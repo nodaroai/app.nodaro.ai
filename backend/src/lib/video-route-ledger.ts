@@ -87,6 +87,11 @@ export function routeCostBasisOf(reported: { providerCostUsd?: number | null; co
   return reported.costBasis === "billed-seconds" ? "billed-seconds" : "receipt"
 }
 
+/** When the route's own record says a done task finished, as `recordRouteTask` takes it (nothing when it said none). */
+export function routeCompletedAtOf(reported: { completedAt?: unknown }): { completedAt?: string } {
+  return typeof reported.completedAt === "string" ? { completedAt: reported.completedAt } : {}
+}
+
 /** The verified bill a done read reported ({@link verifiedTaskUsd}); null when it reported none. */
 export function verifiedReportedUsd(reported: { providerCostUsd?: number | null }): number | null {
   return billUsd(reported.providerCostUsd)
@@ -180,14 +185,35 @@ export async function withdrawRouteStart(jobId: string, send: number, key = ""):
 
 /**
  * When a task's verified bill was first recorded on the ledger (`detail.billedAt`,
- * set once: a later write of the same bill never moves it). The daily
- * reconciliation counts a bill on the day it was RECORDED, so one that arrives
- * after its task's row was written lands on the day it arrived, not on no day.
- * Undefined for a row whose bill went on with the row itself (its `created_at`).
+ * set once: a later write of the same bill never moves it). Undefined for a row
+ * whose bill went on with the row itself (its `created_at`).
  */
 export function billedAtOf(detail: unknown): string | undefined {
   const at = detailOf(detail)?.billedAt
   return typeof at === "string" && Number.isFinite(Date.parse(at)) ? at : undefined
+}
+
+/**
+ * The instant a task's bill belongs to on the ROUTE's books — the day the
+ * daily reconciliation counts it on, so a bill recorded days late is held
+ * against the day the route billed it, not the day it reached the ledger:
+ *   - the time the route's own record says the task finished
+ *     (`detail.completedAt`, when the route reports one);
+ *   - else the time this ledger first read the task done: the row's
+ *     `created_at` when a done read wrote it, or `detail.billedAt` for a row
+ *     written by a read that did NOT find it done (a send given up on as
+ *     unresolved, whose bill arrived on a later read).
+ * Without the route's own time the second is an approximation: a task read
+ * done long after it finished (a recovery after a restart) lands on the day
+ * it was read. Undefined when the row has none of these.
+ */
+export function routeBillingAtOf(row: { detail?: unknown; outcome?: unknown; created_at?: unknown }): string | undefined {
+  const d = detailOf(row.detail)
+  const valid = (v: unknown): string | undefined => (typeof v === "string" && Number.isFinite(Date.parse(v)) ? v : undefined)
+  const reported = valid(d?.completedAt)
+  if (reported) return reported
+  const notReadDone = row.outcome === "unresolved" || row.outcome === "failed" || row.outcome === "expired"
+  return (notReadDone ? billedAtOf(d) : undefined) ?? valid(row.created_at)
 }
 
 /**
@@ -198,41 +224,51 @@ export function billedAtOf(detail: unknown): string | undefined {
  * the same send keeps a reported bill over none, never changes how the send
  * ended (`outcome`: a start given up on stays given up, whatever it is billed),
  * and keeps what else the row carries (`detail`). The first bill of a row is
- * stamped with when it was recorded ({@link billedAtOf}). Retries once, then
- * throws so an unrecorded task cannot be published as delivered.
+ * stamped with when it was recorded ({@link billedAtOf}); `completedAt`, the
+ * time the route's own record says the task finished, is kept beside it when
+ * the route reports one ({@link routeBillingAtOf}). Retries once, then throws
+ * so an unrecorded task cannot be published as delivered.
  */
-export async function recordRouteTask(jobId: string, send: number, ref: string | null, billedUsd: number | null | undefined, key = "", estimatedUsd?: number | null, basis?: RouteCostBasis): Promise<boolean> {
+export async function recordRouteTask(jobId: string, send: number, ref: string | null, billedUsd: number | null | undefined, key = "", estimatedUsd?: number | null, basis?: RouteCostBasis, opts: { completedAt?: string } = {}): Promise<boolean> {
   const billed = billUsd(billedUsd)
   const estimated = finiteUsd(estimatedUsd)
+  const completedAt = typeof opts.completedAt === "string" && Number.isFinite(Date.parse(opts.completedAt)) ? new Date(opts.completedAt).toISOString() : undefined
   const write = async (): Promise<boolean> => {
     const at = new Date().toISOString()
     // With no bill: the row is written once and never over another (a bill already there is kept).
     if (billed === null) {
       const { error } = await ledger().upsert(
-        { job_id: jobId, env: getRuntimeEnv(), kind: "task", send, key, ref, billed_usd: null, ...(estimated !== null ? { estimated_usd: estimated } : {}), updated_at: at },
+        { job_id: jobId, env: getRuntimeEnv(), kind: "task", send, key, ref, billed_usd: null, ...(estimated !== null ? { estimated_usd: estimated } : {}), ...(completedAt ? { detail: { completedAt } } : {}), updated_at: at },
         { onConflict: "job_id,kind,send,key", ignoreDuplicates: true },
       )
       return !error
     }
     const fields = { ref, billed_usd: billed, cost_basis: basis ?? "receipt", ...(estimated !== null ? { estimated_usd: estimated } : {}), updated_at: at }
     // A new row with its bill: recorded now (its `created_at`).
-    const inserted = await ledger().insert({ job_id: jobId, env: getRuntimeEnv(), kind: "task", send, key, ...fields })
+    const inserted = await ledger().insert({ job_id: jobId, env: getRuntimeEnv(), kind: "task", send, key, ...fields, ...(completedAt ? { detail: { completedAt } } : {}) })
     if (!inserted.error) return true
     if (inserted.error.code !== "23505") return false
-    const read = await ledger().select("id, billed_usd, detail").eq("job_id", jobId).eq("kind", "task").eq("send", send).eq("key", key).limit(1)
-    const row = ((read.data ?? []) as Array<{ id?: unknown; billed_usd?: unknown; detail?: unknown }>)[0]
-    if (read.error || !row) return false
-    if (verifiedTaskUsd(row) === null) {
-      // The bill arrives on a row written without one: it is recorded NOW (set once, in the same
-      // compare-and-set that writes the bill, so two writers cannot both stamp it).
-      const { data, error } = await ledger().update({ ...fields, detail: { ...(detailOf(row.detail) ?? {}), billedAt: at } })
-        .eq("id", row.id).is("billed_usd", null).select("id")
+    // The bill arrives on a row written without one: it is recorded NOW (set once, in the same
+    // compare-and-set that writes the bill, so two writers cannot both stamp it). The write merges
+    // the detail it read, so it is also a compare-and-set on the row's stamp: a key written beside
+    // it meanwhile (a send marked as our own loss) is never lost to a stale read — on a miss the
+    // row is read again.
+    for (let cas = 0; cas < 4; cas++) {
+      const read = await ledger().select("id, billed_usd, detail, updated_at").eq("job_id", jobId).eq("kind", "task").eq("send", send).eq("key", key).limit(1)
+      const row = ((read.data ?? []) as Array<{ id?: unknown; billed_usd?: unknown; detail?: unknown; updated_at?: unknown }>)[0]
+      if (read.error || !row) return false
+      if (verifiedTaskUsd(row) !== null) {
+        // A bill there already: the route's latest figure is kept, and when it was first recorded is not moved.
+        const { error } = await ledger().update(fields).eq("id", row.id)
+        return !error
+      }
+      const kept = detailOf(row.detail) ?? {}
+      const { data, error } = await ledger().update({ ...fields, detail: { ...kept, billedAt: at, ...(completedAt && typeof kept.completedAt !== "string" ? { completedAt } : {}) }, updated_at: nextLedgerStamp(row.updated_at) })
+        .eq("id", row.id).eq("updated_at", row.updated_at).is("billed_usd", null).select("id")
       if (error) return false
       if (Array.isArray(data) && data.length > 0) return true
     }
-    // A bill there already: the route's latest figure is kept, and when it was first recorded is not moved.
-    const { error } = await ledger().update(fields).eq("id", row.id)
-    return !error
+    return false
   }
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
@@ -256,6 +292,9 @@ export async function recordRouteSettle(jobId: string, state: Exclude<LedgerSett
         credits: fields.credits ?? null,
         uncollected: fields.uncollected ?? null,
         note: fields.note?.slice(0, 500) ?? null,
+        // A settlement that ends leaves its retry backoff behind: a time kept from it would read as
+        // a late-bill watch that was never started. A watch is started after this write, on its own.
+        ...(state === "retry" ? {} : { next_attempt_at: null }),
         updated_at: new Date().toISOString(),
       },
       { onConflict: "job_id,kind,send,key", ignoreDuplicates: state === "retry" },

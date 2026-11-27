@@ -189,6 +189,8 @@ describe("retryRoutedSettlements", () => {
     h.retryRows = [{ job_id: "j-run", created_at: iso(20 * 60_000) }]
     h.jobs["j-run"] = { status: "cancelled", usage_log_id: "l", parent_job_id: null, defer: null, run: { token: "run-token", usageLogId: "l" } }
     h.logs.l = { action: "generate-video-pro", credits_used: 400, job_id: "j-run", status: "reserved" }
+    // The route never worked on it: its ledger holds nothing.
+    h.noTasks = true
     expect(await mod.retryRoutedSettlements(NOW)).toMatchObject({ settled: 1, failed: 0 })
     expect(await mod.retryRoutedSettlements(NOW)).toMatchObject({ settled: 1, failed: 0 })
     expect(h.refunds).toEqual(["l"])
@@ -473,10 +475,11 @@ describe("retryRoutedSettlements", () => {
   describe("the late-bill pass (compared with the figure last RECORDED, not with what this read fetched)", () => {
     // A watch as a settlement starts it: its end, and the verified bills its figures were taken from (none yet).
     const watched = (state: string, over: Record<string, unknown> = {}) => ({ jobId: "j-late", state, credits: 100, uncollected: null, detail: { watchUntil: iso(-3 * 86_400_000), knownUsd: 0 }, ...over })
-    const lateJob = () => {
+    const lateJob = (charged = 100) => {
       // (The decision as the settlement's own reads alias it.)
       h.jobs["j-late"] = { status: "completed", usage_log_id: "l", parent_job_id: null, ...stamped("j-late"), stamp: stamped("j-late").__videoRoute }
-      h.logs.l = { action: "seedance-2-5:8s:720p", credits_used: 100, job_id: "j-late", status: "committed" }
+      // (What was taken is read from the reservation's own receipt.)
+      h.logs.l = { action: "seedance-2-5:8s:720p", credits_used: 100, job_id: "j-late", status: "committed", credits_charged: charged, receipt: { charged, collected_over_hold: 0, shortfall: 0 } }
     }
     const lateBillPatch = () => h.patches.find((p) => (p as [string, Record<string, unknown>])[1]?.lateBill !== undefined) as [string, Record<string, unknown>, Record<string, unknown>] | undefined
 
@@ -616,7 +619,7 @@ describe("retryRoutedSettlements", () => {
     })
 
     it("a charged run's replaced send whose bill arrives keeps the watch going until it does, and records it as the loss", async () => {
-      lateJob()
+      lateJob(50)
       // Send 1 was replaced (our loss) and has no bill; send 2, the delivered clip, was charged at its bill.
       h.ledger = ledgerOf({ tasks: [{ send: 1, ref: "t1", billedUsd: null, ownLoss: true }, { send: 2, ref: "t2", billedUsd: CREDIT_BASE_USD * 50 }] })
       h.watches = [watched("done", { credits: 50, detail: { watchUntil: iso(-3 * 86_400_000), knownUsd: CREDIT_BASE_USD * 50 } })]
@@ -705,10 +708,10 @@ describe("retryRoutedSettlements", () => {
         expect(await mod.recoverRoutedSettlement("j-gone")).toBe(true)
         expect(h.refunds).toEqual(["l"])
         expect(h.marks).toEqual([["j-gone", "done", { credits: 0, uncollected: 100, note: NOTE }]])
-        // The loss at its best known figure (the quote, no markup), then the watch for its real bill.
-        expect(h.patches[0]).toEqual(["j-gone", { loss: { credits: 100, usd: CREDIT_BASE_USD * 100 } }, {}])
-        h.patches = h.patches.slice(1)
+        // The watch for its real bill, started with its starting figures in the same write: the loss at
+        // its best known figure (the quote, no markup) and the bills known so far (none).
         expectWatch("j-gone", 24 * HOUR)
+        expect(h.patches[0]![1]).toMatchObject({ knownUsd: 0, loss: { credits: 100, usd: CREDIT_BASE_USD * 100 } })
         expect(alertsOf("undelivered-loss:j-gone")).toEqual([expect.objectContaining({ message: expect.stringContaining("still read for a bill that has not come") })])
         expect(h.alerts).toHaveBeenCalledTimes(1)
         err.mockRestore()

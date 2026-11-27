@@ -60,15 +60,17 @@ export async function stopRuleSelect<T extends string>(select: T): Promise<T> {
  *   - `unverified`: nothing is proven missing, but the schema could not be
  *     verified whole — the check function is not installed yet (`checkInstalled:
  *     false`: the tables and the job's columns were probed directly, the
- *     triggers and the index cannot be seen from here), or the check could not
- *     be asked just now (`checkInstalled: undefined`).
- * Only `whole` lets a policy route a model or enforce unpaid charges
- * (ee/routes/admin-video-route.ts); reads and alerts carry on in every case.
+ *     triggers and the index cannot be seen from here), the check could not
+ *     be asked just now (`checkInstalled: undefined`), or it answered without
+ *     a list of what is missing (`checkInstalled: true`).
+ * Only `whole` lets a policy save add or widen routing, or turn unpaid-charge
+ * enforcement on (ee/routes/admin-video-route.ts); reads and alerts carry on
+ * in every case.
  */
 export interface VideoRouteSchemaState {
   readonly status: "whole" | "incomplete" | "unverified"
   readonly missing: readonly string[]
-  /** false: the check function is not installed. undefined: the check could not be asked (an error). */
+  /** false: the check function is not installed. undefined: the check could not be asked (an error). true with `unverified`: it answered in a shape that does not say what is missing. */
   readonly checkInstalled?: boolean
 }
 
@@ -87,9 +89,13 @@ let lastReported: string | undefined
  * trigger that is not attached blocks nothing and repays nothing — so this is
  * asked, and kept for {@link VIDEO_ROUTE_SCHEMA_RECHECK_MS} at most (never for
  * the life of the process: a process picks the check function up as soon as it
- * is applied), with an alert whenever the answer changes. `fresh` asks the
- * database now (a save asks it so). A check that could not be asked is never
- * kept: it is `unverified`, and asked again next time.
+ * is applied), with an alert whenever the answer changes. The billing cron of
+ * every Cloud API server (ee/billing/cleanup-cron.ts) calls it every minute, so
+ * its kept answer is asked again within a minute of going stale, with no save
+ * needed.
+ * `fresh` asks the database now (a save asks it so). A check that could not be
+ * asked, or that answered without a list of what is missing, is never kept: it
+ * is `unverified`, and asked again next time.
  */
 export function videoRouteSchemaState(opts: { client?: unknown; fresh?: boolean; now?: number } = {}): Promise<VideoRouteSchemaState> {
   const now = opts.now ?? Date.now()
@@ -118,9 +124,12 @@ async function askSchemaState(client: unknown, now: number): Promise<VideoRouteS
         return { status: "unverified", missing: [] }
       }
     } else {
+      // Only an answer that lists what is missing (an array of names, empty when nothing is)
+      // decides whole or incomplete. Any other shape proves nothing: unverified, and, like a
+      // failed ask, not kept, so the next call asks again.
       const listed = data && typeof data === "object" ? (data as { missing?: unknown }).missing : undefined
-      const missing = Array.isArray(listed) ? listed.filter((m): m is string => typeof m === "string") : []
-      state = { status: missing.length > 0 ? "incomplete" : "whole", missing, checkInstalled: true }
+      if (!Array.isArray(listed) || !listed.every((m): m is string => typeof m === "string")) return { status: "unverified", missing: [], checkInstalled: true }
+      state = { status: listed.length > 0 ? "incomplete" : "whole", missing: listed, checkInstalled: true }
     }
   } catch {
     return { status: "unverified", missing: [] }
@@ -172,8 +181,8 @@ function report(state: VideoRouteSchemaState): void {
   const key = `${state.status}|${state.checkInstalled === false ? "no-check" : "check"}|${state.missing.join(";")}`
   if (key === lastReported) return
   lastReported = key
-  if (state.checkInstalled === false) console.error(`[ALERT] routed video: schema check function not installed (video_route_schema_state). The tables and the job's columns were probed directly${state.missing.length > 0 ? "" : " and are all there"}; the triggers and the index could not be verified, so no model can be routed and unpaid charges cannot be enforced here until it is.`)
-  if (state.missing.length > 0) console.error(`[ALERT] this database's routed-video schema is incomplete. Missing: ${state.missing.join("; ")}. Apply the remaining schema files before any model is routed: until then a routing policy cannot be saved here.`)
+  if (state.checkInstalled === false) console.error(`[ALERT] routed video: schema check function not installed (video_route_schema_state). The tables and the job's columns were probed directly${state.missing.length > 0 ? "" : " and are all there"}; the triggers and the index could not be verified, so no route can be added and unpaid charges cannot be enforced here until it is.`)
+  if (state.missing.length > 0) console.error(`[ALERT] this database's routed-video schema is incomplete. Missing: ${state.missing.join("; ")}. Apply the remaining schema files before any model is routed: until then no route can be added here (a route can still be removed).`)
 }
 
 /** Test seam. */

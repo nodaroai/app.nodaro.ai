@@ -8,7 +8,7 @@ vi.mock("../supabase.js", () => ({
     return { update: () => chain, upsert: h.upsert }
   } },
 }))
-const { decideRouteSettleHold, holdRouteSettle, patchRouteSettle, recordRouteStartRef, recordRouteSettle, recordRouteTask, routeCostBasisOf, verifiedReportedUsd, verifiedTaskUsd } = await import("../video-route-ledger.js")
+const { decideRouteSettleHold, holdRouteSettle, patchRouteSettle, recordRouteStartRef, recordRouteSettle, recordRouteTask, routeBillingAtOf, routeCostBasisOf, verifiedReportedUsd, verifiedTaskUsd } = await import("../video-route-ledger.js")
 const { getRuntimeEnv } = await import("../runtime-env.js")
 const { createFakeTables } = await import("../../ee/billing/__tests__/helpers/fake-tables.js")
 beforeEach(() => {
@@ -35,6 +35,53 @@ describe("routed task evidence", () => {
     expect(db.rows("video_route_ledger", { send: 2 })[0]).not.toHaveProperty("cost_basis")
     await recordRouteTask("job", 3, "task3", 0, "segment")
     expect(db.rows("video_route_ledger", { send: 3 })[0]).toMatchObject({ billed_usd: null })
+  })
+
+  it("a bill that arrives on a row written without one never drops what another writer kept on it meanwhile (a send marked as our own loss)", async () => {
+    const at = "2026-11-27T10:00:00.000+00:00"
+    const db = createFakeTables({ video_route_ledger: [{ id: 1, job_id: "job", env: getRuntimeEnv(), kind: "task", send: 1, key: "", ref: "t", billed_usd: null, detail: null, created_at: at, updated_at: at }] })
+    let raced = false
+    h.table = () => {
+      const b = db.client.from("video_route_ledger") as Record<string, (...a: never[]) => unknown>
+      const select = b.select!
+      b.select = ((cols: string, o?: unknown) => {
+        const out = (select as (c: string, o?: unknown) => unknown)(cols, o)
+        // The bill's writer reads the row; before its write lands, another writer marks the send as our own loss.
+        if (!raced && cols === "id, billed_usd, detail, updated_at") {
+          raced = true
+          const then = b.then as (ok: (v: unknown) => unknown, bad?: (e: unknown) => unknown) => Promise<unknown>
+          b.then = ((ok: (v: unknown) => unknown, bad?: (e: unknown) => unknown) => then((v) => {
+            Object.assign(db.rows("video_route_ledger")[0]!, { detail: { ownLoss: true }, updated_at: "2026-11-27T10:00:01.000+00:00" })
+            return ok(v)
+          }, bad)) as never
+        }
+        return out
+      }) as never
+      return b
+    }
+    expect(await recordRouteTask("job", 1, "t", 0.5)).toBe(true)
+    expect(db.rows("video_route_ledger")[0]).toMatchObject({ billed_usd: 0.5, detail: { ownLoss: true, billedAt: expect.any(String) } })
+  })
+
+  it("keeps the time the route's own record says a task finished, and the reconciliation's day follows it", async () => {
+    const db = createFakeTables()
+    h.table = () => db.client.from("video_route_ledger")
+    await recordRouteTask("job", 1, "t", null, "", undefined, undefined, { completedAt: "2026-11-26T23:59:00Z" })
+    // The bill arrives later on the same row: the route's own time is what the day is counted on.
+    await recordRouteTask("job", 1, "t", 0.5)
+    const row = db.rows("video_route_ledger")[0]!
+    expect(row.detail).toMatchObject({ completedAt: "2026-11-26T23:59:00.000Z", billedAt: expect.any(String) })
+    expect(routeBillingAtOf(row)).toBe("2026-11-26T23:59:00.000Z")
+  })
+
+  it("without the route's own time, a bill counts on the day the task was first read done", () => {
+    const created = "2026-11-26T10:00:00.000+00:00"
+    const billedAt = "2026-11-28T09:00:00.000Z"
+    // Written by a done read: its row's own time, however late its bill arrived.
+    expect(routeBillingAtOf({ created_at: created, outcome: null, detail: { billedAt } })).toBe(created)
+    // Written by a read that did not find it done (given up on): the read that brought its bill.
+    expect(routeBillingAtOf({ created_at: created, outcome: "unresolved", detail: { billedAt } })).toBe(billedAt)
+    expect(routeBillingAtOf({ created_at: "not a time", detail: null })).toBeUndefined()
   })
 
   it("only a reported bill is a verified cost, whatever its basis; an estimate never is", () => {
@@ -73,6 +120,20 @@ describe("routed task evidence", () => {
     expect(h.readBack).toHaveBeenCalledTimes(2)
     h.upsert.mockResolvedValue({ error: { message: "unavailable" } })
     await expect(recordRouteSettle("job", "retry")).rejects.toThrow(/unavailable/)
+  })
+})
+
+describe("a settlement that ends", () => {
+  it("drops the time its retry backoff left, so the late-bill pass never reads it as a watch", async () => {
+    const at = "2026-11-27T10:00:00.000+00:00"
+    const db = createFakeTables({ video_route_ledger: [{ id: 1, job_id: "job", env: getRuntimeEnv(), kind: "settle", send: 1, key: "", state: "retry", next_attempt_at: "2026-11-27T11:00:00.000Z", detail: { firstAttemptAt: at }, created_at: at, updated_at: at }] })
+    h.table = () => db.client.from("video_route_ledger")
+    await recordRouteSettle("job", "done", { credits: 5 })
+    expect(db.rows("video_route_ledger")[0]).toMatchObject({ state: "done", credits: 5, next_attempt_at: null, detail: { firstAttemptAt: at } })
+    // A retry mark keeps its backoff (and is never written over a row that is there).
+    db.rows("video_route_ledger")[0]!.next_attempt_at = "2026-11-27T12:00:00.000Z"
+    await recordRouteSettle("job", "retry", { note: "again" })
+    expect(db.rows("video_route_ledger")[0]).toMatchObject({ state: "done", next_attempt_at: "2026-11-27T12:00:00.000Z" })
   })
 })
 

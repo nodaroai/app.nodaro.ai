@@ -175,14 +175,35 @@ selection suppresses legacy routing for that model or service.
   A late bill is found by comparing the ledger's verified bills with the
   figure last recorded on the settlement (`detail.knownUsd`), so a bill
   fetched by any read is found; a send given up on stays given up when its
-  bill arrives and is never charged.
-- **Reconciliation** counts each bill on the day it was recorded
-  (`detail.billedAt`). The route's account is shared with other environments
-  and with traffic that never reaches the ledger, so its total is context:
-  only this environment's ledger recording more than the whole account spent
-  is alerted.
+  bill arrives and is never charged. A watch's starting figures are written
+  in the same write that starts it; one whose figures could not be read then
+  has them recorded by its first read, which is not a late bill. What was
+  charged is read from the reservation (refunded, or its metered receipt's
+  charge), never from the settlement row's credits.
+- **Reconciliation** counts each bill on the day the route billed it
+  (`routeBillingAtOf`: the route's own completion time, `completedAt`, when
+  its done read reports one, else the time the task was first read done),
+  not the day the bill reached the ledger. Each environment keeps its own
+  day for context. The route's account is shared with every environment on
+  the database and with alternate-route jobs that write no ledger, so the
+  one comparison that can find unrecorded spend is made once per account
+  (`ee/billing/video-route-account.ts`): the account's spend for each UTC
+  day against every environment's bills, sends still to be billed at their
+  estimate, and those jobs' recorded cost by the day they completed. Past
+  the policy's `spendDriftAlertPercent` (never less than the midnight
+  allowance), spend above everything recorded is alerted as possible paid
+  tasks nothing recorded, and recorded bills above the spend as bills that
+  may be wrong. The last nine days are recomputed each pass, so a late bill
+  corrects its own day. The pass claims its day in a settings row no
+  environment owns: the first environment with a routing policy saved takes
+  it, the other skips, and a claim not finished in two hours may be taken
+  over. Its alerts appear in the Admin of the environment that ran it.
 - **Routed records carry no default request.** A routed run never falls
-  back, so a host that does not know routed runs can only fail and refund
-  one.
+  back, so a host that does not know routed runs never sends one to the
+  default upstream: that half is closed. It can still FINALIZE a routed task
+  that ends done: its recovery delivers the raw clip and commits the hold as
+  an ordinary job, outside the routed settlement and its ledger. So no
+  routing policy is saved on an environment while another environment
+  sharing its database runs a host that does not know routed runs.
 - **Drafts.** A draft the route made holds the route's own reference. It is
   never finalized on the default upstream.

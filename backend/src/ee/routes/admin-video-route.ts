@@ -34,6 +34,7 @@ import {
   parseVideoRoutePriceFactors,
   priceFactorSchema,
   revertedVideoRoutePolicy,
+  routingWidens,
   videoRoutePolicySchema,
   type VideoRoutePolicy,
   type VideoRoutePriceFactor,
@@ -290,13 +291,22 @@ export async function adminVideoRouteRoutes(app: FastifyInstance): Promise<void>
       if (parsed.data.policy.enforceUnpaidCharges && !RUNTIME_ENV_NAMEABLE) {
         return reply.status(409).send({ error: { code: "environment_not_nameable", message: "Unpaid charges cannot be enforced here: this server's environment name cannot be sent to the database (it must be 1-64 printable ASCII characters with no space)." } })
       }
-      // No model is routed, and unpaid charges are not turned on, over a schema that is not PROVEN
-      // whole: a missing trigger fails silently. The database is asked now (never a kept answer),
-      // and anything but "whole" refuses the save — a check function not installed yet, or one
-      // that could not be asked, included. A save that routes nothing and enforces nothing new
-      // (and the revert below) is always allowed.
-      const turnsEnforcementOn = parsed.data.policy.enforceUnpaidCharges === true && (await readVideoRoutePolicy()).policy?.enforceUnpaidCharges !== true
-      if (anyModelRouted(parsed.data.policy) || turnsEnforcementOn) {
+      // The policy this save replaces, read once: the version the page pins (a save over a newer
+      // one is refused here, before anything else is asked) and what the change is measured from.
+      const current = await readVideoRoutePolicy()
+      if (current.updatedAt !== parsed.data.expectedUpdatedAt) {
+        return reply.status(409).send({ error: { code: "stale_policy", message: "The video route setting changed since this page loaded. Reload and try again." } })
+      }
+      // No routing is ADDED or widened, and unpaid charges are not turned on, over a schema that
+      // is not PROVEN whole: a missing trigger fails silently. It is the change that is gated, not
+      // the state: a save that puts some model, for some service, on the alternate route where the
+      // current policy did not (routingWidens), or that turns enforcement on. The database is asked
+      // now (never a kept answer), and anything but "whole" refuses the save — a check function not
+      // installed yet, or one that could not be asked, included. A save that only removes routes or
+      // changes thresholds (and the revert below) is always allowed, so routing can be narrowed
+      // while the schema is unverified.
+      const turnsEnforcementOn = parsed.data.policy.enforceUnpaidCharges === true && current.policy?.enforceUnpaidCharges !== true
+      if (routingWidens(current.policy, parsed.data.policy) || turnsEnforcementOn) {
         const schema = await videoRouteSchemaState({ fresh: true })
         if (schema.status === "incomplete") {
           return reply.status(409).send({ error: { code: "schema_incomplete", message: `No model can be routed and unpaid charges cannot be enforced here yet: this database's routed-video schema is incomplete (missing: ${schema.missing.join("; ")}).` } })
@@ -313,7 +323,8 @@ export async function adminVideoRouteRoutes(app: FastifyInstance): Promise<void>
         }
       }
       // A compare-and-set on the row's `updated_at`: a page edited over an older policy (another
-      // admin saved since) is refused, never allowed to overwrite that save.
+      // admin saved since, including between the read above and this write) is refused, never
+      // allowed to overwrite that save.
       let before: VideoRoutePolicy | null = null
       let stale = false
       await updateSettingsRow(videoRoutePolicyKey(), (raw, rowUpdatedAt) => {

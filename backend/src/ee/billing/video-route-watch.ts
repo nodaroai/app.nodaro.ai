@@ -8,42 +8,40 @@
  *    provider's latest snapshotted balance against
  *    `defaultProviderBalanceAlertCredits`. Below its number, an `[ALERT]`, at
  *    most once per {@link BALANCE_ALERT_EVERY_MS} per account. Unset = none.
- *  - DAILY RECONCILIATION (once per environment): the verified bills this
- *    environment's ledger RECORDED in a UTC day (a bill counts on the day it
- *    was recorded: one that arrives after its task's row was written lands on
- *    the day it arrived) — the cost on runs that were charged, and, on a line
- *    of its own, the cost on sends that were not (known losses: a run that
- *    failed or was cancelled, a replaced send, a send given up on whose bill
- *    arrived) — beside what the route reports its account spent that whole
- *    UTC day (`spend()` counts whole UTC days).
- *    The route's account is SHARED: staging and production share it, and so
- *    does traffic that never reaches this ledger. So the account's figure is
- *    CONTEXT only, and the remainder above this environment's ledger
- *    (`unexplainedUsd`) can never be attributed to it and alerts nothing. The
- *    one comparison that IS this environment's own: its ledger recording MORE
- *    than the whole account spent (past the admin's `spendDriftAlertPercent`
- *    and a small allowance for runs straddling midnight) — then its recorded
- *    bills are wrong, and that is an `[ALERT]`. Unreported bills, unresolved
- *    sends and known losses are alerted from the ledger itself. Nothing here
- *    raises a price: the per-job settlement does that from each run's own
- *    billed figure.
+ *  - DAILY RECONCILIATION, in two parts:
+ *    - this environment's own day (once per environment): the verified bills
+ *      its ledger holds for a UTC day, each on the day the ROUTE billed it
+ *      (lib/video-route-ledger.ts `routeBillingAtOf`; a bill that reached the
+ *      ledger days later still counts on its own day) — the cost on runs that
+ *      were charged, and, on a line of its own, the cost on sends that were
+ *      not (known losses: a run that failed or was cancelled, a replaced send,
+ *      a send given up on whose bill arrived) — beside what the route reports
+ *      its account spent that whole UTC day (`spend()` counts whole UTC days).
+ *      The account is shared, so here its figure is context only. Unreported
+ *      bills, unresolved sends and known losses are alerted from the ledger.
+ *    - the WHOLE account (once per account, ee/billing/video-route-account.ts):
+ *      the account's spend against everything recorded for the day across
+ *      every environment and the unrouted alternate-route jobs, alerting both
+ *      ways (spend nothing recorded, and recorded bills above the spend).
+ *    Nothing here raises a price: the per-job settlement does that from each
+ *    run's own billed figure.
  */
 import { recordVideoRouteAlert } from "./video-route-alerts.js"
 import { RUNTIME_ENV_NAMEABLE, supabase } from "../../lib/supabase.js"
 import { getAppSettings } from "../../lib/app-settings.js"
 import { getRuntimeEnv } from "../../lib/runtime-env.js"
 import { getPluginServices } from "../../lib/private-plugins/services-registry.js"
-import { VIDEO_ROUTE_POLICY_DEFAULTS, unpaidChargesEnforced } from "../../lib/video-route-policy.js"
+import { unpaidChargesEnforced } from "../../lib/video-route-policy.js"
 import { updateSettingsRow, videoRouteSpendDaysKey } from "../../lib/video-route-policy-store.js"
-import { billedAtOf, countHeldRouteSettles, countLateBills, countStuckDeferredRepayments, envWroteLedgerSince, readOtherEnvOpenSettles, verifiedTaskUsd } from "../../lib/video-route-ledger.js"
+import { countHeldRouteSettles, countLateBills, countStuckDeferredRepayments, envWroteLedgerSince, readOtherEnvOpenSettles } from "../../lib/video-route-ledger.js"
 import { fetchKieCreditSnapshotsSince } from "../routes/admin-kie-credits.js"
+import { MIDNIGHT_STRADDLE_ALLOWANCE_USD, ledgerTasksBilledBetween, reconcileRouteAccount } from "./video-route-account.js"
+export { MIDNIGHT_STRADDLE_ALLOWANCE_USD } from "./video-route-account.js"
 
 /** One balance alert per account at most this often. */
 export const BALANCE_ALERT_EVERY_MS = 6 * 3_600_000
 /** Days of reconciliation kept per environment. */
 export const SPEND_DAYS_KEPT = 30
-/** A run that straddles midnight bills on one side and records on the other: this much of a difference is not drift. */
-export const MIDNIGHT_STRADDLE_ALLOWANCE_USD = 0.5
 /** The jobs read per page (every page is read: nothing is silently cut off). */
 const PAGE = 1000
 
@@ -105,9 +103,9 @@ export interface SpendDay {
   /** What the route reports it spent that whole UTC day. */
   actualUsd: number | null
   videoSeconds: number | null
-  /** What the shared account spent beyond this environment's ledger: actual − recorded − losses (null with no route figure). Context only: never attributed to this environment, never alerted. */
+  /** What the shared account spent beyond this environment's ledger: actual − recorded − losses (null with no route figure). Context only: never attributed to this environment, never alerted here (the account's own pass compares the account with every environment). */
   unexplainedUsd: number | null
-  /** What this environment's ledger recorded beyond the WHOLE shared account's spend (0 when none; null with no route figure): the one drift that is this environment's own. */
+  /** What this environment's ledger recorded beyond the WHOLE shared account's spend (0 when none; null with no route figure). Context only: the account's own pass alerts it, against every environment's bills. */
   overRecordedUsd?: number | null
   jobs: number
   failedJobs: number
@@ -127,46 +125,16 @@ export function spendDrifted(recordedUsd: number, unexplainedUsd: number, percen
 }
 
 /**
- * The tasks the route ledger holds for this environment that belong to the day
- * [start, end), with the status of the job each belongs to: a task whose bill
- * was recorded that day (`detail.billedAt`, or its row's `created_at` when the
- * bill went on with the row), and a task written that day with no bill yet
- * (unreported, unresolved). A bill recorded on another day is that day's, so
- * every bill is counted on exactly one day — the day it was recorded. A job's
- * own sends and a plugin run's segments (rows of their parent) are each there:
- * the ledger, not `jobs.provider_cost`.
+ * This environment's task rows whose bill belongs to the day [start, end) on
+ * the route's books (video-route-account.ts `ledgerTasksBilledBetween`: the
+ * route's own completion time, else the time the task was first read done),
+ * with the status of the job each belongs to. A job's own sends and a plugin
+ * run's segments (rows of their parent) are each there: the ledger, not
+ * `jobs.provider_cost`.
  */
 async function ledgerTasksBetween(start: Date, end: Date): Promise<Array<{ jobId: string; billedUsd: number | null; outcome: string | null; ownLoss: boolean; status: string | null }>> {
-  const env = getRuntimeEnv()
-  type TaskRow = { id: number; job_id: string; billed_usd: unknown; cost_basis: unknown; outcome?: unknown; detail?: unknown; created_at?: unknown }
-  const byId = new Map<number, TaskRow>()
-  // Two reads of the day: rows written in it, and rows whose bill was recorded in it.
-  for (const column of ["created_at", "detail->>billedAt"] as const) {
-    for (let from = 0; ; from += PAGE) {
-      const { data, error } = await (supabase.from("video_route_ledger" as "assets") as unknown as { select(c: string): any })
-        .select("id, job_id, billed_usd, cost_basis, outcome, detail, created_at")
-        .eq("env", env)
-        .eq("kind", "task")
-        .gte(column, start.toISOString())
-        .lt(column, end.toISOString())
-        .order("id", { ascending: true })
-        .range(from, from + PAGE - 1)
-      if (error) throw new Error(error.message)
-      const page = (data ?? []) as TaskRow[]
-      for (const t of page) byId.set(t.id, t)
-      if (page.length < PAGE) break
-    }
-  }
-  const inDay = (iso: string | undefined): boolean => {
-    const at = iso ? Date.parse(iso) : NaN
-    return Number.isFinite(at) && at >= start.getTime() && at < end.getTime()
-  }
-  const tasks = [...byId.values()].filter((t) => {
-    // A bill is counted on the day it was recorded; a row with no bill on the day it was written.
-    const billedAt = verifiedTaskUsd(t) !== null ? (billedAtOf(t.detail) ?? (typeof t.created_at === "string" ? t.created_at : undefined)) : (typeof t.created_at === "string" ? t.created_at : undefined)
-    return inDay(billedAt)
-  })
-  const ids = [...new Set(tasks.map((t) => t.job_id))]
+  const tasks = await ledgerTasksBilledBetween(start, end, getRuntimeEnv())
+  const ids = [...new Set(tasks.map((t) => t.jobId))]
   const status = new Map<string, string>()
   for (let i = 0; i < ids.length; i += PAGE) {
     // trash-read: money that was spent, whatever became of the job since.
@@ -174,8 +142,7 @@ async function ledgerTasksBetween(start: Date, end: Date): Promise<Array<{ jobId
     if (error) throw new Error(error.message)
     for (const r of (data ?? []) as Array<{ id: string; status: string }>) status.set(r.id, r.status)
   }
-  // The verified bill each task settles at (a money receipt, or billed seconds at the agreed rate): what this day's total is held against.
-  return tasks.map((t) => ({ jobId: t.job_id, billedUsd: verifiedTaskUsd(t), outcome: typeof t.outcome === "string" ? t.outcome : null, ownLoss: (t.detail as { ownLoss?: unknown } | null)?.ownLoss === true, status: status.get(t.job_id) ?? null }))
+  return tasks.map((t) => ({ jobId: t.jobId, billedUsd: t.billedUsd, outcome: t.outcome, ownLoss: t.ownLoss, status: status.get(t.jobId) ?? null }))
 }
 
 /**
@@ -235,24 +202,16 @@ export async function reconcileRouteSpend(now = new Date()): Promise<SpendDay | 
     const [sinceStart, sinceEnd] = await Promise.all([service.spend(start.toISOString()), service.spend(end.toISOString())])
     const actualUsd = sinceStart && sinceEnd ? Math.max(0, sinceStart.actualUsd - sinceEnd.actualUsd) : null
     const videoSeconds = sinceStart?.videoSeconds != null && sinceEnd?.videoSeconds != null ? Math.max(0, sinceStart.videoSeconds - sinceEnd.videoSeconds) : null
-    // The account is shared (other environments, traffic that never reaches this ledger): what it spent
-    // beyond this ledger is context, never attributed here; this ledger recording MORE than the whole
-    // account spent is this environment's own drift.
+    // The account is shared (other environments, traffic that never reaches this ledger): both
+    // differences are context here. The account's own pass compares it with everything recorded.
     const unexplainedUsd = actualUsd === null ? null : actualUsd - recordedUsd - lossesUsd
     const overRecordedUsd = actualUsd === null ? null : Math.max(0, recordedUsd + lossesUsd - actualUsd)
     const result: SpendDay = { day, recordedUsd, lossesUsd, actualUsd, videoSeconds, unexplainedUsd, overRecordedUsd, jobs, failedJobs, at: new Date().toISOString() }
 
-    const percent = settings.video_route_policy.spendDriftAlertPercent ?? VIDEO_ROUTE_POLICY_DEFAULTS.spendDriftAlertPercent
     if (lossesUsd > 0) {
-      await recordVideoRouteAlert({ key: `losses:${day}`, kind: "reconciliation", message: `${failedJobs} failed routed jobs on ${day} incurred ${lossesUsd.toFixed(2)} USD of supplier charges without a delivered result.` })
-      console.error(`[ALERT] video route: on ${day} ${failedJobs} routed job(s) failed after the route billed them: ${lossesUsd.toFixed(2)} USD refunded to the people who ran them (known losses).`)
-    }
-    if (overRecordedUsd !== null && spendDrifted(recordedUsd + lossesUsd, overRecordedUsd, percent)) {
-      await recordVideoRouteAlert({ key: `spend-drift:${day}`, kind: "reconciliation", message: `On ${day} this environment's ledger recorded ${(recordedUsd + lossesUsd).toFixed(2)} USD of verified bills, ${overRecordedUsd.toFixed(2)} USD more than the route's whole shared account reports it spent (threshold ${percent}%). The recorded bills may be wrong.` })
-      console.error(
-        `[ALERT] video route: on ${day} this environment's ledger recorded ${recordedUsd.toFixed(2)} USD on ${jobs} routed jobs and ${lossesUsd.toFixed(2)} USD on known losses, ` +
-          `${overRecordedUsd.toFixed(2)} USD more than the route's whole account reports (${actualUsd!.toFixed(2)} USD, shared with other environments): the recorded bills may be wrong.`,
-      )
+      const message = `On ${day} the route billed ${lossesUsd.toFixed(2)} USD for routed sends of ${failedJobs} job(s) that were not charged (a run that failed or was cancelled, a send replaced after a step of ours failed, or a send given up on whose bill arrived): known losses.`
+      await recordVideoRouteAlert({ key: `losses:${day}`, kind: "reconciliation", message })
+      console.error(`[ALERT] video route: ${message}`)
     }
     await keepSpendDay(result)
     return result
@@ -411,7 +370,7 @@ export async function reportLateBillsAndOrphans(now = new Date()): Promise<void>
   try {
     const late = await countLateBills(new Date(now.getTime() - 86_400_000).toISOString())
     if (late > 0) {
-      const message = `${late} routed run(s) had a bill arrive after they were settled or released in the last day. The differences are recorded as uncollected; nothing more was charged.`
+      const message = `${late} routed run(s) had a bill arrive after they were settled or released in the last day. Each is recorded on its settlement: what a charged run now costs above its charge as uncollected (a short balance's on its late-bill record, beside its unpaid charge), and the route's bills for sends that were not charged as the loss. Nothing more was charged.`
       console.error(`[ALERT] video route: ${message}`)
       await recordVideoRouteAlert({ key: `late-bills:${day}`, kind: "reconciliation", message })
     }
@@ -458,10 +417,11 @@ export async function reportLateBillsAndOrphans(now = new Date()): Promise<void>
 /** How long an environment may write nothing to the ledger before its open settlements are reported as orphaned. */
 export const ORPHAN_ENV_QUIET_DAYS = 3
 
-/** The daily reconciliation, the held-settlement reminder and the late-bill / orphan report, once per environment. */
+/** The daily reconciliation (this environment's day, then the account's, once per account), the held-settlement reminder and the late-bill / orphan report, once per environment. */
 export function runReconciliationOnce(): Promise<boolean> {
   return runOncePerEnvironment("reconcile", 86_400_000, async () => {
     await reconcileRouteSpend()
+    await reconcileRouteAccount()
     await remindHeldSettlements()
     await reportLateBillsAndOrphans()
   })

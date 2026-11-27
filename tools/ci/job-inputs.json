@@ -318,6 +318,7 @@
         "backend/src/ee/billing/video-pro-segment-reserve.ts",
         "backend/src/ee/billing/video-route-admission.ts",
         "backend/src/ee/billing/video-route-alerts.ts",
+        "backend/src/ee/billing/video-route-late-bills.ts",
         "backend/src/ee/billing/video-route-listing.ts",
         "backend/src/ee/billing/video-route-loss.ts",
         "backend/src/ee/billing/video-route-planned.ts",

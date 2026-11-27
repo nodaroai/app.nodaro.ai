@@ -2,7 +2,7 @@ import { withoutVideoRouteSecrets } from "../public-job-data.js"
 import { assemblyRecoveryColumns } from "../video-assembly-manifest.js"
 import { rowlessRouteTaskOf } from "../video-route-decision.js"
 import { rowlessSegmentDone } from "../alternate-route.js"
-import { recordRouteTaskOutcome, routeCostBasisOf, verifiedReportedUsd } from "../video-route-ledger.js"
+import { recordRouteTaskOutcome, routeCompletedAtOf, routeCostBasisOf, verifiedReportedUsd } from "../video-route-ledger.js"
 import { getPluginServices as getPluginServicesForRoute } from "./services-registry.js"
 import { HOST_ROUTES_PER_MODEL } from "../video-route-host.js"
 import { retainVideo, readRetainedVideo, copyRetainedVideo } from "../retained-videos.js"
@@ -512,7 +512,7 @@ async function getVideoTaskStatus(
         const parentJobId = getJobId()
         const cost = typeof polled.providerCostUsd === "number" && Number.isFinite(polled.providerCostUsd) && polled.providerCostUsd >= 0 ? polled.providerCostUsd : null
         const estimated = typeof polled.estimatedCostUsd === "number" && Number.isFinite(polled.estimatedCostUsd) && polled.estimatedCostUsd >= 0 ? polled.estimatedCostUsd : null
-        const chargedCredits = parentJobId && routed.segmentKey ? await rowlessSegmentDone(parentJobId, routed.segmentKey, routed.taskRef, cost, estimated, routeCostBasisOf(polled)) : null
+        const chargedCredits = parentJobId && routed.segmentKey ? await rowlessSegmentDone(parentJobId, routed.segmentKey, routed.taskRef, cost, estimated, routeCostBasisOf(polled), routeCompletedAtOf(polled)) : null
         return { state: "succeeded", videoUrl: polled.resultUrl, routed: { costUsd: verifiedReportedUsd(polled), chargedCredits } }
       }
       if (polled.state === "failed" || polled.state === "expired") {

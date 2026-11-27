@@ -1,9 +1,12 @@
 // @test-units-by-name it names no node unit
+// @test-watches backend/src/ee/billing/cleanup-cron.ts
 /**
  * The schema check (lib/video-route-schema.ts): on a database without the
  * routed-video columns the server says so once and keeps the behaviour it had
  * before they existed, instead of failing every send and every cancel.
  */
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const h = vi.hoisted(() => ({
@@ -126,6 +129,31 @@ describe("videoRouteSchemaState — whole, incomplete or unverified, never kept 
     // One alert for the unverified state; none for the same state re-checked, none for "whole".
     expect(alert).toHaveBeenCalledTimes(1)
     alert.mockRestore()
+  })
+
+  it("an answer that does not list what is missing is unverified (not whole), says nothing, and is never kept", async () => {
+    const alert = vi.spyOn(console, "error").mockImplementation(() => {})
+    for (const data of [null, {}, { missing: null }, { missing: "none" }, { missing: [1, 2] }, { missing: ["index jobs_video_assembly_due_idx", 3] }, []]) {
+      h.state = { data, error: null }
+      expect(await videoRouteSchemaState()).toEqual({ status: "unverified", missing: [], checkInstalled: true })
+    }
+    // Each one asked again: none was kept.
+    expect(h.stateCalls).toBe(7)
+    h.state = { data: { missing: [] }, error: null }
+    expect(await videoRouteSchemaState()).toEqual({ status: "whole", missing: [], checkInstalled: true })
+    expect(h.stateCalls).toBe(8)
+    expect(alert).not.toHaveBeenCalled()
+    alert.mockRestore()
+  })
+
+  it("the billing cron of every Cloud server asks it every minute, outside the once-per-environment lease, and never lets it throw", () => {
+    const cron = readFileSync(join(__dirname, "..", "..", "ee", "billing", "cleanup-cron.ts"), "utf8")
+    const line = cron.split("\n").find((l) => l.includes("videoRouteSchemaState("))
+    expect(line).toBeDefined()
+    expect(line).toMatch(/cron\.schedule\("\* \* \* \* \*", \(\) => \{ void videoRouteSchemaState\(\)\.catch\(\(\) => \{\}\) \}\)/)
+    expect(line).not.toContain("runOncePerEnvironment")
+    // Not a fresh ask: a tick between re-checks reads nothing.
+    expect(line).not.toContain("fresh")
   })
 
   it("a fresh ask always goes to the database (what a save asks)", async () => {

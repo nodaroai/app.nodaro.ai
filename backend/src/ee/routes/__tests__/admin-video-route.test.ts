@@ -304,9 +304,60 @@ describe("a model is put on the alternate route only where the loaded route can 
   })
 })
 
-describe("a save that routes a model or turns on unpaid-charge enforcement needs the schema PROVEN whole", () => {
+describe("a save that adds or widens routing, or turns on unpaid-charge enforcement, needs the schema PROVEN whole", () => {
   const routed = () => policy({ "seedance-2": { route: "alternate" } })
   const save = (p: unknown) => app.inject({ method: "PUT", url: URL, headers: as, payload: { expectedUpdatedAt: savedAt(), policy: p } })
+  /** A route that can take two models, so two of them can be routed at once. */
+  const twoModelRoute = () => setPluginServices({
+    alternateRoutes: {
+      accepts: () => null, start: async () => ({ taskRef: "t" }), poll: async () => ({ state: "running" }),
+      prices: () => [{ id: "seedance-2:8s:720p", usd: 0.2 }, { id: "seedance-2-5:8s:720p", usd: 0.2 }],
+    },
+  })
+  const both = () => policy({ "seedance-2": { route: "alternate" }, "seedance-2-5": { route: "alternate" } })
+  const modelsSaved = () => (h.rows.get(videoRoutePolicyKey())!.value as { models: unknown }).models
+
+  it("removing one of two routes while the schema is unverified is saved, and the schema is not asked", async () => {
+    twoModelRoute()
+    h.rows.set(videoRoutePolicyKey(), { value: both(), updated_at: "two" })
+    h.schema = { status: "unverified", missing: [], checkInstalled: false }
+    const res = await app.inject({ method: "PUT", url: URL, headers: as, payload: { expectedUpdatedAt: "two", policy: policy({ "seedance-2": { route: "alternate" } }) } })
+    expect(res.statusCode).toBe(200)
+    expect(modelsSaved()).toEqual({ "seedance-2": { route: "alternate" } })
+    expect(h.schemaAsks).toEqual([])
+  })
+
+  it("changing only a threshold while the schema is unverified is saved, and the schema is not asked", async () => {
+    twoModelRoute()
+    h.rows.set(videoRoutePolicyKey(), { value: both(), updated_at: "two" })
+    h.schema = { status: "unverified", missing: [] }
+    const res = await app.inject({ method: "PUT", url: URL, headers: as, payload: { expectedUpdatedAt: "two", policy: { ...both(), routeBalanceAlertUsd: 40, spendDriftAlertPercent: 5 } } })
+    expect(res.statusCode).toBe(200)
+    expect((h.rows.get(videoRoutePolicyKey())!.value as { routeBalanceAlertUsd: number }).routeBalanceAlertUsd).toBe(40)
+    expect(h.schemaAsks).toEqual([])
+  })
+
+  it("adding a route beside one already saved, while the schema is unverified, is refused and saves nothing", async () => {
+    twoModelRoute()
+    h.rows.set(videoRoutePolicyKey(), { value: routed(), updated_at: "one" })
+    h.schema = { status: "unverified", missing: [], checkInstalled: false }
+    const res = await app.inject({ method: "PUT", url: URL, headers: as, payload: { expectedUpdatedAt: "one", policy: both() } })
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error.code).toBe("schema_unverified")
+    expect(h.schemaAsks).toEqual([{ fresh: true }])
+    expect(modelsSaved()).toEqual({ "seedance-2": { route: "alternate" } })
+  })
+
+  it("a save over a newer policy is refused as stale before the schema is asked", async () => {
+    capableRoute()
+    h.rows.set(videoRoutePolicyKey(), { value: policy({}), updated_at: "newer" })
+    h.schema = { status: "unverified", missing: [], checkInstalled: false }
+    const res = await app.inject({ method: "PUT", url: URL, headers: as, payload: { expectedUpdatedAt: "older", policy: routed() } })
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error.code).toBe("stale_policy")
+    expect(h.schemaAsks).toEqual([])
+    expect(modelsSaved()).toEqual({})
+  })
 
   it("refuses with the schema check function not installed (409 schema_unverified, saying so), asked fresh, and saves nothing", async () => {
     capableRoute()

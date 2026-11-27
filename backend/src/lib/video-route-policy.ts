@@ -182,6 +182,23 @@ export function anyModelRouted(policy: VideoRoutePolicy | null | undefined): boo
   return Object.values(policy.models).some((m) => m.route === "alternate" || Object.values(m.services ?? {}).includes("alternate"))
 }
 
+/**
+ * Whether `after` puts some model, for some service, on the alternate route
+ * where `before` did not: a route added, a service override added, or a
+ * "default" override removed under a model routed as a whole. Compared by the
+ * effective choice ({@link videoRouteChoiceFor}): per model of `after`, its
+ * model-level choice (which every service not named takes) and every service
+ * either policy names for it. Removing a route, or changing only a
+ * threshold, never widens. `before` null: nothing saved, every model on "default".
+ */
+export function routingWidens(before: VideoRoutePolicy | null | undefined, after: VideoRoutePolicy | null | undefined): boolean {
+  if (!after) return false
+  return Object.entries(after.models).some(([model, entry]) => {
+    const services = new Set<string | undefined>([undefined, ...Object.keys(entry.services ?? {}), ...Object.keys(before?.models[model]?.services ?? {})])
+    return [...services].some((service) => videoRouteChoiceFor(after, model, service) === "alternate" && videoRouteChoiceFor(before, model, service) !== "alternate")
+  })
+}
+
 /** The policy with every model back on "default" (thresholds kept): the Admin page's "revert all". */
 export function revertedVideoRoutePolicy(policy: VideoRoutePolicy | null | undefined): VideoRoutePolicy {
   return { ...(policy ?? defaultVideoRoutePolicy()), models: {} }

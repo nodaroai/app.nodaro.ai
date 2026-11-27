@@ -23,7 +23,7 @@
  * retry. Core (no ee import); never throws.
  */
 import { getPluginServices } from "./private-plugins/services-registry.js"
-import { deliveredTask, readRouteLedger, recordRouteTask, recordRouteTaskOutcome, routeCostBasisOf, type UnresolvedStart } from "./video-route-ledger.js"
+import { deliveredTask, readRouteLedger, recordRouteTask, recordRouteTaskOutcome, routeCompletedAtOf, routeCostBasisOf, type UnresolvedStart } from "./video-route-ledger.js"
 
 export interface RouteResolution {
   /** Whether this process could read the route at all (it has the route service). */
@@ -67,7 +67,7 @@ export async function resolveRouteLedger(jobId: string, routeId: string): Promis
           // A delivered send the route still has no bill for stays exactly as it is: pending.
           if (item.was !== "open" && bill === null) continue
           // (A given-up send keeps its `unresolved` outcome: its bill is recorded, never charged.)
-          await recordRouteTask(jobId, item.send, item.ref, bill, item.key, usd(polled.estimatedCostUsd), routeCostBasisOf(polled))
+          await recordRouteTask(jobId, item.send, item.ref, bill, item.key, usd(polled.estimatedCostUsd), routeCostBasisOf(polled), routeCompletedAtOf(polled))
           resolved++
           if (bill !== null) billed++
         } else if (polled.state === "failed" || polled.state === "expired") {

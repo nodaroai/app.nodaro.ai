@@ -135,17 +135,29 @@ The page shows both providers' balances and can raise an alert when either
 is below a number an admin sets. Leave a number empty for no alert. Nothing is
 switched automatically.
 
-A daily check lists the verified bills the platform recorded on routed jobs
-that day, each counted on the day it was recorded, with known losses on a line
-of their own, beside what the route's account reports it spent. The route's
-account can be shared by more than one environment, so what it spent beyond
-this environment's records is shown for context only. The check alerts when
-this environment recorded more than the whole account spent, and on bills
-that were never reported or sends that were never read to an end. It only
-alerts; it changes no charge.
+A daily check lists the verified bills this environment recorded on routed
+jobs for each day, each counted on the day the route billed it (even when the
+bill reached the platform days later), with known losses on a line of their
+own, beside what the route's account reports it spent that day. It alerts on
+bills that were never reported and on sends that were never read to an end.
 
-A choice that routes a model, or that turns on **Enforce unpaid charges**, is
-saved only when the database confirms that its routed-video schema is
-complete. It is refused while that cannot be confirmed (for example, before
-the schema check is installed). Saving a choice that routes nothing, and
-**Revert**, are always allowed.
+The route's account can be shared by more than one environment, and by
+alternate-route runs made while no routing choice is saved, so the account
+itself is checked once a day for all of them together: what it spent each day
+against every environment's bills, the parts still to be billed at the route's
+estimate, and the recorded cost of those other runs. The check alerts when the
+account spent more than all of that (paid work nothing recorded may exist), and
+when what was recorded comes to more than the account spent (the recorded bills
+may be wrong), past the drift percentage set on this page and never for less
+than a small allowance for runs that straddle midnight. The last nine days are
+checked again each time, so a bill that arrives late corrects its own day. One
+environment with a routing choice saved runs it for the account; its alerts
+appear on that environment's page. These checks only alert; they change no
+charge.
+
+A choice that adds a route (puts a model, or one of its services, on the
+alternate route where it was not before), or that turns on **Enforce unpaid
+charges**, is saved only when the database confirms that its routed-video
+schema is complete. It is refused while that cannot be confirmed (for example,
+before the schema check is installed). Removing a route, changing only a
+threshold, and **Revert** are always allowed.

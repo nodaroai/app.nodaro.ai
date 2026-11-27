@@ -69,7 +69,7 @@ import { finalizeRecoveredMedia, reconcileKieJob } from "./kie.js"
 import { providerKindForVideoModel } from "./provider-kind.js"
 import { STALE_THRESHOLD_MS } from "./types.js"
 import { jobCostColumns } from "../job-cost-columns.js"
-import { recordRouteTask, recordRouteTaskOutcome, routeCostBasisOf, verifiedReportedUsd } from "../video-route-ledger.js"
+import { recordRouteTask, recordRouteTaskOutcome, routeCompletedAtOf, routeCostBasisOf, verifiedReportedUsd } from "../video-route-ledger.js"
 import { readBullEntry } from "../concurrency-lanes/columns.js"
 
 /** A row left alone (no service here, unreadable here) this long past its stamp is failed and refunded. */
@@ -275,7 +275,7 @@ export async function reconcileAlternateRouteJob(
     // refunded routed job — what the daily reconciliation lists as such).
     const billed = verifiedReportedUsd(done) ?? undefined
     // The billed task goes on the route ledger (what the job's settle, or the known-loss line, reads).
-    await recordRouteTask(row.id, record.send ?? 1, taskRef, usd(done.providerCostUsd) ?? null, "", usd(done.estimatedCostUsd), routeCostBasisOf(done))
+    await recordRouteTask(row.id, record.send ?? 1, taskRef, usd(done.providerCostUsd) ?? null, "", usd(done.estimatedCostUsd), routeCostBasisOf(done), routeCompletedAtOf(done))
     // A queue entry still holds the job (a retry waiting, a re-pick about to run
     // its handler, which reads this same task and finishes the clip): it is that
     // entry's to finish — never failed from here. A read that fails counts as held.
@@ -296,7 +296,7 @@ export async function reconcileAlternateRouteJob(
   }
   const providerMs = usd(done.providerMs)
   // A routed run's billed cost goes on its route ledger (what its settlement charges).
-  if (record.routed) await recordRouteTask(row.id, record.send ?? 1, taskRef, usd(done.providerCostUsd) ?? null, "", usd(done.estimatedCostUsd), routeCostBasisOf(done))
+  if (record.routed) await recordRouteTask(row.id, record.send ?? 1, taskRef, usd(done.providerCostUsd) ?? null, "", usd(done.estimatedCostUsd), routeCostBasisOf(done), routeCompletedAtOf(done))
   await finalizeRecoveredMedia(
     {
       id: row.id,

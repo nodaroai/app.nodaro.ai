@@ -223,7 +223,7 @@ export async function settleRoutedRunJob(usageLogId: string, jobId: string, toke
   // and while one may still be billed the route is read for it afterwards.
   const notCharged = routeLossOf(ledger, "delivered", 0)
   if (notCharged.usd > 0) await patchSettleOrAlert(jobId, "The loss of its segments that were not charged", { loss: { credits: notCharged.credits, usd: notCharged.usd } })
-  if (notCharged.unbilled && !charge.usedQuote) await watchForLateBill(jobId, LATE_BILL_READ_MS.closed, { knownUsd: ledgerBilledUsd(ledger) })
+  if (notCharged.unbilled && !charge.usedQuote) await watchForLateBill(jobId, LATE_BILL_READ_MS.closed, { knownUsd: ledgerBilledUsd(ledger), loss: notCharged })
   for (const seg of charge.over) {
     const parsed = routedPriceIdOf(seg.priceId)
     if (!parsed) continue

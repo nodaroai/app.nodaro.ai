@@ -50,7 +50,7 @@ describe("resolveRouteLedger", () => {
     expect(await resolveRouteLedger("job", "route-1")).toEqual({ readable: true, resolved: 3, billed: 1 })
     // A start with no reference cannot be read: never polled.
     expect(h.poll.mock.calls).toEqual([["route-1", "a"], ["route-1", "b"], ["route-1", "c"], ["route-1", "d"]])
-    expect(h.tasks).toEqual([["job", 1, "a", 0.5, "", 0.4, "billed-seconds"]])
+    expect(h.tasks).toEqual([["job", 1, "a", 0.5, "", 0.4, "billed-seconds", {}]])
     expect(h.outcomes).toEqual([["job", 2, "", "b", "failed"], ["job", 1, "seg-3", "c", "expired"]])
   })
 
@@ -58,7 +58,7 @@ describe("resolveRouteLedger", () => {
     h.ledger = { tasks: [], segments: [], unresolvedStarts: [{ send: 1, key: "", ref: "a" }] }
     h.poll.mockResolvedValueOnce({ state: "done", resultUrl: "https://r/a.mp4", estimatedCostUsd: 0.4 })
     expect(await resolveRouteLedger("job", "route-1")).toEqual({ readable: true, resolved: 1, billed: 0 })
-    expect(h.tasks).toEqual([["job", 1, "a", null, "", 0.4, undefined]])
+    expect(h.tasks).toEqual([["job", 1, "a", null, "", 0.4, undefined, {}]])
   })
 
   const unbilled = () => ({
@@ -93,7 +93,7 @@ describe("resolveRouteLedger", () => {
       .mockResolvedValueOnce({ state: "done", resultUrl: "https://r/x.mp4", providerCostUsd: 0.5, costBasis: "receipt", estimatedCostUsd: 0.4 })
       .mockResolvedValueOnce({ state: "done", resultUrl: "https://r/x.mp4", providerCostUsd: 0.6, costBasis: "billed-seconds", billedSec: 8 })
     expect(await resolveRouteLedger("job", "route-1")).toEqual({ readable: true, resolved: 2, billed: 2 })
-    expect(h.tasks).toEqual([["job", 1, "t1", 0.5, "", 0.4, "receipt"], ["job", 1, "s1", 0.6, "seg-1", null, "billed-seconds"]])
+    expect(h.tasks).toEqual([["job", 1, "t1", 0.5, "", 0.4, "receipt", {}], ["job", 1, "s1", 0.6, "seg-1", null, "billed-seconds", {}]])
     // It was delivered all along: nothing to revive.
     expect(h.revived).toEqual([])
   })
@@ -122,7 +122,7 @@ describe("resolveRouteLedger", () => {
       expect(await resolveRouteLedger("job", "route-1")).toEqual({ readable: true, resolved: 2, billed: 2 })
       // One with no reference cannot be read.
       expect(h.poll.mock.calls).toEqual([["route-1", "g1"], ["route-1", "g2"]])
-      expect(h.tasks).toEqual([["job", 2, "g1", 0.7, "", null, "receipt"], ["job", 1, "g2", 0.2, "seg-4", null, "receipt"]])
+      expect(h.tasks).toEqual([["job", 2, "g1", 0.7, "", null, "receipt", {}], ["job", 1, "g2", 0.2, "seg-4", null, "receipt", {}]])
       // Its outcome is never moved back to delivered.
       expect(h.revived).toEqual([])
     })

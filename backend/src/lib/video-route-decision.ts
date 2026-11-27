@@ -389,19 +389,21 @@ export function rowlessRouteToken(t: Pick<RowlessRouteToken, "routeId" | "model"
 }
 
 /**
- * Whether a signed run token was signed in ANOTHER environment (staging and
- * production share one database): its signature verifies and it names an
- * environment other than this one. A token that does not verify at all is not
- * "foreign" (it is simply invalid, and refused where it is read).
+ * Whether a run token CLAIMS another environment (staging and production share
+ * one database): it names an environment other than this one, whatever its
+ * signature. The signature is not checked here on purpose: an environment
+ * signing with a different secret cannot verify the other's tokens, and would
+ * otherwise read one as merely invalid and go on to release or record its
+ * reservation. Every caller refuses on true, so a forged claim only refuses.
+ * A token that names this environment (or none) and does not verify is not
+ * foreign: it is invalid, and refused where it is read.
  */
 export function foreignRowlessRouteToken(token: unknown): boolean {
   if (typeof token !== "string") return false
-  const [json, sig] = token.split(".")
-  if (!json || !sig) return false
-  const want = createHmac("sha256", stampKey()).update(`rowless:${json}`).digest("base64url")
-  if (!constantTimeEqualStr(sig, want)) return false
+  const [json] = token.split(".")
+  if (!json) return false
   try {
-    const env = (JSON.parse(Buffer.from(json, "base64url").toString("utf8")) as { env?: unknown }).env
+    const env = (JSON.parse(Buffer.from(json, "base64url").toString("utf8")) as { env?: unknown } | null)?.env
     return typeof env === "string" && env !== getRuntimeEnv()
   } catch {
     return false

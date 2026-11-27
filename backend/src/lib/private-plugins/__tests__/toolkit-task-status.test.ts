@@ -90,7 +90,7 @@ it.each([0, 1.5, null, undefined, Infinity, NaN, -1])("resumed routed receipt %s
   const expected = typeof cost === "number" && Number.isFinite(cost) && cost > 0 ? cost : null
   const result = await runWithJobCancellation("parent-job", "owner", () =>
     buildToolkit().providers.getVideoTaskStatus(rowlessRouteTaskId("test-route", "task", "seg-1:1")))
-  expect(segmentDone).toHaveBeenLastCalledWith("parent-job", "seg-1:1", "task", cost === 0 ? 0 : expected, 2, expected === null ? undefined : "receipt")
+  expect(segmentDone).toHaveBeenLastCalledWith("parent-job", "seg-1:1", "task", cost === 0 ? 0 : expected, 2, expected === null ? undefined : "receipt", {})
   expect(result).toMatchObject({ state: "succeeded", routed: { costUsd: expected } })
 })
 
@@ -99,6 +99,14 @@ it("a resumed routed segment billed by its seconds carries that basis to the led
   segmentDone.mockResolvedValue(0)
   const result = await runWithJobCancellation("parent-job", "owner", () =>
     buildToolkit().providers.getVideoTaskStatus(rowlessRouteTaskId("test-route", "task", "seg-1:1")))
-  expect(segmentDone).toHaveBeenLastCalledWith("parent-job", "seg-1:1", "task", 1.2, null, "billed-seconds")
+  expect(segmentDone).toHaveBeenLastCalledWith("parent-job", "seg-1:1", "task", 1.2, null, "billed-seconds", {})
   expect(result).toMatchObject({ state: "succeeded", routed: { costUsd: 1.2 } })
+})
+
+it("a resumed routed segment carries the time the route's own record says it finished to the ledger", async () => {
+  routePoll.mockResolvedValue({ state: "done", resultUrl: "https://p/clip.mp4", providerCostUsd: 1.2, completedAt: "2026-11-24T23:58:00Z" })
+  segmentDone.mockResolvedValue(0)
+  await runWithJobCancellation("parent-job", "owner", () =>
+    buildToolkit().providers.getVideoTaskStatus(rowlessRouteTaskId("test-route", "task", "seg-1:1")))
+  expect(segmentDone).toHaveBeenLastCalledWith("parent-job", "seg-1:1", "task", 1.2, null, "receipt", { completedAt: "2026-11-24T23:58:00Z" })
 })

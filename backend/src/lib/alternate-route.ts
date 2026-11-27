@@ -38,7 +38,7 @@ import { supabase } from "./supabase.js"
 import { IN_FLIGHT_JOB_STATUSES, isParkedJobStatus } from "./job-status.js"
 import { beginPlannedVideoSegment } from "./video-send-start.js"
 import { getJobId, throwIfJobCancelled } from "./job-cancellation.js"
-import { readRouteLedger, recordRouteStart, recordRouteStartRef, recordRouteTask, recordRouteTaskOutcome, routeCostBasisOf, verifiedReportedUsd, type RouteCostBasis } from "./video-route-ledger.js"
+import { readRouteLedger, recordRouteStart, recordRouteStartRef, recordRouteTask, recordRouteTaskOutcome, routeCompletedAtOf, routeCostBasisOf, verifiedReportedUsd, type RouteCostBasis } from "./video-route-ledger.js"
 import { DrainAbortError, isWorkerDraining } from "./worker-drain.js"
 import { redactProviderDetail } from "./provider-error-detail.js"
 import { jobCostColumns } from "./job-cost-columns.js"
@@ -571,7 +571,7 @@ async function pollToResult(service: PluginAlternateRoutesService, polling: Poll
       // is (a money receipt, or billed seconds at the agreed rate). None reported
       // stays none — never the planned figure or an estimate, which would hide it.
       const reported = usd(polled.providerCostUsd)
-      if (p.routed) await recordRouteTask(p.jobId, p.send ?? 1, p.taskRef, reported ?? null, "", usd(polled.estimatedCostUsd), routeCostBasisOf(polled))
+      if (p.routed) await recordRouteTask(p.jobId, p.send ?? 1, p.taskRef, reported ?? null, "", usd(polled.estimatedCostUsd), routeCostBasisOf(polled), routeCompletedAtOf(polled))
       return {
         url,
         cost: p.routed ? verifiedReportedUsd(polled) : (reported ?? p.plannedCostUsd ?? null),
@@ -1049,7 +1049,7 @@ async function runRowlessRouted(run: AlternateRouteRun): Promise<ProviderResult>
     }
     if (polled?.state === "done" && polled.resultUrl) {
       const receipt = usd(polled.providerCostUsd) ?? null
-      return { url: polled.resultUrl, cost: verifiedReportedUsd(polled), routedVia: routeId, routedCredits: await rowlessSegmentDone(parentJobId, segmentKey, taskRef, receipt, usd(polled.estimatedCostUsd), routeCostBasisOf(polled)) }
+      return { url: polled.resultUrl, cost: verifiedReportedUsd(polled), routedVia: routeId, routedCredits: await rowlessSegmentDone(parentJobId, segmentKey, taskRef, receipt, usd(polled.estimatedCostUsd), routeCostBasisOf(polled), routeCompletedAtOf(polled)) }
     }
     if (polled?.state === "failed" || polled?.state === "expired") {
       // How the segment ended goes on the parent's ledger (not billed), so the run's settlement never waits on it.
@@ -1067,8 +1067,8 @@ async function runRowlessRouted(run: AlternateRouteRun): Promise<ProviderResult>
  * the parent's route ledger (what the parent's settle charges), and the
  * credits it charges when the route has reported a bill. Shared by the send and a resume's status read.
  */
-export async function rowlessSegmentDone(parentJobId: string, segmentKey: string, taskRef: string, costUsd: number | null, estimatedUsd?: number | null, basis?: RouteCostBasis): Promise<number | null> {
-  await recordRouteTask(parentJobId, 1, taskRef, costUsd, segmentKey, estimatedUsd ?? undefined, basis)
+export async function rowlessSegmentDone(parentJobId: string, segmentKey: string, taskRef: string, costUsd: number | null, estimatedUsd?: number | null, basis?: RouteCostBasis, finished: { completedAt?: string } = {}): Promise<number | null> {
+  await recordRouteTask(parentJobId, 1, taskRef, costUsd, segmentKey, estimatedUsd ?? undefined, basis, finished)
   if (!hasCredits()) return null
   try {
     const ledger = await readRouteLedger(parentJobId)

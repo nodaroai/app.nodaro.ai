@@ -6,7 +6,7 @@ import { getAppSettings, settingsReadFailed, type AppSettings } from "../../lib/
 import { VIDEO_ROUTE_STAMP_KEY, foreignRowlessRouteToken, rowlessRunTokenFor, videoRouteStampOf, type VideoRouteStamp } from "../../lib/video-route-decision.js"
 import { PRICE_FACTOR_MAX_AUTO, billAnomalyMultipleOf, routeBillAnomalous, routedRunFee, priceFactorOf, raisedPriceFactor, unpaidChargesEnforced } from "../../lib/video-route-policy.js"
 import { updateVideoRoutePriceFactor } from "../../lib/video-route-policy-store.js"
-import { deliveredTask, markRouteSettleUnbilled, markRouteTaskOwnLoss, noteRouteSettleAttempt, patchRouteSettle, readLateBillWatches, readRouteLedger, recordRouteSettle, reopenUnbilledSettle, type LateBillWatch, type RouteLedger } from "../../lib/video-route-ledger.js"
+import { deliveredTask, markRouteSettleUnbilled, markRouteTaskOwnLoss, noteRouteSettleAttempt, readRouteLedger, recordRouteSettle, type RouteLedger } from "../../lib/video-route-ledger.js"
 import { closeUnresolvedStarts, resolveRouteLedger } from "../../lib/video-route-resolve.js"
 import { DEFER_SETTLEMENT_INPUT_KEY } from "../../lib/deferred-child-request.js"
 import { CreditsService } from "./credits.js"
@@ -17,6 +17,7 @@ import { commitRoutedCharge, deferRoutedSettlement, finishRoutedReceipt, patchSe
 import { ledgerBilledUsd, ledgerMayStillBill, routeLossOf } from "./video-route-loss.js"
 import { boundRunOptions, routedRunChargeOf, settleRoutedRunJob, savedRoutedRunSchema } from "./video-route-runs.js"
 import { recordVideoRouteAlert } from "./video-route-alerts.js"
+import { readLateBills as readLateBillsWith } from "./video-route-late-bills.js"
 export { RoutedSettleRetry, RoutedSettleHeld, RoutedSettleUnbilled, RoutedSettleNothingDelivered } from "./video-route-receipt.js"
 
 /** The usage log a settlement charges: what the caller already read with its managed-settle check. */
@@ -203,7 +204,7 @@ export async function settleRoutedJob(args: { usageLogId: string; jobId: string;
   // the route is read for it afterwards.
   const notCharged = routeLossOf(ledger, "delivered", jobQuoteUsd)
   if (notCharged.usd > 0) await patchSettleOrAlert(args.jobId, "The loss of its sends that were not charged", { loss: { credits: notCharged.credits, usd: notCharged.usd } })
-  if (notCharged.unbilled && !charge.usedQuote) await watchForLateBill(args.jobId, LATE_BILL_READ_MS.closed, { knownUsd: ledgerBilledUsd(ledger) })
+  if (notCharged.unbilled && !charge.usedQuote) await watchForLateBill(args.jobId, LATE_BILL_READ_MS.closed, { knownUsd: ledgerBilledUsd(ledger), loss: notCharged })
   // A send charged at its quote by an admin says nothing about the route's price.
   if (charge.usedQuote) return true
   await raiseFactorFrom(stamp, charge.costUsd / (stamp.quotedUsd * charge.taskCount), `job ${args.jobId} billed ${(charge.costUsd / (stamp.quotedUsd * charge.taskCount)).toFixed(3)}x its quote`)
@@ -433,6 +434,32 @@ export interface RoutedSettlementPreview {
   readonly loss?: RouteLoss | null
   /** The loss of the sends NOT charged when the delivered output is: replaced sends, and given-up ones billed since. */
   readonly chargedLoss?: RouteLoss | null
+  /**
+   * What its reservation says was taken (asked for with `reservation: true`): `nothing` when its
+   * hold went back (refunded), else the credits its charge asked for — never what a short balance
+   * let be collected so far. Null when the reservation could not be read or says neither.
+   */
+  readonly taken?: { readonly nothing: boolean; readonly credits: number } | null
+}
+
+/**
+ * What a routed reservation says was taken: nothing when its hold went back;
+ * else what its charge ASKED for. A receipt with no shortfall charged exactly
+ * that (`charged`). One with a shortfall says only what was collected, so the
+ * charge asked for is read from its unpaid-charge record (`requested`). Null
+ * when it says neither, or that record cannot be read.
+ */
+async function takenOf(jobId: string, log: { status?: unknown; credits_charged?: unknown; receipt?: unknown } | null, usageLogId: string): Promise<RoutedSettlementPreview["taken"]> {
+  if (!log) return null
+  if (log.status === "refunded") return { nothing: true, credits: 0 }
+  if (log.status !== "committed") return null
+  const receipt = (log.receipt && typeof log.receipt === "object" ? log.receipt : {}) as { charged?: unknown; shortfall?: unknown }
+  if (!Number.isSafeInteger(receipt.shortfall)) return null
+  if ((receipt.shortfall as number) === 0) return Number.isSafeInteger(receipt.charged) ? { nothing: false, credits: receipt.charged as number } : null
+  const { data, error } = await (supabase.from("video_route_debts" as "assets") as unknown as { select(c: string): any })
+    .select("requested").eq("usage_log_id", usageLogId).eq("job_id", jobId).maybeSingle()
+  const requested = (data as { requested?: unknown } | null)?.requested
+  return !error && Number.isSafeInteger(requested) ? { nothing: false, credits: requested as number } : null
 }
 
 /**
@@ -441,8 +468,8 @@ export interface RoutedSettlementPreview {
  * measured against — and, beside it, what a release records as the loss (the
  * one loss rule). Charges nothing.
  */
-export async function previewRoutedSettlement(jobId: string): Promise<RoutedSettlementPreview> {
-  const none: RoutedSettlementPreview = { credits: null, billedUsd: null, quotedUsd: null, usedQuote: false, anomalous: false, routeId: undefined, ledgerBilledUsd: null, mayStillBill: false, loss: null, chargedLoss: null }
+export async function previewRoutedSettlement(jobId: string, opts: { reservation?: boolean } = {}): Promise<RoutedSettlementPreview> {
+  const none: RoutedSettlementPreview = { credits: null, billedUsd: null, quotedUsd: null, usedQuote: false, anomalous: false, routeId: undefined, ledgerBilledUsd: null, mayStillBill: false, loss: null, chargedLoss: null, taken: null }
   // trash-read: a settlement reads its job whatever became of it.
   const { data: job, error } = await supabase.from("jobs")
     .select(`usage_log_id, run:metadata->videoRouteRun, stamp:input_data->${VIDEO_ROUTE_STAMP_KEY}`).eq("id", jobId).maybeSingle()
@@ -453,6 +480,12 @@ export async function previewRoutedSettlement(jobId: string): Promise<RoutedSett
   if (settingsReadFailed(settings)) return { ...none, routeId }
   const ledger = await readRouteLedger(jobId)
   const jobQuoteUsd = jobQuoteUsdOf(jobId, j.stamp)
+  let taken: RoutedSettlementPreview["taken"] = null
+  if (opts.reservation && j.usage_log_id) {
+    const { data: log, error: logError } = await supabase.from("usage_logs")
+      .select("status, credits_charged, receipt:metadata->videoRouteReceipt").eq("id", j.usage_log_id).maybeSingle()
+    taken = logError ? null : await takenOf(jobId, log as { status?: unknown; credits_charged?: unknown; receipt?: unknown } | null, j.usage_log_id)
+  }
   // What the ledger itself says, whatever the charge comes to.
   const facts = {
     routeId,
@@ -460,6 +493,7 @@ export async function previewRoutedSettlement(jobId: string): Promise<RoutedSett
     mayStillBill: ledgerMayStillBill(ledger),
     loss: routeLossOf(ledger, "nothing", jobQuoteUsd),
     chargedLoss: routeLossOf(ledger, "delivered", jobQuoteUsd),
+    taken,
   }
   const multiple = billAnomalyMultipleOf(settings.video_route_policy)
   if (j.run) {
@@ -478,104 +512,9 @@ export async function previewRoutedSettlement(jobId: string): Promise<RoutedSett
   return { credits: charge.chargedCredits, billedUsd: charge.costUsd, quotedUsd, usedQuote: charge.usedQuote, anomalous: routeBillAnomalous(charge.costUsd, quotedUsd, multiple), ...facts }
 }
 
-const sameUsd = (a: number, b: number): boolean => Math.abs(a - b) < 1e-6
-const numberOf = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null)
-
-/**
- * The late-bill pass. A settlement that closed over a send the route had not
- * billed (settled at its quote, released, ended undelivered, or waiting
- * `unbilled`) is read from the route again on its slow cadence until its
- * watch ends — while ANY of its sends may still be billed, a replaced or
- * given-up one included, not only the charged one. Each read compares what
- * the ledger now holds with the figure last RECORDED on the settlement
- * (`detail.knownUsd`, the verified bills its figures were taken from), never
- * with "what this read fetched": a bill fetched by any other read (the sweep,
- * an admin's look, a read whose record failed) is found on the next pass.
- *   - `unbilled`, and every charged send has its bill now: it goes back to the
- *     settlement, where it is charged or held like any bill;
- *   - settled or released, and the bills changed: what the run is now known to
- *     cost against what was charged (`uncollected`, `detail.lateBill`), and the
- *     loss of what was not charged (the one loss rule, corrected down as well
- *     as up), are RECORDED in one write that also moves the recorded figure,
- *     and alerted. Nothing more is ever charged from here. A record that
- *     cannot be computed or written changes nothing: the next pass finds the
- *     same difference again.
- * Never throws.
- */
-export async function readLateBills(now = Date.now()): Promise<{ read: number; arrived: number }> {
-  const out = { read: 0, arrived: 0 }
-  let watches: LateBillWatch[]
-  try {
-    watches = await readLateBillWatches(new Date(now))
-  } catch (err) {
-    console.error(`[video-route] the late-bill pass could not read its watches: ${err instanceof Error ? err.message : String(err)}`)
-    return out
-  }
-  for (const watch of watches) {
-    try {
-      out.read++
-      const before = await previewRoutedSettlement(watch.jobId)
-      if (before.routeId) await resolveRouteLedger(watch.jobId, before.routeId)
-      const after = await previewRoutedSettlement(watch.jobId)
-      const until = typeof watch.detail.watchUntil === "string" ? Date.parse(watch.detail.watchUntil) : NaN
-      const cadence = watch.state === "unbilled" ? LATE_BILL_READ_MS.unbilled : LATE_BILL_READ_MS.closed
-      const later = new Date(now + cadence).toISOString()
-      const billedNow = after.ledgerBilledUsd ?? null
-      // The ledger could not be read just now (a settings or job read that failed): nothing is decided on a guess; read again (while the watch lasts).
-      if (billedNow === null) {
-        await patchSettleOrAlert(watch.jobId, "The next late-bill read", {}, { next_attempt_at: Number.isFinite(until) && now < until ? new Date(now + LATE_BILL_READ_MS.unbilled).toISOString() : null })
-        continue
-      }
-      // Read again while any send may still be billed and the watch has time left. Otherwise stop.
-      const again = after.mayStillBill === true && Number.isFinite(until) && now < until
-      const nextAt = again ? later : null
-      if (watch.state === "unbilled") {
-        // By what the ledger holds NOW: every charged send has its bill. Back to the settlement.
-        if (after.credits !== null && !after.usedQuote) {
-          if (await reopenUnbilledSettle(watch.jobId)) out.arrived++
-          continue
-        }
-        // Still waiting: the figures Admin shows are refreshed, on a row still waiting.
-        await patchRouteSettle(watch.jobId, {}, { next_attempt_at: Number.isFinite(until) && now < until ? later : null, ...(after.credits !== null ? { credits: after.credits, quoted_usd: after.quotedUsd } : {}) }, { onlyStates: ["unbilled"] })
-        continue
-      }
-      const recordedUsd = numberOf(watch.detail.knownUsd)
-      if (recordedUsd !== null && sameUsd(recordedUsd, billedNow)) {
-        await patchSettleOrAlert(watch.jobId, "The next late-bill read", {}, { next_attempt_at: nextAt })
-        continue
-      }
-      // The bills changed since the figures were recorded (or none was kept: a settlement watched
-      // before the figure was): what it is now known to cost, against what was taken.
-      const nothingCharged = watch.state === "waived" || (watch.credits ?? 0) === 0
-      const loss = (nothingCharged ? after.loss : after.chargedLoss) ?? null
-      const taken = nothingCharged ? 0 : (watch.credits ?? 0)
-      const known = nothingCharged ? null : after.credits
-      // A charged run whose total cannot be computed just now: not recorded on a guess; the next pass finds the same change.
-      if (loss === null || (!nothingCharged && known === null)) {
-        await patchSettleOrAlert(watch.jobId, "The next late-bill read", {}, { next_attempt_at: later })
-        continue
-      }
-      const difference = known === null ? 0 : Math.max(0, known - taken)
-      // `uncollected`: the charge not collected (a charged run), or the loss (nothing charged) —
-      // the figure as it now stands, down as well as up. A shortfall's is its unpaid charge, kept by the database.
-      const uncollected = nothingCharged ? loss.credits : difference
-      const lateBill = { at: new Date(now).toISOString(), billedUsd: billedNow, knownCredits: known ?? loss.credits, chargedCredits: taken, differenceCredits: difference, lossCredits: loss.credits, lossUsd: loss.usd }
-      const before_ = { uncollected: watch.uncollected ?? 0, loss: numberOf((watch.detail.lateBill as Record<string, unknown> | undefined)?.lossCredits) ?? numberOf((watch.detail.loss as Record<string, unknown> | undefined)?.credits) ?? (nothingCharged ? (watch.uncollected ?? 0) : 0) }
-      const recorded = await patchSettleOrAlert(watch.jobId, "A late bill", { lateBill, knownUsd: billedNow, loss: { credits: loss.credits, usd: loss.usd } }, { next_attempt_at: nextAt, ...(watch.state === "shortfall" ? {} : { uncollected }) })
-      if (!recorded) continue
-      out.arrived++
-      // A settlement watched before the figure was kept, whose money figures did not move: nothing to alert.
-      if (recordedUsd === null && before_.uncollected === uncollected && before_.loss === loss.credits) continue
-      const message = nothingCharged
-        ? `A bill arrived for a routed run that was not charged (released or undelivered): the route's bills for it now come to ${loss.credits} credits (${loss.usd.toFixed(4)} USD), recorded as the loss (it was ${before_.uncollected}).`
-        : `A bill arrived after a routed run was settled: it is now known to cost ${known} credits against ${taken} charged; ${difference} credits are recorded as uncollected${loss.credits > 0 ? `, and ${loss.credits} credits of sends not charged as a loss` : ""}. Nothing more was charged.`
-      console.error(`[ALERT] video route: job ${watch.jobId}: ${message}`)
-      await recordVideoRouteAlert({ key: `late-bill:${watch.jobId}`, kind: "anomaly", jobId: watch.jobId, message }).catch(() => {})
-    } catch (err) {
-      console.error(`[video-route] job ${watch.jobId}: reading its late bill failed: ${err instanceof Error ? err.message : String(err)}`)
-    }
-  }
-  return out
+/** The late-bill pass (video-route-late-bills.ts), over this settlement's own preview. Never throws. */
+export function readLateBills(now = Date.now()): Promise<{ read: number; arrived: number }> {
+  return readLateBillsWith(now, previewRoutedSettlement)
 }
 
 /**
@@ -670,16 +609,19 @@ export async function recoverRoutedSettlementOutcome(jobId: string): Promise<"se
     // rule (the route's bills, the quote of a delivered send not billed yet; never our own fee):
     // recorded on the settlement, alerted once per run, and the route is read afterwards while a
     // send of it may still be billed (one in flight when it ended, or given up on).
-    const lost = await previewRoutedSettlement(jobId).catch(() => null)
-    const loss = lost?.loss ?? null
+    // The figures need only the ledger (read twice before giving up on it).
+    const ledgerNow = await readRouteLedger(jobId).catch(() => readRouteLedger(jobId)).catch(() => null)
+    const loss = ledgerNow ? routeLossOf(ledgerNow, "nothing", jobQuoteUsdOf(jobId, (j as { stamp?: unknown }).stamp)) : null
     const credits = loss?.credits ?? 0
     // A loss that could not be computed just now (a read that failed) is watched too: the late-bill
     // pass records it once it can. One that can never be computed (a decision that does not verify) is not.
-    const watch = unread.length > 0 || loss?.unbilled === true || (loss === null && (lost === null || lost.routeId !== undefined))
+    const watch = unread.length > 0 || loss?.unbilled === true || (loss === null && routeId !== undefined)
     await recordRouteSettle(jobId, "done", { credits: 0, ...(credits > 0 ? { uncollected: credits } : {}), note: credits > 0 || watch ? "undelivered; refunded; the route's bills for it are our loss" : "undelivered; refunded" })
-    if (loss && loss.usd > 0) await patchSettleOrAlert(jobId, "The loss of an undelivered run", { loss: { credits: loss.credits, usd: loss.usd } })
+    // The loss is written in the same step that starts the watch (its starting figures), or alone.
+    const lossFigure = loss && loss.usd > 0 ? { credits: loss.credits, usd: loss.usd } : null
+    if (watch) await watchForLateBill(jobId, LATE_BILL_READ_MS.closed, { knownUsd: ledgerNow ? ledgerBilledUsd(ledgerNow) : null, loss: lossFigure })
+    else if (lossFigure) await patchSettleOrAlert(jobId, "The loss of an undelivered run", { loss: lossFigure })
     if (credits > 0 || watch) {
-      if (watch) await watchForLateBill(jobId, LATE_BILL_READ_MS.closed, { knownUsd: lost?.ledgerBilledUsd ?? null })
       const message = `A routed run ended ${String(j.status)} after the route had worked on it: nothing was charged, ${credits} credits of the route's bills for its sends are recorded as our loss${watch ? ", and the route is still read for a bill that has not come" : ""}.`
       console.error(`[ALERT] job ${jobId}: ${message}`)
       await recordVideoRouteAlert({ key: `undelivered-loss:${jobId}`, kind: "settlement", jobId, message }).catch(() => {})
@@ -691,11 +633,23 @@ export async function recoverRoutedSettlementOutcome(jobId: string): Promise<"se
     if (!r || !Number.isSafeInteger(r.charged) || (r.shortfall === 0 && r.charged !== log.credits_charged) || !Number.isSafeInteger(r.collected_over_hold) || !Number.isSafeInteger(r.shortfall)) {
       throw new Error("Committed routed reservation has no confirmed metered receipt")
     }
+    // A charge whose record is finished here (its first settle stopped after the commit) never
+    // started its late-bill watch. Its ledger is read BEFORE the record is finished: a read that
+    // fails leaves the settlement `retry`, so the sweep comes back — never a finished row whose
+    // watch was never started and that no pass reads again. (The finish is replay-safe.)
+    const ledgerNow = await readRouteLedger(jobId)
+    // The ledger now may hold a bill that arrived after the charge was taken. Its bills are the
+    // watch's starting figure only when the charge they come to is the one the receipt took;
+    // otherwise none is kept, and the first read measures what the run costs against that charge.
+    const now = await previewRoutedSettlement(jobId).catch(() => null)
+    const chargeStands = r.shortfall === 0 && typeof now?.credits === "number" && now.credits === r.charged
     await finishRoutedReceipt(j.usage_log_id, jobId, { charged: r.charged!, collectedOverHold: r.collected_over_hold!, shortfall: r.shortfall! })
-    // A charge whose record was finished here (its first settle stopped after the commit) never
-    // started its late-bill watch: while a send of it may still be billed, the route is read for it.
-    // (No figure is kept from that first settle: the first read records what the ledger shows then.)
-    if (ledgerMayStillBill(await readRouteLedger(jobId))) await watchForLateBill(jobId, LATE_BILL_READ_MS.closed)
+    // The loss of the sends that were not charged, by the one rule, and — while a send may still
+    // be billed — the watch, with its starting figures in the same write.
+    const notCharged = routeLossOf(ledgerNow, "delivered", jobQuoteUsdOf(jobId, (j as { stamp?: unknown }).stamp))
+    const lossFigure = notCharged.usd > 0 ? { credits: notCharged.credits, usd: notCharged.usd } : null
+    if (ledgerMayStillBill(ledgerNow)) await watchForLateBill(jobId, LATE_BILL_READ_MS.closed, { knownUsd: chargeStands ? ledgerBilledUsd(ledgerNow) : null, loss: lossFigure })
+    else if (lossFigure) await patchSettleOrAlert(jobId, "The loss of its sends that were not charged", { loss: lossFigure })
     return "settled"
   }
   // A rejected bill whose release landed before its record: the one settlement finishes the record.

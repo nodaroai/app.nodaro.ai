@@ -17,6 +17,7 @@ import { recordKieCreditSnapshot, fetchKieCreditSnapshotsSince } from "../routes
 import { kieRunwayAlert } from "./kie-low-balance-alert.js"
 import { retryRoutedSettlements } from "./video-route-settlement.js"
 import { runBalanceCheckOnce, runOncePerEnvironment, runReconciliationOnce } from "./video-route-watch.js"
+import { videoRouteSchemaState } from "../../lib/video-route-schema.js"
 import { sweepStaleDcrRegistrations } from "../../lib/oauth-dcr-sweep.js"
 import { sweepAbandonedCopilotWorkflows } from "../copilot/abandoned-sweep.js"
 import { sweepUnsyncedConsents } from "../lib/consent-loops-sync.js"
@@ -203,6 +204,13 @@ export function startCleanupCron(): void {
   // routed jobs against the route's own spend — at 00:20 (the servers run on UTC). Best effort,
   // never throws; a no-op with no route here or no routing ever saved.
   cron.schedule("20 0 * * *", () => { void runReconciliationOnce() })
+  // The routed-video schema check (lib/video-route-schema.ts) -- every minute, on
+  // EVERY server and outside any once-per-environment lease: each process keeps
+  // its own answer, for at most VIDEO_ROUTE_SCHEMA_RECHECK_MS, and asks the
+  // database again only once that answer is stale (a tick in between reads
+  // nothing). So a newly applied schema file, or a piece that goes missing, is
+  // noticed and alerted on without a save or a restart. Never throws into the cron.
+  cron.schedule("* * * * *", () => { void videoRouteSchemaState().catch(() => {}) })
 
   cron.schedule("0 3 * * *", async () => {
     console.log("[cron] Starting free user media cleanup...")

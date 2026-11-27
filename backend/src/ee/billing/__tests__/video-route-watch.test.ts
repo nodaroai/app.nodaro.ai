@@ -57,7 +57,7 @@ vi.mock("@/lib/supabase.js", () => ({
         if (table !== "video_route_ledger") return { data: [], error: null }
         const rows = (h.tasks as Array<Record<string, unknown>>).map((t, i) => ({ id: i + 1, created_at: "2026-11-24T12:00:00.000Z", ...t }))
         const at = (r: Record<string, unknown>) => (column === "created_at" ? r.created_at : (r.detail as { billedAt?: unknown } | undefined)?.billedAt)
-        return { data: rows.filter((r) => typeof at(r) === "string" && (at(r) as string) >= from && (at(r) as string) < to), error: null }
+        return { data: rows.filter((r) => typeof at(r) === "string" && (at(r) as string) >= from && (to === "" || (at(r) as string) < to)), error: null }
       }
       q.in = async (_c: string, ids: string[]) => ({ data: ids.map((id) => ({ id, status: h.statuses[id] ?? "completed" })), error: null })
       return q
@@ -159,29 +159,30 @@ describe("reconcileRouteSpend", () => {
     expect(alerts().some((m) => m.includes("may be wrong"))).toBe(false)
   })
 
-  it("alerts when THIS environment's ledger records more than the whole account spent (its own drift) — and raises no price", async () => {
+  it("this environment's ledger recording more than the whole account spent is shown here, and alerted by the account's own pass (never twice)", async () => {
     route()
     h.settings = { video_route_policy: policy() }
     h.tasks = [task("a", 9), task("b", 3)]
     const day = await reconcileRouteSpend(NOW)
     expect(day).toMatchObject({ recordedUsd: 12, actualUsd: 10, overRecordedUsd: 2 })
-    expect((h.adminAlerts as Array<{ key: string }>).some((a) => a.key === "spend-drift:2026-11-24")).toBe(true)
-    expect(alerts().some((m) => m.includes("the recorded bills may be wrong"))).toBe(true)
+    expect((h.adminAlerts as Array<{ key: string }>).some((a) => a.key.startsWith("spend-drift:"))).toBe(false)
   })
 
-  it("counts a bill on the day it was RECORDED: a late bill lands on the day it arrived, not on no day", async () => {
+  it("counts a bill on the day the ROUTE billed it: a bill that reached the ledger days later still counts on its own day", async () => {
     route()
     h.settings = { video_route_policy: policy() }
     h.tasks = [
-      // Written two days before, billed on the day: this day's.
+      // First read done two days before, its bill recorded on this day: that earlier day's, not this one's.
       { job_id: "late", billed_usd: "4.000000", created_at: "2026-11-22T10:00:00.000Z", detail: { billedAt: "2026-11-24T08:00:00.000Z" } },
-      // Written on the day with no bill, billed the next day: neither billed nor missing on this day.
+      // First read done on this day, its bill recorded the next day: this day's.
       { job_id: "next", billed_usd: "2.000000", created_at: "2026-11-24T23:00:00.000Z", detail: { billedAt: "2026-11-25T00:10:00.000Z" } },
+      // Read done the next day, but the route's own record says it finished on this day: this day's.
+      { job_id: "own", billed_usd: "0.500000", created_at: "2026-11-25T00:05:00.000Z", detail: { completedAt: "2026-11-24T23:58:00.000Z" } },
       // Billed with its row on the day.
       { job_id: "plain", billed_usd: "1.000000" },
     ] as never
     const day = await reconcileRouteSpend(NOW)
-    expect(day).toMatchObject({ recordedUsd: 5, jobs: 2 })
+    expect(day).toMatchObject({ recordedUsd: 3.5, jobs: 3 })
     expect((h.adminAlerts as Array<{ key: string }>).some((a) => a.key.startsWith("missing-receipts:"))).toBe(false)
   })
 
@@ -200,7 +201,7 @@ describe("reconcileRouteSpend", () => {
     h.tasks = [task("a", 5), task("b", 3), task("c", 2, "failed")]
     const day = await reconcileRouteSpend(NOW)
     expect(day).toMatchObject({ recordedUsd: 8, lossesUsd: 2, failedJobs: 1, unexplainedUsd: 0 })
-    expect(alerts().some((m) => m.includes("known losses"))).toBe(true)
+    expect(alerts().some((m) => m.includes("known losses") && m.includes("not charged"))).toBe(true)
     expect(alerts().some((m) => m.includes("rate table"))).toBe(false)
   })
 
@@ -349,7 +350,7 @@ describe("reportLateBillsAndOrphans — the daily report of late bills and of se
   it("lists the bills that arrived after their run was settled or released: recorded, never charged", async () => {
     h.lateBills = 3
     await reportLateBillsAndOrphans(NOW)
-    expect(kept().find((a) => a.key === "late-bills:2026-11-25")?.message).toMatch(/3 routed run\(s\).*nothing more was charged/)
+    expect(kept().find((a) => a.key === "late-bills:2026-11-25")?.message).toMatch(/3 routed run\(s\).*as uncollected.*as the loss. Nothing more was charged/)
   })
 
   it("lists the repayments the database's retry gave up on: no longer retried, still owed", async () => {

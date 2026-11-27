@@ -6696,6 +6696,13 @@ export type PluginAlternateRoutePoll =
       providerMs?: number
       /** ADDITIVE-OPTIONAL (V2). The seconds the upstream billed (compared with the admission quote's). */
       billedSec?: number
+      /**
+       * ADDITIVE-OPTIONAL (V2). When the upstream's own record says the task
+       * finished (an ISO timestamp). The host counts the task's bill on that
+       * day in its daily reconciliation against `spend()`; absent, it uses the
+       * time it first read the task done.
+       */
+      completedAt?: string
     }
   /** Ended without a result and NOT charged (a refusal included). Admin-routed jobs never fall back. */
   | { state: "failed" | "expired"; message: string; code?: string }
