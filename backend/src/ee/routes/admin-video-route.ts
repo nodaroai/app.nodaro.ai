@@ -57,7 +57,7 @@ import { VIDEO_ROUTE_OUTCOME_KEY, type VideoRouteOutcome } from "../billing/vide
 import { audit } from "./admin-trends-lifecycle.js"
 import { decideRouteSettleHold, patchRouteSettle, readHeldRouteSettle, readHeldRouteSettles, readRouteLedger, type HeldRouteSettle } from "../../lib/video-route-ledger.js"
 import { resolveRouteLedger } from "../../lib/video-route-resolve.js"
-import { videoRouteSchemaMissing } from "../../lib/video-route-schema.js"
+import { videoRouteSchemaState } from "../../lib/video-route-schema.js"
 import { CONFIRM_ROUNDING_CREDITS } from "../billing/video-route-receipt.js"
 import { previewRoutedSettlement, recoverRoutedSettlement, RoutedSettleHeld } from "../billing/video-route-settlement.js"
 
@@ -121,13 +121,14 @@ export interface VideoRouteAdminView {
   alerts: VideoRouteAlert[]
   spendDays: SpendDay[]
   /**
-   * Settlements waiting for an admin, oldest first: a bill far above its quote (confirm or reject), or a run the route
-   * never billed (settle at its quote or release). Each carries what a decision would do RIGHT NOW: `wouldCharge` is the
-   * real bill of every billed send plus the quote of every unbilled one (null: not computable yet), `totalAnomalous`
-   * says that total is itself far above the quote (settling it at the quote would hold it, not charge it), and a
-   * release records `wouldCharge` as the loss.
+   * Settlements waiting for an admin, oldest first (`heldAt`: when it started waiting): a bill far above its quote
+   * (confirm or reject), or a run the route never billed (settle at its quote or release). Each carries what a decision
+   * would do RIGHT NOW: `wouldCharge` is the real bill of every billed send plus the quote of every unbilled one (null:
+   * not computable yet), `totalAnomalous` says that total is itself far above the quote (settling it at the quote would
+   * hold it, not charge it), and `wouldLose` is what a release records as the loss: the route's bill of its sends (the
+   * quote of one not billed yet), in base credits, with no markup, add-on or run fee (null: not computable yet).
    */
-  holds: Array<HeldRouteSettle & { wouldCharge: number | null; totalAnomalous: boolean }>
+  holds: Array<HeldRouteSettle & { wouldCharge: number | null; wouldLose: number | null; totalAnomalous: boolean }>
   /**
    * What the loaded route takes today with no policy saved, as it reports it
    * (routable models and known services only). null: the route does not say,
@@ -243,7 +244,7 @@ async function view(): Promise<VideoRouteAdminView> {
     holds: await Promise.all(holds.map(async (hold) => {
       // What each action would do now, from the same computation the settlement uses. Never fails the page.
       const preview = await previewRoutedSettlement(hold.jobId).catch(() => null)
-      return { ...hold, wouldCharge: preview?.credits ?? null, totalAnomalous: preview?.anomalous === true }
+      return { ...hold, wouldCharge: preview?.credits ?? null, wouldLose: preview?.loss?.credits ?? null, totalAnomalous: preview?.anomalous === true }
     })),
     legacyRouting: legacy.recognised,
     legacyRoutingUnrecognised: legacy.unrecognised,
@@ -289,11 +290,26 @@ export async function adminVideoRouteRoutes(app: FastifyInstance): Promise<void>
       if (parsed.data.policy.enforceUnpaidCharges && !RUNTIME_ENV_NAMEABLE) {
         return reply.status(409).send({ error: { code: "environment_not_nameable", message: "Unpaid charges cannot be enforced here: this server's environment name cannot be sent to the database (it must be 1-64 printable ASCII characters with no space)." } })
       }
-      // No model is routed over a schema that is not whole: a missing trigger fails silently.
-      if (anyModelRouted(parsed.data.policy)) {
-        const missing = await videoRouteSchemaMissing()
-        if (missing.length > 0) {
-          return reply.status(409).send({ error: { code: "schema_incomplete", message: `No model can be routed here yet: this database's routed-video schema is incomplete (missing: ${missing.join("; ")}).` } })
+      // No model is routed, and unpaid charges are not turned on, over a schema that is not PROVEN
+      // whole: a missing trigger fails silently. The database is asked now (never a kept answer),
+      // and anything but "whole" refuses the save — a check function not installed yet, or one
+      // that could not be asked, included. A save that routes nothing and enforces nothing new
+      // (and the revert below) is always allowed.
+      const turnsEnforcementOn = parsed.data.policy.enforceUnpaidCharges === true && (await readVideoRoutePolicy()).policy?.enforceUnpaidCharges !== true
+      if (anyModelRouted(parsed.data.policy) || turnsEnforcementOn) {
+        const schema = await videoRouteSchemaState({ fresh: true })
+        if (schema.status === "incomplete") {
+          return reply.status(409).send({ error: { code: "schema_incomplete", message: `No model can be routed and unpaid charges cannot be enforced here yet: this database's routed-video schema is incomplete (missing: ${schema.missing.join("; ")}).` } })
+        }
+        if (schema.status !== "whole") {
+          return reply.status(409).send({
+            error: {
+              code: "schema_unverified",
+              message: schema.checkInstalled === false
+                ? "No model can be routed and unpaid charges cannot be enforced here yet: the schema check function is not installed in this database yet, so the routed-video schema cannot be verified."
+                : "The routed-video schema could not be verified just now, so nothing was saved. Try again.",
+            },
+          })
         }
       }
       // A compare-and-set on the row's `updated_at`: a page edited over an older policy (another
@@ -353,7 +369,8 @@ export async function adminVideoRouteRoutes(app: FastifyInstance): Promise<void>
         if (seen.routeId) await resolveRouteLedger(jobId, seen.routeId)
         const now = await previewRoutedSettlement(jobId)
         if (now.credits === null || Math.abs(now.credits - expected) > CONFIRM_ROUNDING_CREDITS) {
-          if (now.credits !== null) await patchRouteSettle(jobId, {}, { credits: now.credits, billed_usd: now.billedUsd, quoted_usd: now.quotedUsd })
+          // The new figures go only on a row still waiting for this decision (a row that moved on is not rewritten).
+          if (now.credits !== null) await patchRouteSettle(jobId, {}, { credits: now.credits, billed_usd: now.billedUsd, quoted_usd: now.quotedUsd }, { onlyStates: [held.kind === "unbilled" ? "unbilled" : "hold"] })
           return reply.status(409).send({
             error: { code: "total_changed", message: now.credits === null ? "The total of this run cannot be computed right now. Nothing was decided; try again." : `The total of this run is now ${now.credits} credits, not the ${expected} you were shown. Nothing was decided; look at it again.` },
             data: { ...(await view()), changed: { jobId, expectedChargedCredits: expected, wouldCharge: now.credits, totalAnomalous: now.anomalous } },

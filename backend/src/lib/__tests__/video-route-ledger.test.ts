@@ -10,6 +10,7 @@ vi.mock("../supabase.js", () => ({
 }))
 const { decideRouteSettleHold, holdRouteSettle, patchRouteSettle, recordRouteStartRef, recordRouteSettle, recordRouteTask, routeCostBasisOf, verifiedReportedUsd, verifiedTaskUsd } = await import("../video-route-ledger.js")
 const { getRuntimeEnv } = await import("../runtime-env.js")
+const { createFakeTables } = await import("../../ee/billing/__tests__/helpers/fake-tables.js")
 beforeEach(() => {
   vi.resetAllMocks()
   h.table = null
@@ -17,19 +18,23 @@ beforeEach(() => {
 
 describe("routed task evidence", () => {
   it("records a bill with its basis, an estimate beside it, and a bill of zero as no bill", async () => {
-    h.upsert.mockResolvedValue({ error: null })
+    const db = createFakeTables()
+    h.table = () => db.client.from("video_route_ledger")
+    const row = () => db.rows("video_route_ledger")[0]!
     await recordRouteTask("job", 1, "task", 0.5, "segment", 0.4)
-    expect(h.upsert).toHaveBeenCalledWith(expect.objectContaining({ billed_usd: 0.5, estimated_usd: 0.4, cost_basis: "receipt" }), expect.objectContaining({ ignoreDuplicates: false }))
-    // Zero (or less) is not a bill: recorded as none, so the settlement is pending, never a free run.
+    expect(row()).toMatchObject({ billed_usd: 0.5, estimated_usd: 0.4, cost_basis: "receipt" })
+    // Zero (or less) is not a bill: it never overwrites a row that has one (the settlement is pending, never a free run).
     await recordRouteTask("job", 1, "task", 0, "segment", 0.4)
-    expect(h.upsert).toHaveBeenLastCalledWith(expect.objectContaining({ billed_usd: null }), expect.objectContaining({ ignoreDuplicates: true }))
+    expect(row()).toMatchObject({ billed_usd: 0.5 })
     // Billed seconds at the agreed rate: a verified bill, recorded with its basis.
     await recordRouteTask("job", 1, "task", 0.4, "segment", undefined, "billed-seconds")
-    expect(h.upsert).toHaveBeenLastCalledWith(expect.objectContaining({ billed_usd: 0.4, cost_basis: "billed-seconds" }), expect.objectContaining({ ignoreDuplicates: false }))
-    // An estimate alone is recorded as an estimate: no bill, no basis, and it never overwrites a row that has a bill.
-    await recordRouteTask("job", 1, "task", null, "segment", 0.4, "billed-seconds")
-    expect(h.upsert).toHaveBeenLastCalledWith(expect.objectContaining({ billed_usd: null, estimated_usd: 0.4 }), expect.objectContaining({ ignoreDuplicates: true }))
-    expect(h.upsert.mock.calls.at(-1)![0]).not.toHaveProperty("cost_basis")
+    expect(row()).toMatchObject({ billed_usd: 0.4, cost_basis: "billed-seconds" })
+    // An estimate alone is recorded as an estimate: no bill, no basis.
+    await recordRouteTask("job", 2, "task2", null, "segment", 0.4, "billed-seconds")
+    expect(db.rows("video_route_ledger", { send: 2 })[0]).toMatchObject({ billed_usd: null, estimated_usd: 0.4 })
+    expect(db.rows("video_route_ledger", { send: 2 })[0]).not.toHaveProperty("cost_basis")
+    await recordRouteTask("job", 3, "task3", 0, "segment")
+    expect(db.rows("video_route_ledger", { send: 3 })[0]).toMatchObject({ billed_usd: null })
   })
 
   it("only a reported bill is a verified cost, whatever its basis; an estimate never is", () => {
@@ -51,9 +56,15 @@ describe("routed task evidence", () => {
   })
 
   it("refuses to publish a completed task when neither ledger write succeeded", async () => {
-    h.upsert.mockResolvedValue({ error: { message: "unavailable" } })
+    const db = createFakeTables()
+    h.table = () => db.client.from("video_route_ledger")
+    db.failNextWrite("video_route_ledger")
+    // The first write fails, the retry lands.
+    await expect(recordRouteTask("job", 1, "task", 1)).resolves.toBe(true)
+    db.failNextWrite("video_route_ledger")
+    const again = createFakeTables()
+    h.table = () => ({ ...again.client.from("video_route_ledger") as object, insert: async () => ({ error: { message: "unavailable" } }) })
     await expect(recordRouteTask("job", 1, "task", 1)).rejects.toThrow(/could not record/)
-    expect(h.upsert).toHaveBeenCalledTimes(2)
   })
 
   it("cannot acknowledge a missing start or a failed settlement write", async () => {

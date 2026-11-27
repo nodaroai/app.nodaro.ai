@@ -63,7 +63,7 @@ const NOT_A_SAVED_FAILURE: Readonly<Record<string, { count: number; why: string;
   "ee/billing/provision-credits.ts": { count: 3, why: LOG },
   "ee/billing/video-route-admission.ts": { count: 1, why: "a log line naming a routed job's hold" },
   "ee/billing/video-route-receipt.ts": { count: 5, why: "operator alerts and Admin notes for missing receipts, uncollected charges, and a bill held for or rejected by an admin" },
-  "ee/billing/video-route-settlement.ts": { count: 5, why: "operator alerts on a confirmed charge above its hold and on the loss of a run that ended undelivered, and the Admin notes of a bill that arrived after its run was settled or released" },
+  "ee/billing/video-route-settlement.ts": { count: 7, why: "operator alerts on a confirmed charge above its hold, on the loss of a run that ended undelivered or delivered nothing, and the Admin notes of a bill that arrived after its run was settled or released (charged or not)" },
   "ee/routes/admin-video-route.ts": { count: 1, why: "an admin's own reply: the total of a held run changed since the page showed it" },
   "ee/billing/video-route-watch.ts": { count: 1, why: "operator reconciliation of outstanding charges" },
   "ee/billing/video-route-runs.ts": { count: 1, why: "operator alert on a segment bill above its quote" },

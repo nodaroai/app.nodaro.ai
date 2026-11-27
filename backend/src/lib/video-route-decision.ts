@@ -388,6 +388,26 @@ export function rowlessRouteToken(t: Pick<RowlessRouteToken, "routeId" | "model"
   })
 }
 
+/**
+ * Whether a signed run token was signed in ANOTHER environment (staging and
+ * production share one database): its signature verifies and it names an
+ * environment other than this one. A token that does not verify at all is not
+ * "foreign" (it is simply invalid, and refused where it is read).
+ */
+export function foreignRowlessRouteToken(token: unknown): boolean {
+  if (typeof token !== "string") return false
+  const [json, sig] = token.split(".")
+  if (!json || !sig) return false
+  const want = createHmac("sha256", stampKey()).update(`rowless:${json}`).digest("base64url")
+  if (!constantTimeEqualStr(sig, want)) return false
+  try {
+    const env = (JSON.parse(Buffer.from(json, "base64url").toString("utf8")) as { env?: unknown }).env
+    return typeof env === "string" && env !== getRuntimeEnv()
+  } catch {
+    return false
+  }
+}
+
 /** A token's decision when the server signed it in this environment; undefined otherwise. */
 export function rowlessRouteTokenOf(token: unknown): RowlessRouteToken | undefined {
   if (typeof token !== "string") return undefined

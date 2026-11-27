@@ -179,21 +179,59 @@ export async function withdrawRouteStart(jobId: string, send: number, key = ""):
 }
 
 /**
+ * When a task's verified bill was first recorded on the ledger (`detail.billedAt`,
+ * set once: a later write of the same bill never moves it). The daily
+ * reconciliation counts a bill on the day it was RECORDED, so one that arrives
+ * after its task's row was written lands on the day it arrived, not on no day.
+ * Undefined for a row whose bill went on with the row itself (its `created_at`).
+ */
+export function billedAtOf(detail: unknown): string | undefined {
+  const at = detailOf(detail)?.billedAt
+  return typeof at === "string" && Number.isFinite(Date.parse(at)) ? at : undefined
+}
+
+/**
  * Records the bill of the job's task of send `send` as the route reported it
  * (`billedUsd`, with `basis` saying what it is; null: none reported), and the
  * route's estimate beside it when it gave one (kept for the record, never
  * settled from). Written on every read that finds it done; a later write of
- * the same send keeps a reported bill over none. Retries once, then throws so
- * an unrecorded task cannot be published as delivered.
+ * the same send keeps a reported bill over none, never changes how the send
+ * ended (`outcome`: a start given up on stays given up, whatever it is billed),
+ * and keeps what else the row carries (`detail`). The first bill of a row is
+ * stamped with when it was recorded ({@link billedAtOf}). Retries once, then
+ * throws so an unrecorded task cannot be published as delivered.
  */
 export async function recordRouteTask(jobId: string, send: number, ref: string | null, billedUsd: number | null | undefined, key = "", estimatedUsd?: number | null, basis?: RouteCostBasis): Promise<boolean> {
   const billed = billUsd(billedUsd)
   const estimated = finiteUsd(estimatedUsd)
   const write = async (): Promise<boolean> => {
-    const { error } = await ledger().upsert(
-      { job_id: jobId, env: getRuntimeEnv(), kind: "task", send, key, ref, billed_usd: billed, ...(estimated !== null ? { estimated_usd: estimated } : {}), ...(billed !== null ? { cost_basis: basis ?? "receipt" } : {}), updated_at: new Date().toISOString() },
-      { onConflict: "job_id,kind,send,key", ignoreDuplicates: billed === null },
-    )
+    const at = new Date().toISOString()
+    // With no bill: the row is written once and never over another (a bill already there is kept).
+    if (billed === null) {
+      const { error } = await ledger().upsert(
+        { job_id: jobId, env: getRuntimeEnv(), kind: "task", send, key, ref, billed_usd: null, ...(estimated !== null ? { estimated_usd: estimated } : {}), updated_at: at },
+        { onConflict: "job_id,kind,send,key", ignoreDuplicates: true },
+      )
+      return !error
+    }
+    const fields = { ref, billed_usd: billed, cost_basis: basis ?? "receipt", ...(estimated !== null ? { estimated_usd: estimated } : {}), updated_at: at }
+    // A new row with its bill: recorded now (its `created_at`).
+    const inserted = await ledger().insert({ job_id: jobId, env: getRuntimeEnv(), kind: "task", send, key, ...fields })
+    if (!inserted.error) return true
+    if (inserted.error.code !== "23505") return false
+    const read = await ledger().select("id, billed_usd, detail").eq("job_id", jobId).eq("kind", "task").eq("send", send).eq("key", key).limit(1)
+    const row = ((read.data ?? []) as Array<{ id?: unknown; billed_usd?: unknown; detail?: unknown }>)[0]
+    if (read.error || !row) return false
+    if (verifiedTaskUsd(row) === null) {
+      // The bill arrives on a row written without one: it is recorded NOW (set once, in the same
+      // compare-and-set that writes the bill, so two writers cannot both stamp it).
+      const { data, error } = await ledger().update({ ...fields, detail: { ...(detailOf(row.detail) ?? {}), billedAt: at } })
+        .eq("id", row.id).is("billed_usd", null).select("id")
+      if (error) return false
+      if (Array.isArray(data) && data.length > 0) return true
+    }
+    // A bill there already: the route's latest figure is kept, and when it was first recorded is not moved.
+    const { error } = await ledger().update(fields).eq("id", row.id)
     return !error
   }
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -230,21 +268,40 @@ function detailOf(raw: unknown): Record<string, unknown> | null {
 }
 
 /**
+ * A stamp for a compare-and-set write that is strictly later than the one it
+ * replaces. Compared as instants, never as text: the database answers
+ * `+00:00` where JavaScript writes `Z`, and with microseconds. A write in the
+ * same millisecond as the last one would otherwise leave the stamp unchanged,
+ * and a concurrent writer's compare-and-set on it would then succeed over
+ * this write.
+ */
+export function nextLedgerStamp(previous: unknown, now = Date.now()): string {
+  const before = typeof previous === "string" ? Date.parse(previous) : NaN
+  return new Date(Number.isFinite(before) ? Math.max(now, Math.floor(before) + 1) : now).toISOString()
+}
+
+/**
  * Merges `patch` into the settle row's `detail` (and sets `columns` beside it).
  * A compare-and-set on the detail it read, tried a few times: a concurrent
  * writer's keys (the first attempt's time, the watch, a late bill) are never
- * lost to a stale read. Never throws.
+ * lost to a stale read. With `onlyStates`, only a row still in one of those
+ * states is written (a row that moved on meanwhile is left as it is). False
+ * when nothing was written (no row, a row in another state, a write that
+ * failed): a caller that needs the write says so (ee/billing/video-route-receipt.ts
+ * `patchSettleOrAlert`). Never throws.
  */
-export async function patchRouteSettle(jobId: string, patch: Record<string, unknown>, columns: Record<string, unknown> = {}): Promise<boolean> {
+export async function patchRouteSettle(jobId: string, patch: Record<string, unknown>, columns: Record<string, unknown> = {}, opts: { onlyStates?: readonly LedgerSettleState[] } = {}): Promise<boolean> {
   try {
     for (let attempt = 0; attempt < 4; attempt++) {
-      const { data, error: readError } = await ledger().select("id, detail, updated_at").eq("job_id", jobId).eq("kind", "settle").limit(1)
-      const row = ((data ?? []) as Array<{ id?: unknown; detail?: unknown; updated_at?: unknown }>)[0]
+      const { data, error: readError } = await ledger().select("id, detail, state, updated_at").eq("job_id", jobId).eq("kind", "settle").limit(1)
+      const row = ((data ?? []) as Array<{ id?: unknown; detail?: unknown; state?: unknown; updated_at?: unknown }>)[0]
       if (readError || !row) return false
+      if (opts.onlyStates && !opts.onlyStates.includes(row.state as LedgerSettleState)) return false
       const current = detailOf(row.detail) ?? {}
-      const stamp = new Date().toISOString()
-      const { data: written, error } = await ledger().update({ ...columns, detail: { ...current, ...patch }, updated_at: stamp === row.updated_at ? new Date(Date.now() + 1).toISOString() : stamp })
-        .eq("id", row.id).eq("updated_at", row.updated_at).select("id")
+      let write = ledger().update({ ...columns, detail: { ...current, ...patch }, updated_at: nextLedgerStamp(row.updated_at) })
+        .eq("id", row.id).eq("updated_at", row.updated_at)
+      if (opts.onlyStates) write = write.in("state", [...opts.onlyStates])
+      const { data: written, error } = await write.select("id")
       if (error) return false
       if (Array.isArray(written) && written.length > 0) return true
     }
@@ -257,8 +314,17 @@ export async function patchRouteSettle(jobId: string, patch: Record<string, unkn
 /** Marks a delivered send as our own loss (its clip was replaced after a step of ours failed). False when it could not be written; never throws. */
 export async function markRouteTaskOwnLoss(jobId: string, send: number): Promise<boolean> {
   try {
-    const { data, error } = await ledger().update({ detail: { ownLoss: true } }).eq("job_id", jobId).eq("kind", "task").eq("send", send).eq("key", "").select("id")
-    return !error && Array.isArray(data) && data.length > 0
+    // Merged into what the row carries (when its bill was recorded), a compare-and-set on the stamp it read.
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const read = await ledger().select("id, detail, updated_at").eq("job_id", jobId).eq("kind", "task").eq("send", send).eq("key", "").limit(1)
+      const row = ((read.data ?? []) as Array<{ id?: unknown; detail?: unknown; updated_at?: unknown }>)[0]
+      if (read.error || !row) return false
+      const { data, error } = await ledger().update({ detail: { ...(detailOf(row.detail) ?? {}), ownLoss: true }, updated_at: nextLedgerStamp(row.updated_at) })
+        .eq("id", row.id).eq("updated_at", row.updated_at).select("id")
+      if (error) return false
+      if (Array.isArray(data) && data.length > 0) return true
+    }
+    return false
   } catch {
     return false
   }
@@ -291,17 +357,6 @@ export async function recordRouteTaskOutcome(jobId: string, send: number, key: s
   }
 }
 
-/** A start given up on as `unresolved` turned out delivered (its bill arrived): it counts as a delivered send again. Never throws. */
-export async function reviveUnresolvedTask(jobId: string, send: number, key: string): Promise<boolean> {
-  try {
-    const { error } = await ledger().update({ outcome: "done", updated_at: new Date().toISOString() })
-      .eq("job_id", jobId).eq("kind", "task").eq("send", send).eq("key", key).eq("outcome", "unresolved")
-    return !error
-  } catch {
-    return false
-  }
-}
-
 /** Notes one more attempt to settle, and when the next is due (the sweep's backoff). Never throws. */
 export async function noteRouteSettleAttempt(jobId: string, attempts: number, nextAttemptAt: Date): Promise<void> {
   try {
@@ -318,11 +373,38 @@ export async function noteRouteSettleAttempt(jobId: string, attempts: number, ne
  * who settles it at its quote or releases it. True when THIS call moved it.
  */
 export async function markRouteSettleUnbilled(jobId: string, fields: { credits: number | null; quotedUsd: number | null; note: string; nextAttemptAt?: Date }): Promise<boolean> {
-  const { data, error } = await ledger()
-    .update({ state: "unbilled", credits: fields.credits, quoted_usd: fields.quotedUsd, note: fields.note.slice(0, 500), updated_at: new Date().toISOString(), next_attempt_at: fields.nextAttemptAt?.toISOString() ?? null })
-    .eq("job_id", jobId).eq("kind", "settle").eq("state", "retry").is("decision", null).select("id")
-  if (error) throw new Error(`Job ${jobId}: could not mark its settlement unbilled: ${error.message}`)
-  return Array.isArray(data) && data.length > 0
+  return enterHeldState(jobId, "unbilled", { credits: fields.credits, quoted_usd: fields.quotedUsd, note: fields.note.slice(0, 500), next_attempt_at: fields.nextAttemptAt?.toISOString() ?? null })
+}
+
+/**
+ * Moves the settle row from `retry` (no decision) into `hold` / `unbilled`, and
+ * stamps when it did (`detail.heldAt`) in the SAME compare-and-set: what Admin
+ * and the daily reminder show as "waiting since", never the row's `updated_at`
+ * (which every later write of the row moves). Merged into the detail it read,
+ * on the stamp it read, so a concurrent detail write is never lost. True when
+ * THIS call moved it; false when the row is not (or no longer) `retry` with no
+ * decision. Throws when it could not be written.
+ */
+async function enterHeldState(jobId: string, state: "hold" | "unbilled", columns: Record<string, unknown>): Promise<boolean> {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const read = await ledger().select("id, state, decision, detail, updated_at").eq("job_id", jobId).eq("kind", "settle").limit(1)
+    if (read.error) throw new Error(`Job ${jobId}: could not read its settlement to move it to ${state}: ${read.error.message}`)
+    const row = ((read.data ?? []) as Array<{ id?: unknown; state?: unknown; decision?: unknown; detail?: unknown; updated_at?: unknown }>)[0]
+    if (!row || row.state !== "retry" || (row.decision ?? null) !== null) return false
+    const at = new Date().toISOString()
+    const { data, error } = await ledger()
+      .update({ ...columns, state, detail: { ...(detailOf(row.detail) ?? {}), heldAt: at }, updated_at: nextLedgerStamp(row.updated_at) })
+      .eq("id", row.id).eq("updated_at", row.updated_at).eq("state", "retry").is("decision", null).select("id")
+    if (error) throw new Error(`Job ${jobId}: could not move its settlement to ${state}: ${error.message}`)
+    if (Array.isArray(data) && data.length > 0) return true
+  }
+  return false
+}
+
+/** When a held settlement started waiting: `detail.heldAt`, else (a row held before it was kept) when the row was created — never its `updated_at`. */
+function heldAtOf(row: Record<string, unknown>): string {
+  const kept = detailOf(row.detail)?.heldAt
+  return typeof kept === "string" && kept ? kept : String(row.created_at ?? "")
 }
 
 /** What a settlement held for an admin's decision records beside its state. */
@@ -341,17 +423,16 @@ export interface RouteSettleHold {
  * Throws when it could not be written (the settle is then retried).
  */
 export async function holdRouteSettle(jobId: string, hold: RouteSettleHold): Promise<boolean> {
-  const fields = { state: "hold", credits: hold.credits, billed_usd: hold.billedUsd, quoted_usd: hold.quotedUsd, note: hold.note.slice(0, 500), updated_at: new Date().toISOString() }
-  const inserted = await ledger().insert({ job_id: jobId, env: getRuntimeEnv(), kind: "settle", send: 1, ...fields })
+  const fields = { credits: hold.credits, billed_usd: hold.billedUsd, quoted_usd: hold.quotedUsd, note: hold.note.slice(0, 500) }
+  const at = new Date().toISOString()
+  const inserted = await ledger().insert({ job_id: jobId, env: getRuntimeEnv(), kind: "settle", send: 1, state: "hold", ...fields, detail: { heldAt: at }, updated_at: at })
   if (!inserted.error) return true
   if (inserted.error.code !== "23505") throw new Error(`Job ${jobId}: could not hold its settlement: ${inserted.error.message}`)
   // A settlement an admin settled "at its quote" whose total turns out far above the quote is
   // held like any other: that decision is spent (what it chose stays in `detail.atQuote`).
   // A `confirmed` given for a smaller total is spent the same way: the new total needs its own.
   await ledger().update({ decision: null }).eq("job_id", jobId).eq("kind", "settle").eq("state", "retry").in("decision", ["quote", "confirmed"])
-  const { data, error } = await ledger().update(fields).eq("job_id", jobId).eq("kind", "settle").eq("state", "retry").is("decision", null).select("id")
-  if (error) throw new Error(`Job ${jobId}: could not hold its settlement: ${error.message}`)
-  return Array.isArray(data) && data.length > 0
+  return enterHeldState(jobId, "hold", fields)
 }
 
 /**
@@ -462,34 +543,39 @@ export interface HeldRouteSettle {
 
 /** This environment's settlements held for a decision, oldest first. Throws on a database error. */
 export async function readHeldRouteSettles(limit = 200): Promise<HeldRouteSettle[]> {
-  const { data, error } = await ledger().select("job_id, state, credits, billed_usd, quoted_usd, note, updated_at")
+  const { data, error } = await ledger().select("job_id, state, credits, billed_usd, quoted_usd, note, detail, created_at")
     .eq("env", getRuntimeEnv()).eq("kind", "settle").in("state", ["hold", "unbilled"]).order("id", { ascending: true }).limit(limit)
   if (error) throw new Error(`Could not read the held settlements: ${error.message}`)
   const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : typeof v === "string" && v !== "" && Number.isFinite(Number(v)) ? Number(v) : null)
   return ((data ?? []) as Array<Record<string, unknown>>).map((r) => ({
     jobId: String(r.job_id), kind: r.state === "unbilled" ? "unbilled" as const : "anomaly" as const, credits: num(r.credits), billedUsd: num(r.billed_usd), quotedUsd: num(r.quoted_usd),
-    note: typeof r.note === "string" ? r.note : null, heldAt: String(r.updated_at ?? ""),
+    note: typeof r.note === "string" ? r.note : null, heldAt: heldAtOf(r),
   }))
 }
 
 /** One job's held settlement in this environment, or null when it is not held. Throws on a database error. */
 export async function readHeldRouteSettle(jobId: string): Promise<HeldRouteSettle | null> {
-  const { data, error } = await ledger().select("job_id, state, credits, billed_usd, quoted_usd, note, updated_at")
+  const { data, error } = await ledger().select("job_id, state, credits, billed_usd, quoted_usd, note, detail, created_at")
     .eq("job_id", jobId).eq("env", getRuntimeEnv()).eq("kind", "settle").in("state", ["hold", "unbilled"]).limit(1)
   if (error) throw new Error(`Could not read the held settlement: ${error.message}`)
   const r = ((data ?? []) as Array<Record<string, unknown>>)[0]
   if (!r) return null
   const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : typeof v === "string" && v !== "" && Number.isFinite(Number(v)) ? Number(v) : null)
-  return { jobId: String(r.job_id), kind: r.state === "unbilled" ? "unbilled" : "anomaly", credits: num(r.credits), billedUsd: num(r.billed_usd), quotedUsd: num(r.quoted_usd), note: typeof r.note === "string" ? r.note : null, heldAt: String(r.updated_at ?? "") }
+  return { jobId: String(r.job_id), kind: r.state === "unbilled" ? "unbilled" : "anomaly", credits: num(r.credits), billedUsd: num(r.billed_usd), quotedUsd: num(r.quoted_usd), note: typeof r.note === "string" ? r.note : null, heldAt: heldAtOf(r) }
 }
 
-/** How many settlements this environment holds for a decision, and since when the oldest. Throws on a database error. */
-export async function countHeldRouteSettles(): Promise<{ count: number; oldestAt: string | null }> {
-  const { data, error, count } = await ledger().select("updated_at", { count: "exact" })
-    .eq("env", getRuntimeEnv()).eq("kind", "settle").in("state", ["hold", "unbilled"]).order("updated_at", { ascending: true }).limit(1)
+/** How many settlements this environment holds for a decision, and since when the oldest has waited ({@link heldAtOf}). Throws on a database error. */
+export async function countHeldRouteSettles(limit = 1000): Promise<{ count: number; oldestAt: string | null }> {
+  const { data, error, count } = await ledger().select("detail, created_at", { count: "exact" })
+    .eq("env", getRuntimeEnv()).eq("kind", "settle").in("state", ["hold", "unbilled"]).order("id", { ascending: true }).limit(limit)
   if (error) throw new Error(`Could not count the held settlements: ${error.message}`)
-  const first = ((data ?? []) as Array<{ updated_at?: unknown }>)[0]
-  return { count: typeof count === "number" ? count : (first ? 1 : 0), oldestAt: first ? String(first.updated_at ?? "") : null }
+  const rows = (data ?? []) as Array<Record<string, unknown>>
+  let oldest: number | null = null
+  for (const r of rows) {
+    const at = Date.parse(heldAtOf(r))
+    if (Number.isFinite(at) && (oldest === null || at < oldest)) oldest = at
+  }
+  return { count: typeof count === "number" ? count : rows.length, oldestAt: oldest === null ? null : new Date(oldest).toISOString() }
 }
 
 /** The job's ledger; throws when it cannot be read (a settlement never guesses). */

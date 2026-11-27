@@ -214,6 +214,33 @@ describe("an admin-routed run", () => {
     expect(s.poll).toHaveBeenCalledWith("route-1", "task-7")
   })
 
+  it("saves NO default request on a routed record: an older host reading the same database has nothing to resend", async () => {
+    service()
+    const seen: Array<Record<string, unknown>> = []
+    mocks.failWrite.when = (patch) => {
+      const rec = (patch.input_data as Record<string, unknown> | undefined)?.[ALTERNATE_ROUTE_KEY]
+      if (rec) seen.push(rec as Record<string, unknown>)
+      return false
+    }
+    await takeAlternateRoute(run())
+    // The claim and the running record both, every one routed and without a fallback.
+    expect(seen.length).toBeGreaterThanOrEqual(2)
+    for (const rec of seen) {
+      expect(rec).toMatchObject({ routed: true })
+      expect(rec).not.toHaveProperty("fallback")
+    }
+    expect(record()).not.toHaveProperty("fallback")
+  })
+
+  it.each([["with no saved default request (as saved now)", false], ["with one saved by an earlier build", true]])("a re-pick reads the task a routed job holds %s, never starting another", async (_what, withFallback) => {
+    const s = service()
+    Object.assign(job(), { provider_kind: "alternate-route", provider_task_id: "alt:task-7" })
+    ;(job().input_data as Record<string, unknown>)[ALTERNATE_ROUTE_KEY] = { state: "running", at: 1, routeId: "route-1", taskRef: "task-7", routed: true, ...(withFallback ? { fallback: { taskModel: "m", modelKey: "seedance-2-5", body: {} } } : {}) }
+    expect(await takeAlternateRoute(run())).toMatchObject({ url: "https://out.example/v.mp4" })
+    expect(s.start).not.toHaveBeenCalled()
+    expect(s.poll).toHaveBeenCalledWith("route-1", "task-7")
+  })
+
   it("fails a routed job in a process with no route service, instead of running it on the default route", async () => {
     setPluginServices({})
     const err = await failure(takeAlternateRoute(run()))

@@ -64,11 +64,19 @@ the default provider unless the alternate route is chosen for it.
   quote prices only the parts the route never billed; billed parts keep
   their real bill, and when the total is far above the quote the run is
   held for its own confirmation instead of charged. A release records the
-  best-known cost as the loss. The route is still read for a late bill for
-  seven days: one that arrives is recorded with its difference and alerted,
-  and nothing more is ever charged for it. A send that started and could
-  never be read to an end is not charged; it is recorded and listed in the
-  daily check as a possible loss.
+  loss, and the page shows that figure before it is chosen. The route is
+  still read for a late bill for seven days, for every part of the run that
+  may still be billed: one that arrives is recorded with its difference and
+  alerted, and nothing more is ever charged for it. A send that started and
+  could never be read to an end is not charged, even when a bill for it
+  arrives later; it is recorded and listed in the daily check as a possible
+  loss, and its bill, when it comes, as a known loss.
+- **What a loss is.** On every path (a run that failed or was cancelled, a
+  release, a run that delivered nothing, a clip that was replaced, a late
+  bill) the loss recorded is what the route billed for the parts that were
+  not charged, or the quote of a delivered part it has not billed yet. It is
+  the route's cost only, with nothing the platform adds on top. It is
+  corrected when the real bill arrives, down as well as up.
 - **Only the clip delivered is charged.** When a step of the platform's own
   fails after the route delivered a clip (a voice track that could not be
   laid on) and a second clip is made, the run is charged for the clip the
@@ -127,7 +135,17 @@ The page shows both providers' balances and can raise an alert when either
 is below a number an admin sets. Leave a number empty for no alert. Nothing is
 switched automatically.
 
-A daily check compares the total the route's account reports it spent with
-the verified bills the platform recorded on routed jobs. It lists jobs that
-failed after the route billed them as their own line, and alerts when the
-rest does not add up. It only alerts; it changes no charge.
+A daily check lists the verified bills the platform recorded on routed jobs
+that day, each counted on the day it was recorded, with known losses on a line
+of their own, beside what the route's account reports it spent. The route's
+account can be shared by more than one environment, so what it spent beyond
+this environment's records is shown for context only. The check alerts when
+this environment recorded more than the whole account spent, and on bills
+that were never reported or sends that were never read to an end. It only
+alerts; it changes no charge.
+
+A choice that routes a model, or that turns on **Enforce unpaid charges**, is
+saved only when the database confirms that its routed-video schema is
+complete. It is refused while that cannot be confirmed (for example, before
+the schema check is installed). Saving a choice that routes nothing, and
+**Revert**, are always allowed.

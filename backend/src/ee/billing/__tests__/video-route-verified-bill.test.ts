@@ -11,50 +11,13 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-const h = vi.hoisted(() => ({ rows: [] as Array<Record<string, unknown>> }))
+const h = vi.hoisted(() => ({ db: null as null | import("./helpers/fake-tables.js").FakeTables }))
 vi.mock("@/lib/runtime-env.js", () => ({ getRuntimeEnv: () => "production" }))
-vi.mock("@/lib/supabase.js", () => ({
-  supabase: {
-    from: () => ({
-      upsert: async (row: Record<string, unknown>, opts: { ignoreDuplicates?: boolean }) => {
-        const same = h.rows.find((r) => r.job_id === row.job_id && r.kind === row.kind && r.send === row.send && r.key === row.key)
-        if (!same) h.rows.push({ ...row })
-        else if (!opts.ignoreDuplicates) Object.assign(same, row)
-        return { error: null }
-      },
-      select: () => ({ eq: async (_c: string, jobId: string) => ({ data: h.rows.filter((r) => r.job_id === jobId), error: null }) }),
-      insert: async (row: Record<string, unknown>) => {
-        const key = row.key ?? ""
-        const send = row.send ?? 1
-        if (h.rows.some((r) => r.job_id === row.job_id && r.kind === row.kind && (r.send ?? 1) === send && (r.key ?? "") === key)) return { error: { code: "23505", message: "duplicate" } }
-        h.rows.push({ ...row, send, key })
-        return { error: null }
-      },
-      update: (patch: Record<string, unknown>) => {
-        const where: Array<[string, unknown]> = []
-        const anyOf: Array<[string, unknown[]]> = []
-        const chain: Record<string, unknown> = {}
-        // As the store does: every filter narrows the rows written, and `select` answers the rows that were.
-        const write = () => {
-          const hit = h.rows.filter((r) => where.every(([c, v]) => (r[c] ?? null) === v) && anyOf.every(([c, vs]) => vs.includes(r[c] ?? null)))
-          for (const r of hit) Object.assign(r, patch)
-          return hit
-        }
-        chain.eq = (c: string, v: unknown) => (where.push([c, v]), chain)
-        chain.is = (c: string, v: unknown) => (where.push([c, v]), chain)
-        chain.in = (c: string, vs: unknown[]) => (anyOf.push([c, vs]), chain)
-        chain.select = async () => ({ data: write().map((_r, i) => ({ id: i + 1 })), error: null })
-        chain.then = (ok: (v: unknown) => unknown) => {
-          write()
-          return Promise.resolve({ error: null }).then(ok)
-        }
-        return chain
-      },
-    }),
-  },
-}))
+vi.mock("@/lib/supabase.js", () => ({ supabase: { from: (t: string) => h.db!.client.from(t) } }))
+const { createFakeTables } = await import("./helpers/fake-tables.js")
+const ledgerRows = () => h.db!.rows("video_route_ledger")
 
-const { deliveredTask, markRouteTaskOwnLoss, readRouteLedger, recordRouteStart, recordRouteTask, recordRouteTaskOutcome, reviveUnresolvedTask, routeCostBasisOf } = await import("../../../lib/video-route-ledger.js")
+const { billedAtOf, deliveredTask, markRouteTaskOwnLoss, readRouteLedger, recordRouteStart, recordRouteTask, recordRouteTaskOutcome, routeCostBasisOf } = await import("../../../lib/video-route-ledger.js")
 const { routedChargeOf } = await import("../video-route-settlement.js")
 const { videoRouteStamp, videoRouteStampOf, VIDEO_ROUTE_STAMP_KEY } = await import("../../../lib/video-route-decision.js")
 const { CREDIT_BASE_USD } = await import("@nodaro/shared/models")
@@ -72,29 +35,29 @@ async function chargeOf(done: Done) {
   return routedChargeOf(stamp, log, await readRouteLedger(JOB), settings)
 }
 
-beforeEach(() => { h.rows = [] })
+beforeEach(() => { h.db = createFakeTables() })
 
 describe("the verified bill, from the route's answer to the charge", () => {
   it("billed seconds at the agreed rate settle, and the basis is kept on the task row", async () => {
     const charge = await chargeOf({ state: "done", resultUrl: "https://r/clip.mp4", providerCostUsd: CREDIT_BASE_USD * 80, costBasis: "billed-seconds", billedSec: 8 })
     expect(charge).toMatchObject({ kind: "billed", chargedCredits: 80 })
-    expect(h.rows[0]).toMatchObject({ kind: "task", billed_usd: CREDIT_BASE_USD * 80, cost_basis: "billed-seconds" })
+    expect(ledgerRows()[0]).toMatchObject({ kind: "task", billed_usd: CREDIT_BASE_USD * 80, cost_basis: "billed-seconds" })
   })
 
   it("a money receipt settles the same way (also from a route that predates the basis field)", async () => {
     expect(await chargeOf({ state: "done", resultUrl: "https://r/clip.mp4", providerCostUsd: CREDIT_BASE_USD * 80, costBasis: "receipt" })).toMatchObject({ kind: "billed", chargedCredits: 80 })
-    expect(h.rows[0]).toMatchObject({ cost_basis: "receipt" })
-    h.rows = []
+    expect(ledgerRows()[0]).toMatchObject({ cost_basis: "receipt" })
+    h.db = createFakeTables()
     expect(await chargeOf({ state: "done", resultUrl: "https://r/clip.mp4", providerCostUsd: CREDIT_BASE_USD * 80 })).toMatchObject({ kind: "billed", chargedCredits: 80 })
-    expect(h.rows[0]).toMatchObject({ cost_basis: "receipt" })
+    expect(ledgerRows()[0]).toMatchObject({ cost_basis: "receipt" })
   })
 
   it("an estimate never reaches the settle: with no bill reported the run is pending", async () => {
     const charge = await chargeOf({ state: "done", resultUrl: "https://r/clip.mp4", estimatedCostUsd: CREDIT_BASE_USD * 80 })
     expect(charge.kind).toBe("pending")
     // Recorded for the record, with no bill and no basis.
-    expect(h.rows[0]).toMatchObject({ billed_usd: null, estimated_usd: CREDIT_BASE_USD * 80 })
-    expect(h.rows[0]).not.toHaveProperty("cost_basis")
+    expect(ledgerRows()[0]).toMatchObject({ billed_usd: null, estimated_usd: CREDIT_BASE_USD * 80 })
+    expect(ledgerRows()[0]).not.toHaveProperty("cost_basis")
     // What the settlement reads carries no trace of it.
     expect((await readRouteLedger(JOB)).tasks).toEqual([{ send: 1, ref: "task", outcome: null, billedUsd: null }])
   })
@@ -102,7 +65,7 @@ describe("the verified bill, from the route's answer to the charge", () => {
   it("a bill of zero is no bill: the run is pending, never free", async () => {
     const charge = await chargeOf({ state: "done", resultUrl: "https://r/clip.mp4", providerCostUsd: 0, costBasis: "billed-seconds", billedSec: 0 })
     expect(charge.kind).toBe("pending")
-    expect(h.rows[0]).toMatchObject({ billed_usd: null })
+    expect(ledgerRows()[0]).toMatchObject({ billed_usd: null })
   })
 
   it("a bill reported later replaces the pending state; the estimate beside it changes nothing", async () => {
@@ -138,7 +101,7 @@ describe("sends that did not simply deliver", () => {
     await recordRouteStart(JOB, 2)
     await recordRouteTask(JOB, 2, "t2", CREDIT_BASE_USD * 80, "", undefined, "receipt")
     await recordRouteTaskOutcome(JOB, 1, "", null, "unresolved")
-    expect(h.rows.filter((r) => r.kind === "task" && r.outcome === "unresolved")).toHaveLength(1)
+    expect(ledgerRows().filter((r) => r.kind === "task" && r.outcome === "unresolved")).toHaveLength(1)
     expect(await charge()).toMatchObject({ kind: "billed", chargedCredits: 80, taskCount: 1 })
   })
 
@@ -153,7 +116,7 @@ describe("sends that did not simply deliver", () => {
     await recordRouteStart(JOB, 1)
     await recordRouteTask(JOB, 1, "t1", null)
     expect(await recordRouteTaskOutcome(JOB, 1, "", "t1", outcome)).toBe(false)
-    const task = h.rows.find((r) => r.kind === "task")!
+    const task = ledgerRows().find((r) => r.kind === "task")!
     expect(task.outcome ?? null).toBeNull()
     expect((await readRouteLedger(JOB)).tasks.map(deliveredTask)).toEqual([true])
     // Still a delivered send waiting for its bill, never "nothing delivered".
@@ -168,22 +131,39 @@ describe("sends that did not simply deliver", () => {
     expect(await recordRouteTaskOutcome(JOB, 1, "", "t1", "unresolved")).toBe(true)
     // Read to its end afterwards: how it ended replaces "unresolved".
     expect(await recordRouteTaskOutcome(JOB, 1, "", "t1", "expired")).toBe(true)
-    expect(h.rows.find((r) => r.kind === "task")).toMatchObject({ outcome: "expired", billed_usd: null })
+    expect(ledgerRows().find((r) => r.kind === "task")).toMatchObject({ outcome: "expired", billed_usd: null })
     expect(await charge()).toMatchObject({ kind: "pending", cause: "nothing-delivered" })
   })
 
-  it("a start given up on whose bill arrives counts as a delivered send again; one the route ended does not", async () => {
+  it("a start given up on whose bill arrives STAYS given up: its bill is recorded (when it arrived), it is never charged", async () => {
     await recordRouteStart(JOB, 1)
     await recordRouteStart(JOB, 2)
     await recordRouteTaskOutcome(JOB, 1, "", "t1", "unresolved")
     await recordRouteTaskOutcome(JOB, 2, "", "t2", "failed")
     await recordRouteTask(JOB, 1, "t1", CREDIT_BASE_USD * 70, "", undefined, "receipt")
-    // The bill alone does not make it delivered: it is still recorded as given up.
+    // The bill is on the ledger, stamped with when it was recorded; the outcome is untouched.
+    const given = ledgerRows().find((r) => r.kind === "task" && r.send === 1)!
+    expect(given).toMatchObject({ outcome: "unresolved", billed_usd: CREDIT_BASE_USD * 70, cost_basis: "receipt" })
+    expect(billedAtOf(given.detail)).toEqual(expect.any(String))
+    expect(ledgerRows().filter((r) => r.kind === "task").map((r) => r.outcome)).toEqual(["unresolved", "failed"])
+    // Never part of a charge.
     expect(await charge()).toMatchObject({ kind: "pending", cause: "nothing-delivered" })
-    expect(await reviveUnresolvedTask(JOB, 1, "")).toBe(true)
-    await reviveUnresolvedTask(JOB, 2, "")
-    expect(h.rows.filter((r) => r.kind === "task").map((r) => r.outcome)).toEqual(["done", "failed"])
-    expect(await charge()).toMatchObject({ kind: "billed", chargedCredits: 70, taskCount: 1 })
+    expect((await readRouteLedger(JOB)).tasks.filter(deliveredTask)).toEqual([])
+  })
+
+  it("a bill is stamped with when it was first recorded: on a row written without one, and never moved by a later write", async () => {
+    await recordRouteTask(JOB, 1, "t1", null)
+    expect(billedAtOf(ledgerRows()[0]!.detail)).toBeUndefined()
+    await recordRouteTask(JOB, 1, "t1", CREDIT_BASE_USD * 40, "", undefined, "receipt")
+    const first = billedAtOf(ledgerRows()[0]!.detail)
+    expect(first).toEqual(expect.any(String))
+    await markRouteTaskOwnLoss(JOB, 1)
+    await recordRouteTask(JOB, 1, "t1", CREDIT_BASE_USD * 41, "", undefined, "receipt")
+    // The latest figure, the first time, and the own-loss mark beside it (merged, never replaced).
+    expect(ledgerRows()[0]).toMatchObject({ billed_usd: CREDIT_BASE_USD * 41, detail: { billedAt: first, ownLoss: true } })
+    // A row written with its bill carries none: its `created_at` is when.
+    await recordRouteTask(JOB, 2, "t2", CREDIT_BASE_USD * 40, "", undefined, "receipt")
+    expect(billedAtOf(ledgerRows().find((r) => r.send === 2)!.detail)).toBeUndefined()
   })
 
   it("an earlier delivered send is listed as our loss whether or not its bill has come, and its mark says when it could not be written", async () => {
@@ -201,7 +181,7 @@ describe("sends that did not simply deliver", () => {
   it("an unbilled send is charged at its quote only on an admin's decision, and never before", async () => {
     await chargeOf({ state: "done", resultUrl: "https://r/clip.mp4" })
     expect(await charge()).toMatchObject({ kind: "pending", cause: "unbilled" })
-    h.rows.push({ job_id: JOB, kind: "settle", send: 1, key: "", state: "retry", decision: "quote" })
+    h.db!.tables.video_route_ledger!.push({ id: 1, job_id: JOB, env: "production", kind: "settle", send: 1, key: "", state: "retry", decision: "quote" })
     // The quote the run was held at: 100 credits.
     expect(await charge()).toMatchObject({ kind: "billed", chargedCredits: 100, taskCount: 1 })
     void bill

@@ -114,7 +114,7 @@ describe("resolveRouteLedger", () => {
       unresolvedStarts: [],
     })
 
-    it("is read again, and one that turns out done with a verified bill is recorded and counts as delivered again", async () => {
+    it("is read again, and one that turns out done with a verified bill has its bill recorded — and stays given up (never charged: a known loss)", async () => {
       h.ledger = givenUp()
       h.poll
         .mockResolvedValueOnce({ state: "done", resultUrl: "https://r/x.mp4", providerCostUsd: 0.7, costBasis: "receipt" })
@@ -123,7 +123,8 @@ describe("resolveRouteLedger", () => {
       // One with no reference cannot be read.
       expect(h.poll.mock.calls).toEqual([["route-1", "g1"], ["route-1", "g2"]])
       expect(h.tasks).toEqual([["job", 2, "g1", 0.7, "", null, "receipt"], ["job", 1, "g2", 0.2, "seg-4", null, "receipt"]])
-      expect(h.revived).toEqual([["job", 2, ""], ["job", 1, "seg-4"]])
+      // Its outcome is never moved back to delivered.
+      expect(h.revived).toEqual([])
     })
 
     it("done with no bill, or still running, leaves it given up", async () => {

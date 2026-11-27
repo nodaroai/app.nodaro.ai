@@ -11,13 +11,19 @@
  *     bill leaves it pending, and "failed" / "expired" for a send already
  *     recorded delivered leaves it delivered;
  *   - a start given up on as `unresolved`: read once more, since its bill may
- *     still arrive (it is then a delivered, billed send: a known loss).
+ *     still arrive. Its bill then goes on the ledger, and it STAYS `unresolved`:
+ *     it was given up on, so it is never part of a charge — a billed given-up
+ *     send is a known loss (ee/billing/video-route-settlement.ts `routeLossOf`).
+ *     No such send can be the delivered output: a send's task row is written
+ *     before its clip is published (lib/alternate-route.ts `pollToResult`, the
+ *     recovery's finalize, `rowlessSegmentDone`), and only a start with NO task
+ *     row is ever given up on (`closeUnresolvedStarts`).
  *
  * One read per item per call, never a loop: the settlement sweep is the
  * retry. Core (no ee import); never throws.
  */
 import { getPluginServices } from "./private-plugins/services-registry.js"
-import { deliveredTask, readRouteLedger, recordRouteTask, recordRouteTaskOutcome, reviveUnresolvedTask, routeCostBasisOf, type UnresolvedStart } from "./video-route-ledger.js"
+import { deliveredTask, readRouteLedger, recordRouteTask, recordRouteTaskOutcome, routeCostBasisOf, type UnresolvedStart } from "./video-route-ledger.js"
 
 export interface RouteResolution {
   /** Whether this process could read the route at all (it has the route service). */
@@ -60,8 +66,8 @@ export async function resolveRouteLedger(jobId: string, routeId: string): Promis
           const bill = verified(polled.providerCostUsd)
           // A delivered send the route still has no bill for stays exactly as it is: pending.
           if (item.was !== "open" && bill === null) continue
+          // (A given-up send keeps its `unresolved` outcome: its bill is recorded, never charged.)
           await recordRouteTask(jobId, item.send, item.ref, bill, item.key, usd(polled.estimatedCostUsd), routeCostBasisOf(polled))
-          if (item.was === "given-up") await reviveUnresolvedTask(jobId, item.send, item.key)
           resolved++
           if (bill !== null) billed++
         } else if (polled.state === "failed" || polled.state === "expired") {
@@ -83,7 +89,8 @@ export async function resolveRouteLedger(jobId: string, routeId: string): Promis
 /**
  * Gives up on the starts that could not be read to an end: each is recorded
  * `unresolved` (never charged, never forgotten: the daily report lists them
- * as loss candidates). Returns them.
+ * as loss candidates, and a bill that arrives for one later is a known loss).
+ * Returns them.
  */
 export async function closeUnresolvedStarts(jobId: string): Promise<readonly UnresolvedStart[]> {
   try {

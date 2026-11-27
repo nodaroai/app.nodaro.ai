@@ -457,7 +457,9 @@ async function resumeHeld(
 ): Promise<ProviderResult | null> {
   if (row.provider_kind !== ALTERNATE_ROUTE_PROVIDER_KIND) return null
   const taskRef = alternateRouteTaskRefOf(row.provider_task_id)
-  if (!taskRef || !record?.routeId || !record.fallback) throw new AlternateRoutePendingError(PENDING_MESSAGE)
+  // A routed record carries no saved default request (a routed run never falls back): only an
+  // unrouted one needs it to be read on.
+  if (!taskRef || !record?.routeId || (!record.routed && !record.fallback)) throw new AlternateRoutePendingError(PENDING_MESSAGE)
   console.warn(`[alternate-route] job ${jobId}: already started; reading task ${taskRef} instead of starting another`)
   return pollToResult(service, {
     ...(record.routed ? { routed: routedOf(row, jobId), send: record.send ?? 1 } : {}),
@@ -468,7 +470,7 @@ async function resumeHeld(
     inputData: row.input_data,
     saved: true,
     plannedCostUsd: undefined,
-    fallback: record.fallback,
+    ...(record.fallback ? { fallback: record.fallback } : {}),
   })
 }
 
@@ -497,7 +499,8 @@ interface Polling {
   inputData: Record<string, unknown> | null
   saved: boolean
   plannedCostUsd: number | undefined
-  fallback: SavedDefaultRequest
+  /** The default request an unrouted run falls back to; a routed run has none (it never falls back). */
+  fallback?: SavedDefaultRequest
   /** Set while the reference is not saved: the save is retried on every read. */
   unsaved?: { runningInput: Record<string, unknown> }
   /** An admin-routed run: an ended task fails the job (refunded), never falls back. */
@@ -550,7 +553,7 @@ async function pollToResult(service: PluginAlternateRoutesService, polling: Poll
         // may yet appear); the recovery's age bound ends a run that never has one.
         if (!doneWithoutResultNoted) {
           doneWithoutResultNoted = true
-          const record = alternateRouteRecordOf(p.inputData) ?? { state: "running" as const, at: Date.now(), routeId: p.routeId, taskRef: p.taskRef, fallback: p.fallback }
+          const record = alternateRouteRecordOf(p.inputData) ?? { state: "running" as const, at: Date.now(), routeId: p.routeId, taskRef: p.taskRef, ...(p.fallback ? { fallback: p.fallback } : {}), ...(p.routed ? { routed: true as const } : {}) }
           if (!p.saved || await noteDoneWithoutResult(p.jobId, p.held, p.inputData, record)) {
             console.error(`[ALERT] job ${p.jobId}: alternate route ${p.routeId} task ${p.taskRef} reads done without a result file (it was charged); not falling back, still reading.`)
           }
@@ -582,6 +585,8 @@ async function pollToResult(service: PluginAlternateRoutesService, polling: Poll
       // How it ended goes on the ledger (not billed), so its settlement never waits on it.
       if (p.routed && (polled.state === "failed" || polled.state === "expired")) await recordRouteTaskOutcome(p.jobId, p.send ?? 1, "", p.taskRef, polled.state)
       if (p.routed) throw routedFailure(p.jobId, p.routed, `its task ${polled.state}`)
+      // (An unrouted run always carries its default request; one without it is left to the recovery, never resent blind.)
+      if (!p.fallback) throw new AlternateRoutePendingError(PENDING_MESSAGE)
       return fallBack(p.jobId, p.held, p.inputData, { state: "fell-back", at: Date.now(), routeId: p.routeId, taskRef: p.taskRef, reason: polled.state, fallback: p.fallback })
     }
     if (polled?.state === "unreadable") {
@@ -833,8 +838,10 @@ async function runRouted(
     stamp = resigned
     row = { ...row, input_data: { ...(row.input_data ?? {}), [VIDEO_ROUTE_STAMP_KEY]: resigned } }
   }
-  const fallback: SavedDefaultRequest = { taskModel: run.taskModel, modelKey: run.provider, body: run.body }
-  let claimedInput = withAlternateRouteRecord(row.input_data, { state: "claimed", at: Date.now(), routeId: stamp.routeId, fallback, routed: true, attempt: 1, send: sendOf.send })
+  // A routed record carries NO default request: a routed run never falls back, and a host that
+  // does not know routed runs (an older build reading the same database) finds nothing to resend
+  // to the default upstream — it can only fail and refund the job.
+  let claimedInput = withAlternateRouteRecord(row.input_data, { state: "claimed", at: Date.now(), routeId: stamp.routeId, routed: true, attempt: 1, send: sendOf.send })
   const claimed = await claim(jobId, claimedInput)
   if (claimed === "error") throw new AlternateRoutePendingError(PENDING_MESSAGE)
   if (claimed === "lost") {
@@ -872,7 +879,7 @@ async function runRouted(
         throw routedFailure(jobId, stamp, `the start was refused twice (${code ?? "refused"})`)
       }
       console.warn(`[alternate-route] job ${jobId}: route ${stamp.routeId} refused the run before creating a task; trying once more: ${errText(err)}`)
-      claimedInput = withAlternateRouteRecord(row.input_data, { state: "claimed", at: Date.now(), routeId: stamp.routeId, fallback, routed: true, attempt: 2, send: sendOf.send })
+      claimedInput = withAlternateRouteRecord(row.input_data, { state: "claimed", at: Date.now(), routeId: stamp.routeId, routed: true, attempt: 2, send: sendOf.send })
       if (!(await recordAttempt(jobId, claimedInput))) throw new AlternateRoutePendingError(PENDING_MESSAGE)
       await throwIfJobCancelled()
     }
@@ -883,7 +890,7 @@ async function runRouted(
     throw routedFailure(jobId, stamp, "the start gave no task reference")
   }
   const plannedCostUsd = usd(started?.plannedCostUsd)
-  const runningInput = withAlternateRouteRecord(row.input_data, { state: "running", at: Date.now(), routeId: stamp.routeId, taskRef, fallback, routed: true, send: sendOf.send })
+  const runningInput = withAlternateRouteRecord(row.input_data, { state: "running", at: Date.now(), routeId: stamp.routeId, taskRef, routed: true, send: sendOf.send })
   let save = await saveReference(jobId, taskRef, plannedCostUsd, runningInput)
   if (save === "error") save = await saveReference(jobId, taskRef, plannedCostUsd, runningInput)
   if (save === "not-live") return refuseNotLive(jobId, stamp.routeId, taskRef)
@@ -896,7 +903,6 @@ async function runRouted(
     inputData: saved ? runningInput : claimedInput,
     saved,
     plannedCostUsd,
-    fallback,
     routed: stamp,
     send: sendOf.send,
     ...(saved ? {} : { unsaved: { runningInput } }),

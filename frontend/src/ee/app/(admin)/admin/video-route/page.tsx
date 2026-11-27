@@ -220,7 +220,7 @@ export default function AdminVideoRoutePage() {
           />
         </label>
         <label className="flex flex-col gap-1 text-sm">
-          Alert when the route's real spend exceeds the recorded cost by more than (%)
+          Alert when this environment's recorded bills exceed the route's whole account spend by more than (%)
           <Input
             inputMode="decimal"
             value={draft.spendDriftAlertPercent}
@@ -350,8 +350,11 @@ export default function AdminVideoRoutePage() {
                     {hold.wouldCharge === null
                       ? "What a charge would take cannot be computed yet."
                       : hold.kind === "unbilled"
-                        ? `Settling now charges ${hold.wouldCharge} credits (real bills where there are any, the quote for the rest). Releasing records ${hold.wouldCharge} credits as a loss.`
-                        : `Confirming now charges ${hold.wouldCharge} credits. Rejecting records ${hold.wouldCharge} credits as a loss.`}
+                        ? `Settling now charges ${hold.wouldCharge} credits (real bills where there are any, the quote for the rest).`
+                        : `Confirming now charges ${hold.wouldCharge} credits.`}
+                    {hold.wouldLose === null
+                      ? ""
+                      : ` ${hold.kind === "unbilled" ? "Releasing" : "Rejecting"} records ${hold.wouldLose} credits as a loss: the route's bill for its sends (the quote where it has not billed yet), the route's cost alone.`}
                   </p>
                   {hold.kind === "unbilled" && hold.totalAnomalous && (
                     <p className="text-xs text-amber-700 dark:text-amber-300">
@@ -409,8 +412,10 @@ export default function AdminVideoRoutePage() {
       <section className="flex flex-col gap-2">
         <h2 className="font-medium">Daily spend check</h2>
         <p className="text-sm text-muted-foreground">
-          Each day, the cost recorded on routed jobs, and the known losses (jobs that failed after the route billed them), against
-          what the route itself reports it spent. What is left beyond the threshold raises an alert: the route's rates may be wrong.
+          Each day, the bills this environment recorded (counted on the day each was recorded), on charged runs and as known losses
+          (runs that failed, replaced sends, sends given up on and billed later), beside what the route's account reports it spent.
+          That account is shared with other environments, so what it spent beyond this ledger is shown for context and raises no
+          alert. An alert is raised when this ledger records more than the whole account spent: the recorded bills may be wrong.
         </p>
         {data.spendDays.length === 0 ? (
           <p className="text-sm text-muted-foreground">No day checked yet.</p>
@@ -423,7 +428,7 @@ export default function AdminVideoRoutePage() {
                 <th className="pe-4 text-start">Recorded</th>
                 <th className="pe-4 text-start">Known losses</th>
                 <th className="pe-4 text-start">Route reports</th>
-                <th className="text-start">Unexplained</th>
+                <th className="text-start">Account beyond this ledger</th>
               </tr>
             </thead>
             <tbody>

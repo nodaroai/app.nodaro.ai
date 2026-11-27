@@ -319,6 +319,7 @@
         "backend/src/ee/billing/video-route-admission.ts",
         "backend/src/ee/billing/video-route-alerts.ts",
         "backend/src/ee/billing/video-route-listing.ts",
+        "backend/src/ee/billing/video-route-loss.ts",
         "backend/src/ee/billing/video-route-planned.ts",
         "backend/src/ee/billing/video-route-pricing.ts",
         "backend/src/ee/billing/video-route-receipt.ts",

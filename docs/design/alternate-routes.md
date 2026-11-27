@@ -168,5 +168,21 @@ selection suppresses legacy routing for that model or service.
 - **Admin alerts** appear in Admin → Video route. Price changes, pending
   settlement, low balances and reconciliation differences never send
   customer notifications.
+- **Losses and late bills.** A recorded loss is the route's bill (the quote
+  of a delivered send not billed yet) for the sends that are not charged, in
+  base credits: the route's cost alone, with nothing the platform adds
+  (`ee/billing/video-route-loss.ts`).
+  A late bill is found by comparing the ledger's verified bills with the
+  figure last recorded on the settlement (`detail.knownUsd`), so a bill
+  fetched by any read is found; a send given up on stays given up when its
+  bill arrives and is never charged.
+- **Reconciliation** counts each bill on the day it was recorded
+  (`detail.billedAt`). The route's account is shared with other environments
+  and with traffic that never reaches the ledger, so its total is context:
+  only this environment's ledger recording more than the whole account spent
+  is alerted.
+- **Routed records carry no default request.** A routed run never falls
+  back, so a host that does not know routed runs can only fail and refund
+  one.
 - **Drafts.** A draft the route made holds the route's own reference. It is
   never finalized on the default upstream.

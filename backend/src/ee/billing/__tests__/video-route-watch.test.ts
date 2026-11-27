@@ -46,8 +46,19 @@ vi.mock("@/lib/supabase.js", () => ({
   supabase: {
     from: (table: string) => {
       const q: Record<string, unknown> = {}
-      for (const m of ["select", "gte", "lt", "not", "eq", "order"]) q[m] = () => q
-      q.range = async () => ({ data: table === "video_route_ledger" ? h.tasks : [], error: null })
+      // The day's reads, as the store answers them: by `created_at`, or by when a bill was recorded (`detail->>billedAt`).
+      let column = ""
+      let from = ""
+      let to = ""
+      for (const m of ["select", "not", "eq", "order"]) q[m] = () => q
+      q.gte = (c: string, v: string) => ((column = c), (from = v), q)
+      q.lt = (_c: string, v: string) => ((to = v), q)
+      q.range = async () => {
+        if (table !== "video_route_ledger") return { data: [], error: null }
+        const rows = (h.tasks as Array<Record<string, unknown>>).map((t, i) => ({ id: i + 1, created_at: "2026-11-24T12:00:00.000Z", ...t }))
+        const at = (r: Record<string, unknown>) => (column === "created_at" ? r.created_at : (r.detail as { billedAt?: unknown } | undefined)?.billedAt)
+        return { data: rows.filter((r) => typeof at(r) === "string" && (at(r) as string) >= from && (at(r) as string) < to), error: null }
+      }
       q.in = async (_c: string, ids: string[]) => ({ data: ids.map((id) => ({ id, status: h.statuses[id] ?? "completed" })), error: null })
       return q
     },
@@ -136,14 +147,51 @@ describe("reconcileRouteSpend", () => {
     expect(alerts().some((m) => m.includes("rate table"))).toBe(false)
   })
 
-  it("alerts on what is UNEXPLAINED past the threshold — and raises no price", async () => {
+  it("the shared account spending MORE than this ledger is context only: shown, never alerted (other environments use the account)", async () => {
     route()
     h.settings = { video_route_policy: policy() }
     h.tasks = [task("a", 5), task("b", 3), task("c", null)]
     const day = await reconcileRouteSpend(NOW)
+    // What the ledger itself shows is still alerted: a bill never reported.
     expect(h.adminAlerts).toEqual(expect.arrayContaining([expect.objectContaining({ key: "missing-receipts:2026-11-24", kind: "reconciliation" })]))
-    expect(day).toMatchObject({ recordedUsd: 8, actualUsd: 10, unexplainedUsd: 2 })
-    expect(alerts().some((m) => m.includes("rate table may be wrong"))).toBe(true)
+    expect(day).toMatchObject({ recordedUsd: 8, actualUsd: 10, unexplainedUsd: 2, overRecordedUsd: 0 })
+    expect((h.adminAlerts as Array<{ key: string }>).some((a) => a.key.startsWith("spend-drift:"))).toBe(false)
+    expect(alerts().some((m) => m.includes("may be wrong"))).toBe(false)
+  })
+
+  it("alerts when THIS environment's ledger records more than the whole account spent (its own drift) — and raises no price", async () => {
+    route()
+    h.settings = { video_route_policy: policy() }
+    h.tasks = [task("a", 9), task("b", 3)]
+    const day = await reconcileRouteSpend(NOW)
+    expect(day).toMatchObject({ recordedUsd: 12, actualUsd: 10, overRecordedUsd: 2 })
+    expect((h.adminAlerts as Array<{ key: string }>).some((a) => a.key === "spend-drift:2026-11-24")).toBe(true)
+    expect(alerts().some((m) => m.includes("the recorded bills may be wrong"))).toBe(true)
+  })
+
+  it("counts a bill on the day it was RECORDED: a late bill lands on the day it arrived, not on no day", async () => {
+    route()
+    h.settings = { video_route_policy: policy() }
+    h.tasks = [
+      // Written two days before, billed on the day: this day's.
+      { job_id: "late", billed_usd: "4.000000", created_at: "2026-11-22T10:00:00.000Z", detail: { billedAt: "2026-11-24T08:00:00.000Z" } },
+      // Written on the day with no bill, billed the next day: neither billed nor missing on this day.
+      { job_id: "next", billed_usd: "2.000000", created_at: "2026-11-24T23:00:00.000Z", detail: { billedAt: "2026-11-25T00:10:00.000Z" } },
+      // Billed with its row on the day.
+      { job_id: "plain", billed_usd: "1.000000" },
+    ] as never
+    const day = await reconcileRouteSpend(NOW)
+    expect(day).toMatchObject({ recordedUsd: 5, jobs: 2 })
+    expect((h.adminAlerts as Array<{ key: string }>).some((a) => a.key.startsWith("missing-receipts:"))).toBe(false)
+  })
+
+  it("a send given up on whose bill arrived is a known loss, never a charged job's cost", async () => {
+    route()
+    h.settings = { video_route_policy: policy() }
+    h.tasks = [{ job_id: "g", billed_usd: "2.000000", outcome: "unresolved" }, { job_id: "ok", billed_usd: "3.000000" }] as never
+    const day = await reconcileRouteSpend(NOW)
+    expect(day).toMatchObject({ recordedUsd: 3, lossesUsd: 2 })
+    expect((h.adminAlerts as Array<{ key: string }>).some((a) => a.key.startsWith("unresolved-sends:"))).toBe(false)
   })
 
   it("lists known losses on their own line, so they are not read as drift", async () => {
@@ -209,6 +257,38 @@ describe("runOncePerEnvironment", () => {
     expect(await runOncePerEnvironment("t", 3_600_000, next, 4 * 3_600_000 + 5)).toBe(true)
     expect(next).toHaveBeenCalledTimes(2)
     vi.doUnmock("../../../lib/redis-lease.js")
+  })
+
+  it("a skipped period says so; a pass held past two periods is alerted; a shutdown gives the running lease back", async () => {
+    const taken = new Map<string, string>()
+    const kv = new Map<string, string>()
+    vi.doMock("../../../lib/redis-lease.js", () => ({
+      LEASE_KEY_PREFIX: "plugin:lease:",
+      acquireLease: async (key: string) => (taken.has(key) ? null : (taken.set(key, "token"), "token")),
+      releaseLease: async (key: string) => { taken.delete(key) },
+    }))
+    vi.doMock("../../../lib/queue.js", () => ({ redis: { set: async (k: string, v: string) => (kv.set(k, v), "OK"), get: async (k: string) => kv.get(k) ?? null } }))
+    const { runOncePerEnvironment: run, releaseVideoRouteLeases } = await import("../video-route-watch.js")
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    let finish = () => {}
+    const stuck = run("s", 15 * 60_000, () => new Promise<void>((resolve) => { finish = resolve }), 0)
+    await vi.waitFor(() => expect([...taken.keys()].some((k) => k.endsWith(":s:running"))).toBe(true))
+    // The next period: skipped, with a warning, no alert yet.
+    expect(await run("s", 15 * 60_000, async () => {}, 15 * 60_000 + 5)).toBe(false)
+    expect(warn.mock.calls.some((c) => String(c[0]).includes("still holds its running lease"))).toBe(true)
+    expect((h.adminAlerts as Array<{ key: string }>).some((a) => a.key === "lease-held:s")).toBe(false)
+    // Three periods later it still holds it: alerted.
+    expect(await run("s", 15 * 60_000, async () => {}, 45 * 60_000 + 5)).toBe(false)
+    expect((h.adminAlerts as Array<{ key: string }>).some((a) => a.key === "lease-held:s")).toBe(true)
+    // A shutdown gives it back: the next period runs.
+    await releaseVideoRouteLeases()
+    expect([...taken.keys()].some((k) => k.endsWith(":s:running"))).toBe(false)
+    expect(await run("s", 15 * 60_000, async () => {}, 60 * 60_000 + 5)).toBe(true)
+    finish()
+    await stuck
+    warn.mockRestore()
+    vi.doUnmock("../../../lib/redis-lease.js")
+    vi.doUnmock("../../../lib/queue.js")
   })
 })
 

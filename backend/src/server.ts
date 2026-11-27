@@ -2,6 +2,7 @@ import { config, hasAdmin, hasCredits, isMultiUser } from "./lib/config.js"
 import { buildApp } from "./app.js"
 import { startCommunityReaperCron } from "./ee/services/community/reaper.js"
 import { startCleanupCron } from "./ee/billing/cleanup-cron.js"
+import { releaseVideoRouteLeases } from "./ee/billing/video-route-watch.js"
 // Registers the routed-node estimators the price table prices a routed node with (every process that estimates).
 import "./ee/billing/video-route-admission.js"
 import { startReconcileCron } from "./lib/reconcile/start.js"
@@ -382,6 +383,8 @@ async function main() {
       stopTrendRadarCron()
       stopWorkflowExecutionsReconcileCron()
       stopPipelinesReconcileCron()
+      // The routed-video sweeps' "running" leases, so the next process's pass is not held off for their TTL.
+      await releaseVideoRouteLeases()
       await orchestratorWorker.close()
       if (videoDirectorWorker) await videoDirectorWorker.close()
       if (pipelineWorker) await pipelineWorker.close()

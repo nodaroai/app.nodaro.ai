@@ -16,13 +16,35 @@ export const LATE_BILL_WATCH_DAYS = 7
 export const LATE_BILL_READ_MS = { unbilled: 6 * 3_600_000, closed: 24 * 3_600_000 } as const
 
 /**
+ * Writes `patch` (and `columns`) on the job's settle row, and when that cannot
+ * be written says so: an `[ALERT]` and an Admin alert, never a silent skip.
+ * Answers whether it was written.
+ */
+export async function patchSettleOrAlert(jobId: string, what: string, patch: Record<string, unknown>, columns: Record<string, unknown> = {}): Promise<boolean> {
+  if (await patchRouteSettle(jobId, patch, columns)) return true
+  const message = `${what} could not be written on its routed settlement; the sweep reads it again on its next pass.`
+  console.error(`[ALERT] video route: job ${jobId}: ${message}`)
+  await recordVideoRouteAlert({ key: `settle-write:${jobId}`, kind: "settlement", jobId, message }).catch(() => {})
+  return false
+}
+
+/**
  * Starts (or keeps) the watch for a late bill on a settlement that closed over
  * a send the route had not billed: the sweep reads the route again every
- * `everyMs` until the watch ends. A late bill is recorded and alerted, never
- * charged on its own. Never throws.
+ * `everyMs` until the watch ends. `knownUsd` is the route's verified bills as
+ * the ledger stood when the settlement's figures were taken (lib/video-route-ledger.ts
+ * via `ledgerBilledUsd`): the late-bill pass compares every read against it,
+ * so a bill is found on the read where it is first SEEN, not only on the read
+ * that fetched it. A late bill is recorded and alerted, never charged on its
+ * own. Tried twice; a watch that cannot be written is alerted (never a silent
+ * skip). Never throws.
  */
-export async function watchForLateBill(jobId: string, everyMs: number, now = Date.now()): Promise<void> {
-  await patchRouteSettle(jobId, { watchUntil: new Date(now + LATE_BILL_WATCH_DAYS * 86_400_000).toISOString() }, { next_attempt_at: new Date(now + everyMs).toISOString() })
+export async function watchForLateBill(jobId: string, everyMs: number, opts: { knownUsd?: number | null; now?: number } = {}): Promise<boolean> {
+  const now = opts.now ?? Date.now()
+  const patch = { watchUntil: new Date(now + LATE_BILL_WATCH_DAYS * 86_400_000).toISOString(), ...(typeof opts.knownUsd === "number" ? { knownUsd: opts.knownUsd } : {}) }
+  const columns = { next_attempt_at: new Date(now + everyMs).toISOString() }
+  if (await patchRouteSettle(jobId, patch, columns)) return true
+  return patchSettleOrAlert(jobId, "The watch for a late bill", patch, columns)
 }
 /** The settlement is held for an admin's decision (its bill is far above its quote); nothing was charged. */
 export class RoutedSettleHeld extends RoutedSettleRetry {}
@@ -59,14 +81,21 @@ export interface RoutedBill {
   readonly model?: string
   /** A delivered send is charged at its quote because the route never billed it: the route is read for a late bill afterwards. */
   readonly unbilledSends?: boolean
+  /** What a release of this settlement records as the loss (an admin's rejection): the one loss rule over every send. */
+  readonly releaseLoss: RouteLoss
+  /** The route's verified bills on the ledger the figures were taken from (`ledgerBilledUsd`): the late-bill watch's starting point. */
+  readonly knownUsd?: number | null
 }
 
 /**
- * An admin rejected the held bill: the hold is released (nothing is charged)
- * and the charge not taken is recorded as a loss. Idempotent: the release is a
+ * The hold is released (nothing is charged): an admin rejected the bill, or a
+ * completed run had nothing delivered. `loss` is what is recorded as the
+ * loss ({@link RouteLoss}, the one loss rule in video-route-settlement.ts
+ * `routeLossOf`: what the route billed, or quoted while unbilled, for the
+ * sends, never the hold with our own fee). Idempotent: the release is a
  * compare-and-set on the log's `reserved` status, and a replay finds it done.
  */
-export async function releaseRejectedCharge(usageLogId: string, jobId: string, charged: number, opts: { note?: string; unbilledSends?: boolean } = {}): Promise<void> {
+export async function releaseRejectedCharge(usageLogId: string, jobId: string, loss: RouteLoss, opts: { note?: string; knownUsd?: number | null } = {}): Promise<void> {
   const { data: log, error } = await supabase.from("usage_logs").select("status").eq("id", usageLogId).maybeSingle()
   if (error || !log) throw new Error(`Job ${jobId}: could not read its reservation to release it`)
   if (log.status === "reserved") {
@@ -78,10 +107,23 @@ export async function releaseRejectedCharge(usageLogId: string, jobId: string, c
   }
   const { error: jobError } = await supabase.from("jobs").update({ credits_actual: 0 }).eq("id", jobId)
   if (jobError) throw new Error(`Job ${jobId}: recording actual credits failed: ${jobError.message}`)
-  await recordRouteSettle(jobId, "waived", { credits: 0, uncollected: charged, note: opts.note ?? "bill rejected by an admin; hold released, charge not taken (a recorded loss)" })
-  console.error(`[ALERT] video route: job ${jobId}: its hold was released; ${charged} credits were not charged (a recorded loss).`)
+  await recordRouteSettle(jobId, "waived", { credits: 0, uncollected: loss.credits, note: opts.note ?? "bill rejected by an admin; hold released, charge not taken (a recorded loss)" })
+  console.error(`[ALERT] video route: job ${jobId}: its hold was released; ${loss.credits} credits of the route's bill for it are recorded as a loss.`)
   // A send the route had not billed may still be billed: the loss recorded above is the best known, and is corrected if a bill arrives.
-  if (opts.unbilledSends) await watchForLateBill(jobId, LATE_BILL_READ_MS.closed)
+  if (loss.unbilled) await watchForLateBill(jobId, LATE_BILL_READ_MS.closed, { knownUsd: opts.knownUsd })
+}
+
+/**
+ * A recorded loss, by the one loss rule (video-route-settlement.ts `routeLossOf`):
+ * what the route billed — or quoted, while a delivered send has no bill — for
+ * the sends that are NOT charged, in base credits (the route's cost at the
+ * credit's value: no markup, no add-on, no run fee), and in USD beside it.
+ * `unbilled`: a send counted in it may still be billed (the route is watched).
+ */
+export interface RouteLoss {
+  readonly credits: number
+  readonly usd: number
+  readonly unbilled: boolean
 }
 
 /**
@@ -104,7 +146,7 @@ export async function commitRoutedCharge(usageLogId: string, jobId: string, char
   const settle = (await readRouteLedger(jobId)).settle
   const decision = settle?.decision ?? null
   if (decision === "rejected") {
-    await releaseRejectedCharge(usageLogId, jobId, charged, { unbilledSends: bill.unbilledSends })
+    await releaseRejectedCharge(usageLogId, jobId, bill.releaseLoss, { knownUsd: bill.knownUsd })
     return "released"
   }
   const multiple = billAnomalyMultipleOf(bill.policy)
@@ -139,6 +181,6 @@ export async function commitRoutedCharge(usageLogId: string, jobId: string, char
   if (!outcome) return deferRoutedSettlement(jobId, `The metered settlement of ${charged} credits gave no receipt`)
   await finishRoutedReceipt(usageLogId, jobId, outcome)
   // Charged at its quote for a send the route had not billed: a bill that arrives later is recorded against this charge.
-  if (bill.unbilledSends) await watchForLateBill(jobId, LATE_BILL_READ_MS.closed)
+  if (bill.unbilledSends) await watchForLateBill(jobId, LATE_BILL_READ_MS.closed, { knownUsd: bill.knownUsd })
   return "charged"
 }

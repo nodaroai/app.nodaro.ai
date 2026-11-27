@@ -40,6 +40,7 @@ const h = vi.hoisted(() => ({
   ledgerSeq: [] as Array<Record<string, unknown>>,
   policy: { models: {} } as Record<string, unknown> | null,
   holds: [] as unknown[][],
+  env: "production",
 }))
 // The re-read of the route (lib/video-route-resolve.ts) has its own suite: here, when it is asked and what follows.
 vi.mock("@/lib/video-route-resolve.js", () => ({
@@ -77,7 +78,7 @@ vi.mock("@/lib/supabase.js", () => ({
     },
   },
 }))
-vi.mock("@/lib/runtime-env.js", () => ({ getRuntimeEnv: () => "production" }))
+vi.mock("@/lib/runtime-env.js", () => ({ getRuntimeEnv: () => h.env }))
 vi.mock("@/lib/video-route-ledger.js", async (orig) => ({
   ...(await orig<typeof import("@/lib/video-route-ledger.js")>()),
   readRouteLedger: async () => {
@@ -110,7 +111,7 @@ const ledgerOf = (over: Record<string, unknown> = {}) => ({ starts: [], tasks: [
 const alertsOf = (key: string) => h.alerts.mock.calls.map((c) => (c as unknown as [{ key: string; message: string }])[0]).filter((a) => a.key === key)
 /** The one write was the late-bill watch on the settle row: seven days of it, the next read `everyMs` from when it was started. */
 const expectWatch = (jobId: string, everyMs: number) => {
-  expect(h.patches).toEqual([[jobId, { watchUntil: expect.any(String) }, { next_attempt_at: expect.any(String) }]])
+  expect(h.patches).toEqual([[jobId, expect.objectContaining({ watchUntil: expect.any(String) }), { next_attempt_at: expect.any(String) }]])
   const [, kept, columns] = h.patches[0] as [string, { watchUntil: string }, { next_attempt_at: string }]
   expect(Date.parse(kept.watchUntil) - Date.parse(columns.next_attempt_at)).toBe(7 * 86_400_000 - everyMs)
 }
@@ -140,6 +141,7 @@ beforeEach(() => {
   h.ledgerSeq = []
   h.policy = { models: {} }
   h.holds = []
+  h.env = "production"
   h.alerts.mockClear()
   h.ledgerFails = false
   h.billedUsd = CREDIT_BASE_USD * 60
@@ -293,7 +295,7 @@ describe("retryRoutedSettlements", () => {
     h.ledgerFails = true
     const err = vi.spyOn(console, "error").mockImplementation(() => {})
     expect(await mod.retryRoutedSettlements(NOW)).toMatchObject({ stale: 0, failed: 1 })
-    expect(h.patches).toContainEqual(["j-long", { firstAttemptAt: new Date(NOW).toISOString() }])
+    expect(h.patches).toContainEqual(["j-long", { firstAttemptAt: new Date(NOW).toISOString() }, {}])
     err.mockRestore()
   })
 
@@ -302,7 +304,6 @@ describe("retryRoutedSettlements", () => {
 
     it.each([
       ["still running", { status: "processing", usage_log_id: "l", parent_job_id: null, defer: null }],
-      ["a deferred child its parent settles", { status: "completed", usage_log_id: "l", parent_job_id: "parent-1", defer: true }],
     ])("a run whose row is 50 h old and is %s gets no clock and no alert, however many passes find it", async (_what, job) => {
       h.retryRows = [{ job_id: "j-flying", created_at: iso(50 * HOUR) }]
       h.jobs["j-flying"] = { ...job, ...stamped("j-flying") }
@@ -314,6 +315,25 @@ describe("retryRoutedSettlements", () => {
       expect(stale(err)).toBe(false)
       expect(h.settled).toEqual([])
       expect(h.refunds).toEqual([])
+      err.mockRestore()
+    })
+
+    it("a terminal deferred child its parent has not settled or released is not silent: its clock starts, and past 48 h it is alerted on every pass", async () => {
+      h.retryRows = [{ job_id: "j-child", created_at: iso(50 * HOUR) }]
+      h.jobs["j-child"] = { status: "completed", usage_log_id: "l", parent_job_id: "parent-1", defer: true, ...stamped("j-child") }
+      const err = vi.spyOn(console, "error").mockImplementation(() => {})
+      expect(await mod.retryRoutedSettlements(NOW)).toEqual({ scanned: 1, settled: 0, failed: 0, stale: 0 })
+      expect(h.patches).toEqual([["j-child", { firstAttemptAt: new Date(NOW).toISOString() }, {}]])
+      expect(alertsOf("stale:j-child")).toEqual([])
+      // Its parent still has not settled it 49 h later.
+      h.patches = []
+      h.retryRows = [{ job_id: "j-child", created_at: iso(99 * HOUR), detail: { firstAttemptAt: iso(49 * HOUR) } } as never]
+      expect(await mod.retryRoutedSettlements(NOW)).toMatchObject({ stale: 1, settled: 0 })
+      expect(alertsOf("stale:j-child")).toEqual([expect.objectContaining({ message: expect.stringContaining("its parent has not settled or released") })])
+      // Never settled or released from here: its parent's settlement does that.
+      expect(h.settled).toEqual([])
+      expect(h.refunds).toEqual([])
+      expect(h.patches).toEqual([])
       err.mockRestore()
     })
 
@@ -338,7 +358,7 @@ describe("retryRoutedSettlements", () => {
       const err = vi.spyOn(console, "error").mockImplementation(() => {})
       expect(await mod.retryRoutedSettlements(NOW)).toEqual({ scanned: 1, settled: 0, failed: 0, stale: 0 })
       // The clock starts now, once.
-      expect(h.patches).toEqual([["j-long", { firstAttemptAt: new Date(NOW).toISOString() }]])
+      expect(h.patches).toEqual([["j-long", { firstAttemptAt: new Date(NOW).toISOString() }, {}]])
       // Inside its wait: read again later, as a fresh settlement is.
       expect(h.attempts).toEqual([["j-long", 1, new Date(NOW + mod.routeBillBackoffMs(0))]])
       // Not past: not handed to an admin as unbilled, its starts not given up on, nothing released, no alert of age.
@@ -359,7 +379,7 @@ describe("retryRoutedSettlements", () => {
       h.logs.l = { action: "seedance-2-5:8s:720p", credits_used: 100, job_id: "j-long", status: "reserved" }
       const err = vi.spyOn(console, "error").mockImplementation(() => {})
       expect(await mod.retryRoutedSettlements(NOW)).toEqual({ scanned: 1, settled: 0, failed: 1, stale: 0 })
-      expect(h.patches).toEqual([["j-long", { firstAttemptAt: new Date(NOW).toISOString() }]])
+      expect(h.patches).toEqual([["j-long", { firstAttemptAt: new Date(NOW).toISOString() }, {}]])
       expect(h.refunds).toEqual([])
       expect(h.marks.some((m) => m[1] === "waived")).toBe(false)
       expect(alertsOf("undelivered:j-long")).toEqual([])
@@ -425,8 +445,9 @@ describe("retryRoutedSettlements", () => {
     // Nothing is charged: the hold goes back.
     expect(h.refunds).toEqual(["l"])
     expect(h.settled).toEqual([])
-    // The route may have billed the send that started: the hold is the best-known loss, never zero.
-    expect(h.marks.at(-1)).toEqual(["j-empty", "waived", { credits: 0, uncollected: 140, note: expect.stringContaining("a send had started") }])
+    // The route may have billed the send that started, but no bill is known: the loss is what the route
+    // billed (nothing yet), never the hold with our own fee — and the route is watched for that bill.
+    expect(h.marks.at(-1)).toEqual(["j-empty", "waived", { credits: 0, uncollected: 0, note: expect.stringContaining("recorded as the loss") }])
     expectWatch("j-empty", 24 * HOUR)
     expect(alertsOf("undelivered:j-empty")).toEqual([expect.objectContaining({ message: expect.stringContaining("still read for its bill") })])
     err.mockRestore()
@@ -443,19 +464,21 @@ describe("retryRoutedSettlements", () => {
     const err = vi.spyOn(console, "error").mockImplementation(() => {})
     expect(await mod.retryRoutedSettlements(NOW)).toMatchObject({ settled: 1, failed: 0 })
     expect(h.refunds).toEqual(["l"])
-    expect(h.marks.at(-1)).toEqual(["j-empty", "waived", { credits: 0, uncollected: 0, note: expect.not.stringContaining("a send had started") }])
+    expect(h.marks.at(-1)).toEqual(["j-empty", "waived", { credits: 0, uncollected: 0, note: expect.not.stringContaining("recorded as the loss") }])
     expect(h.patches).toEqual([])
     expect(alertsOf("undelivered:j-empty")).toEqual([expect.objectContaining({ message: expect.not.stringContaining("still read for its bill") })])
     err.mockRestore()
   })
 
-  describe("the late-bill pass", () => {
-    const watched = (state: string, over: Record<string, unknown> = {}) => ({ jobId: "j-late", state, credits: 100, uncollected: null, detail: { watchUntil: iso(-3 * 86_400_000) }, ...over })
+  describe("the late-bill pass (compared with the figure last RECORDED, not with what this read fetched)", () => {
+    // A watch as a settlement starts it: its end, and the verified bills its figures were taken from (none yet).
+    const watched = (state: string, over: Record<string, unknown> = {}) => ({ jobId: "j-late", state, credits: 100, uncollected: null, detail: { watchUntil: iso(-3 * 86_400_000), knownUsd: 0 }, ...over })
     const lateJob = () => {
       // (The decision as the settlement's own reads alias it.)
       h.jobs["j-late"] = { status: "completed", usage_log_id: "l", parent_job_id: null, ...stamped("j-late"), stamp: stamped("j-late").__videoRoute }
       h.logs.l = { action: "seedance-2-5:8s:720p", credits_used: 100, job_id: "j-late", status: "committed" }
     }
+    const lateBillPatch = () => h.patches.find((p) => (p as [string, Record<string, unknown>])[1]?.lateBill !== undefined) as [string, Record<string, unknown>, Record<string, unknown>] | undefined
 
     it("nothing arrived: the route is read again on the slow cadence, and nothing else changes", async () => {
       lateJob()
@@ -472,99 +495,148 @@ describe("retryRoutedSettlements", () => {
       // Before the read no bill (the quote, 100); after it the route's bill of 260.
       h.billedSeq = [null]
       h.billedUsd = CREDIT_BASE_USD * 260
-      h.resolved = 1
-      h.billed = 1
       h.watches = [watched("done", { credits: 100 })]
       const err = vi.spyOn(console, "error").mockImplementation(() => {})
       expect(await mod.readLateBills(NOW)).toEqual({ read: 1, arrived: 1 })
-      expect(h.patches).toEqual([["j-late", { lateBill: { at: new Date(NOW).toISOString(), knownCredits: 260, chargedCredits: 100, differenceCredits: 160 } }, { next_attempt_at: null, uncollected: 160 }]])
-      expect(h.alerts.mock.calls.filter((c) => (c as unknown as [{ key: string }])[0].key === "late-bill:j-late")).toHaveLength(1)
+      expect(h.patches).toEqual([["j-late", { lateBill: { at: new Date(NOW).toISOString(), billedUsd: CREDIT_BASE_USD * 260, knownCredits: 260, chargedCredits: 100, differenceCredits: 160, lossCredits: 0, lossUsd: 0 }, knownUsd: CREDIT_BASE_USD * 260, loss: { credits: 0, usd: 0 } }, { next_attempt_at: null, uncollected: 160 }]])
+      expect(alertsOf("late-bill:j-late")).toHaveLength(1)
       // Nothing more is charged, and nothing is refunded.
       expect(h.settled).toEqual([])
       expect(h.refunds).toEqual([])
       err.mockRestore()
     })
 
-    it("a bill that arrives after a release raises the recorded loss to what the run is now known to cost", async () => {
+    it("a bill FETCHED by an earlier read whose record was lost is found on the next pass all the same (no 'gained in this call' needed)", async () => {
+      lateJob()
+      // The bill is on the ledger already (another read fetched it); this pass's own read fetches nothing.
+      h.billedUsd = CREDIT_BASE_USD * 260
+      h.resolved = 0
+      h.billed = 0
+      h.watches = [watched("done", { credits: 100 })]
+      const err = vi.spyOn(console, "error").mockImplementation(() => {})
+      expect(await mod.readLateBills(NOW)).toEqual({ read: 1, arrived: 1 })
+      expect(lateBillPatch()?.[2]).toEqual({ next_attempt_at: null, uncollected: 160 })
+      expect(alertsOf("late-bill:j-late")).toHaveLength(1)
+      // Once recorded, the same figure is not recorded again.
+      h.patches = []
+      h.alerts.mockClear()
+      h.watches = [watched("done", { credits: 100, uncollected: 160, detail: { watchUntil: iso(-3 * 86_400_000), knownUsd: CREDIT_BASE_USD * 260 } })]
+      expect(await mod.readLateBills(NOW)).toEqual({ read: 1, arrived: 0 })
+      expect(lateBillPatch()).toBeUndefined()
+      expect(h.alerts).not.toHaveBeenCalled()
+      err.mockRestore()
+    })
+
+    it("a bill that arrives after a release records the route's bill as the loss: up, or DOWN from a figure that was higher", async () => {
       lateJob()
       h.billedSeq = [null]
-      h.billedUsd = CREDIT_BASE_USD * 260
-      h.resolved = 1
-      h.billed = 1
+      h.billedUsd = CREDIT_BASE_USD * 60
+      // Released at the quote's 100; the route's real bill is 60.
       h.watches = [watched("waived", { credits: 0, uncollected: 100 })]
       const err = vi.spyOn(console, "error").mockImplementation(() => {})
       await mod.readLateBills(NOW)
-      expect(h.patches[0]).toEqual(["j-late", { lateBill: expect.objectContaining({ knownCredits: 260, chargedCredits: 0, differenceCredits: 260 }) }, { next_attempt_at: null, uncollected: 260 }])
+      expect(lateBillPatch()).toEqual(["j-late", expect.objectContaining({ lateBill: expect.objectContaining({ lossCredits: 60, chargedCredits: 0 }), knownUsd: CREDIT_BASE_USD * 60 }), { next_attempt_at: null, uncollected: 60 }])
+      expect(alertsOf("late-bill:j-late")[0]!.message).toContain("(it was 100)")
       expect(h.settled).toEqual([])
       err.mockRestore()
     })
 
-    it("an unbilled settlement whose bill arrives goes back to the settlement, where it is charged or held like any bill", async () => {
+    it("an unbilled settlement whose bill is on the ledger goes back to the settlement (by state, whoever fetched the bill)", async () => {
       lateJob()
-      h.billedSeq = [null]
       h.billedUsd = CREDIT_BASE_USD * 260
-      h.resolved = 1
-      h.billed = 1
+      h.resolved = 0
+      h.billed = 0
       h.watches = [watched("unbilled", { credits: null })]
       await mod.readLateBills(NOW)
       expect(h.reopened).toEqual([["j-late"]])
       expect(h.settled).toEqual([])
     })
 
-    it.each([["done", 24], ["waived", 24], ["unbilled", 6]] as const)("the route still answers done with no bill for a %s settlement: no bill arrived, nothing is recorded or alerted, and it is read again", async (state, hours) => {
+    it.each([["done", 24], ["waived", 24]] as const)("the route still answers done with no bill for a %s settlement: nothing is recorded or alerted, and it is read again", async (state, hours) => {
       lateJob()
       h.billedUsd = null as unknown as number
-      // The read touched the ledger (an estimate, a status), and no send gained a verified bill.
       h.resolved = 1
       h.billed = 0
       h.watches = [watched(state, state === "waived" ? { credits: 0, uncollected: 100 } : {})]
       const err = vi.spyOn(console, "error").mockImplementation(() => {})
       expect(await mod.readLateBills(NOW)).toEqual({ read: 1, arrived: 0 })
-      expect(h.resolves).toEqual([["j-late", "r1"]])
-      // Only the next read is scheduled: no late bill, no changed figure.
       expect(h.patches).toEqual([["j-late", {}, { next_attempt_at: new Date(NOW + hours * HOUR).toISOString() }]])
-      expect(alertsOf("late-bill:j-late")).toEqual([])
       expect(h.alerts).not.toHaveBeenCalled()
       expect(h.reopened).toEqual([])
-      expect(h.settled).toEqual([])
       expect(err).not.toHaveBeenCalled()
       err.mockRestore()
     })
 
-    it.each(["done", "waived"])("a bill arrived for a %s settlement but its new total cannot be computed just now: nothing is recorded on a guess, and it is read again", async (state) => {
+    it("an unbilled settlement still without its bill: its figures are refreshed only on a row still waiting, and it is read again", async () => {
       lateJob()
-      h.resolved = 1
-      h.billed = 1
+      h.billedUsd = null as unknown as number
+      h.watches = [watched("unbilled", { credits: null })]
+      expect(await mod.readLateBills(NOW)).toEqual({ read: 1, arrived: 0 })
+      expect(h.patches).toEqual([["j-late", {}, { next_attempt_at: new Date(NOW + 6 * HOUR).toISOString(), credits: 100, quoted_usd: expect.any(Number) }, { onlyStates: ["unbilled"] }]])
+      expect(h.reopened).toEqual([])
+    })
+
+    it("a bill arrived for a charged run whose new total cannot be computed just now: nothing is recorded on a guess, and the next pass finds the same change", async () => {
+      lateJob()
       // Before the read: one delivered send, no bill. After it: a ledger no total can be computed from yet.
       h.ledgerSeq = [ledgerOf({ tasks: [{ send: 1, ref: "t", billedUsd: null }] }), ledgerOf({ tasks: [{ send: 1, ref: "t", billedUsd: CREDIT_BASE_USD * 260 }], unresolvedStarts: [{ send: 2, key: "", ref: "t2" }] })]
-      h.watches = [watched(state)]
+      h.watches = [watched("done")]
       const err = vi.spyOn(console, "error").mockImplementation(() => {})
       expect(await mod.readLateBills(NOW)).toEqual({ read: 1, arrived: 0 })
-      expect(h.patches).toEqual([["j-late", {}, { next_attempt_at: new Date(NOW + 6 * HOUR).toISOString() }]])
+      expect(h.patches).toEqual([["j-late", {}, { next_attempt_at: new Date(NOW + 24 * HOUR).toISOString() }]])
       expect(h.alerts).not.toHaveBeenCalled()
       err.mockRestore()
     })
 
     it("a released run with no delivered send (no total to compute) is read again on the slow cadence until its watch ends", async () => {
       lateJob()
-      // A send of it had started and was given up on: nothing delivered, so no figure, and its bill may still come.
+      // A send of it had started and was given up on: nothing delivered, no bill, and its bill may still come.
       h.ledger = ledgerOf({ tasks: [{ send: 1, ref: "t", billedUsd: null, outcome: "unresolved" }] })
-      h.watches = [watched("waived", { credits: 0, uncollected: 140 })]
+      h.watches = [watched("waived", { credits: 0, uncollected: 0 })]
       expect(await mod.readLateBills(NOW)).toEqual({ read: 1, arrived: 0 })
       expect(h.resolves).toEqual([["j-late", "r1"]])
       expect(h.patches).toEqual([["j-late", {}, { next_attempt_at: new Date(NOW + 24 * HOUR).toISOString() }]])
       expect(h.alerts).not.toHaveBeenCalled()
       // Past its watch it is no longer read.
       h.patches = []
-      h.watches = [watched("waived", { credits: 0, uncollected: 140, detail: { watchUntil: iso(60_000) } })]
+      h.watches = [watched("waived", { credits: 0, uncollected: 0, detail: { watchUntil: iso(60_000), knownUsd: 0 } })]
       await mod.readLateBills(NOW)
       expect(h.patches).toEqual([["j-late", {}, { next_attempt_at: null }]])
+    })
+
+    it("a given-up send whose bill arrives after the release is recorded as the loss (never charged)", async () => {
+      lateJob()
+      h.ledger = ledgerOf({ tasks: [{ send: 1, ref: "t", billedUsd: CREDIT_BASE_USD * 70, outcome: "unresolved" }] })
+      h.watches = [watched("waived", { credits: 0, uncollected: 0 })]
+      const err = vi.spyOn(console, "error").mockImplementation(() => {})
+      expect(await mod.readLateBills(NOW)).toEqual({ read: 1, arrived: 1 })
+      expect(lateBillPatch()?.[2]).toEqual({ next_attempt_at: null, uncollected: 70 })
+      expect(h.settled).toEqual([])
+      err.mockRestore()
+    })
+
+    it("a charged run's replaced send whose bill arrives keeps the watch going until it does, and records it as the loss", async () => {
+      lateJob()
+      // Send 1 was replaced (our loss) and has no bill; send 2, the delivered clip, was charged at its bill.
+      h.ledger = ledgerOf({ tasks: [{ send: 1, ref: "t1", billedUsd: null, ownLoss: true }, { send: 2, ref: "t2", billedUsd: CREDIT_BASE_USD * 50 }] })
+      h.watches = [watched("done", { credits: 50, detail: { watchUntil: iso(-3 * 86_400_000), knownUsd: CREDIT_BASE_USD * 50 } })]
+      expect(await mod.readLateBills(NOW)).toEqual({ read: 1, arrived: 0 })
+      // Still read: the replaced send may still be billed (not only the charged one counts).
+      expect(h.patches).toEqual([["j-late", {}, { next_attempt_at: new Date(NOW + 24 * HOUR).toISOString() }]])
+      // Its bill arrives: recorded as the loss beside the charge; the charge itself is unchanged.
+      h.patches = []
+      h.ledger = ledgerOf({ tasks: [{ send: 1, ref: "t1", billedUsd: CREDIT_BASE_USD * 40, ownLoss: true }, { send: 2, ref: "t2", billedUsd: CREDIT_BASE_USD * 50 }] })
+      const err = vi.spyOn(console, "error").mockImplementation(() => {})
+      expect(await mod.readLateBills(NOW)).toEqual({ read: 1, arrived: 1 })
+      expect(lateBillPatch()).toEqual(["j-late", expect.objectContaining({ lateBill: expect.objectContaining({ lossCredits: 40, differenceCredits: 0 }), loss: { credits: 40, usd: CREDIT_BASE_USD * 40 } }), { next_attempt_at: null, uncollected: 0 }])
+      expect(alertsOf("late-bill:j-late")[0]!.message).toContain("40 credits of sends not charged")
+      err.mockRestore()
     })
 
     it("past its watch a settlement is no longer read", async () => {
       lateJob()
       h.billedUsd = null as unknown as number
-      h.watches = [watched("done", { detail: { watchUntil: iso(60_000) } })]
+      h.watches = [watched("done", { detail: { watchUntil: iso(60_000), knownUsd: 0 } })]
       await mod.readLateBills(NOW)
       expect(h.patches).toEqual([["j-late", {}, { next_attempt_at: null }]])
     })
@@ -612,8 +684,8 @@ describe("retryRoutedSettlements", () => {
         expect(h.settled).toEqual([])
         // The route billed 60: nothing charged, 60 recorded as uncollected.
         expect(h.marks).toEqual([["j-gone", "done", { credits: 0, uncollected: 60, note: NOTE }]])
-        // Its bill is known: nothing left to watch the route for.
-        expect(h.patches).toEqual([])
+        // Its bill is known: recorded beside it in USD too, and nothing left to watch the route for.
+        expect(h.patches).toEqual([["j-gone", { loss: { credits: 60, usd: CREDIT_BASE_USD * 60 } }, {}]])
         expect(h.alerts).toHaveBeenCalledTimes(1)
         expect(alertsOf("undelivered-loss:j-gone")).toEqual([expect.objectContaining({ kind: "settlement", jobId: "j-gone", message: expect.stringContaining(`ended ${status}`) })])
         expect(alertsOf("undelivered-loss:j-gone")[0]!.message).toContain("60 credits")
@@ -633,6 +705,9 @@ describe("retryRoutedSettlements", () => {
         expect(await mod.recoverRoutedSettlement("j-gone")).toBe(true)
         expect(h.refunds).toEqual(["l"])
         expect(h.marks).toEqual([["j-gone", "done", { credits: 0, uncollected: 100, note: NOTE }]])
+        // The loss at its best known figure (the quote, no markup), then the watch for its real bill.
+        expect(h.patches[0]).toEqual(["j-gone", { loss: { credits: 100, usd: CREDIT_BASE_USD * 100 } }, {}])
+        h.patches = h.patches.slice(1)
         expectWatch("j-gone", 24 * HOUR)
         expect(alertsOf("undelivered-loss:j-gone")).toEqual([expect.objectContaining({ message: expect.stringContaining("still read for a bill that has not come") })])
         expect(h.alerts).toHaveBeenCalledTimes(1)
@@ -671,6 +746,36 @@ describe("retryRoutedSettlements", () => {
         expect(h.marks).toEqual([])
         expect(alertsOf("undelivered-loss:j-gone")).toEqual([])
       })
+    })
+  })
+
+  describe("another environment's job (staging and production share one database)", () => {
+    it("a run token signed in another environment is refused BEFORE the run branch: nothing is written or settled", async () => {
+      const { rowlessRouteToken, bindRowlessRouteToken } = await import("../../../lib/video-route-decision.js")
+      h.env = "staging"
+      const token = bindRowlessRouteToken(rowlessRouteToken({ routeId: "r1", model: "seedance-2-5", service: "generate-video-pro", feeChargedCredits: 10, reserveChargedCredits: 100, feeId: "gvp-fee" }), { parentJobId: "j-run", userId: "u" })!
+      h.env = "production"
+      h.jobs["j-run"] = { status: "completed", usage_log_id: "l", parent_job_id: null, run: { token, usageLogId: "other-log" } }
+      h.logs.l = { action: "gvp-fee", credits_used: 100, job_id: "j-run", status: "reserved", mode: "video-route" }
+      await expect(mod.settleRoutedJob({ usageLogId: "l", jobId: "j-run", log: { action: "gvp-fee", credits_used: 100, job_id: "j-run", routed: true } })).rejects.toThrow(mod.FOREIGN_ROUTED_RESERVATION)
+      await expect(mod.recoverRoutedSettlement("j-run")).rejects.toThrow(mod.FOREIGN_ROUTED_RESERVATION)
+      // Not even a retry mark (the usage logs differ, which would otherwise write one) under this environment.
+      expect(h.marks).toEqual([])
+      expect(h.runSettles).toEqual([])
+      expect(h.settled).toEqual([])
+      expect(h.refunds).toEqual([])
+    })
+
+    it("a decision stamped in another environment is refused before anything is released or recorded", async () => {
+      h.env = "staging"
+      const foreign = stamped("j-far")
+      h.env = "production"
+      h.jobs["j-far"] = { status: "failed", usage_log_id: "l", parent_job_id: null, ...foreign, stamp: foreign.__videoRoute }
+      h.logs.l = { action: "seedance-2-5:8s:720p", credits_used: 100, job_id: "j-far", status: "reserved" }
+      await expect(mod.recoverRoutedSettlement("j-far")).rejects.toThrow(mod.FOREIGN_ROUTED_RESERVATION)
+      expect(h.refunds).toEqual([])
+      expect(h.marks).toEqual([])
+      expect(h.resolves).toEqual([])
     })
   })
 

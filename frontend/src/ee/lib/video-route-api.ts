@@ -28,6 +28,8 @@ export interface VideoRouteHold {
   heldAt: string
   /** What a charge would take right now: the real bill of every billed send plus the quote of every unbilled one. Null: not computable yet. */
   wouldCharge: number | null
+  /** What a release records as the loss right now: the route's bill for its sends (the quote where not billed yet), base credits, no markup or fees. Null: not computable yet. */
+  wouldLose: number | null
   /** That total is itself far above the quote: settling at the quote would hold it for its own confirmation instead of charging it. */
   totalAnomalous: boolean
 }
@@ -71,8 +73,10 @@ export interface VideoRouteView {
     lossesUsd: number
     actualUsd: number | null
     videoSeconds: number | null
-    /** What the route spent beyond the recorded cost and the known losses. */
+    /** What the route's SHARED account spent beyond this environment's ledger: context only, never attributed here. */
     unexplainedUsd: number | null
+    /** What this environment's ledger recorded beyond the whole account's spend: the drift that is alerted. */
+    overRecordedUsd?: number | null
     jobs: number
     failedJobs: number
     at: string

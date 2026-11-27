@@ -719,14 +719,16 @@ describe("settleRoutedJob (the one routed settlement)", () => {
     expect(h.commits).toEqual([["log", 50, { collectOverHold: true, routedJobId: JOB }]])
     expect(h.ownLoss).toEqual([[JOB, 1]])
     expect(err.mock.calls.some((c) => String(c[0]).includes("our loss"))).toBe(true)
-    // Its bill is known: nothing is left to read the route for.
+    // Its bill is known: it is recorded beside the charge as the loss (the route's bill, base credits), and nothing is left to read the route for.
     expect(ownLossAlerts()).toEqual([expect.objectContaining({ key: `own-loss:${JOB}:1`, message: expect.not.stringContaining("not reported yet") })])
-    expect(h.patches).toEqual([])
+    expect(h.patches).toEqual([[JOB, { loss: { credits: 40, usd: CREDIT_BASE_USD * 40 } }, {}]])
     err.mockRestore()
   })
 
   describe("an earlier delivered send the route has not billed yet", () => {
-    const WATCH = [JOB, expect.objectContaining({ watchUntil: expect.any(String) }), expect.objectContaining({ next_attempt_at: expect.any(String) })]
+    const WATCH = [JOB, expect.objectContaining({ watchUntil: expect.any(String), knownUsd: expect.any(Number) }), expect.objectContaining({ next_attempt_at: expect.any(String) })]
+    // The loss recorded beside the charge: the quote of a replaced send not billed yet (its best known figure), no markup.
+    const LOSS = [JOB, { loss: { credits: expect.any(Number), usd: expect.any(Number) } }, {}]
     const replaced = (first: Record<string, unknown> = {}) => {
       policy()
       h.job = { status: "completed", usage_log_id: "log", [VIDEO_ROUTE_STAMP_KEY]: signed() }
@@ -742,8 +744,8 @@ describe("settleRoutedJob (the one routed settlement)", () => {
       expect(h.ownLoss).toEqual([[JOB, 1]])
       expect(ownLossAlerts()).toEqual([expect.objectContaining({ key: `own-loss:${JOB}:1`, kind: "settlement", message: expect.stringContaining("amount not reported yet") })])
       expect(ownLossAlerts()[0]!.message).not.toContain("could NOT be marked")
-      // After the charge: the late-bill watch, so the loss gets its figure when the bill comes.
-      expect(h.patches).toEqual([WATCH])
+      // After the charge: the loss at its best known figure, and the late-bill watch, so it gets its real figure when the bill comes.
+      expect(h.patches).toEqual([LOSS, WATCH])
       expect(h.settles.at(-1)).toEqual([JOB, "done", { credits: 50 }])
       err.mockRestore()
     })
@@ -756,7 +758,7 @@ describe("settleRoutedJob (the one routed settlement)", () => {
       expect(h.commits).toEqual([["log", 50, { collectOverHold: true, routedJobId: JOB }]])
       expect(ownLossAlerts()).toEqual([expect.objectContaining({ key: `own-loss:${JOB}:1`, message: expect.stringContaining("could NOT be marked") })])
       expect(err.mock.calls.some((c) => String(c[0]).includes("could NOT be marked"))).toBe(true)
-      expect(h.patches).toEqual([WATCH])
+      expect(h.patches).toEqual([LOSS, WATCH])
       err.mockRestore()
     })
 
@@ -769,7 +771,7 @@ describe("settleRoutedJob (the one routed settlement)", () => {
       // Send 1 was marked before; send 2 is marked and alerted now, with its bill known.
       expect(h.ownLoss).toEqual([[JOB, 2]])
       expect(ownLossAlerts()).toEqual([expect.objectContaining({ key: `own-loss:${JOB}:2`, message: expect.not.stringContaining("not reported yet") })])
-      expect(h.patches).toEqual([WATCH])
+      expect(h.patches).toEqual([LOSS, WATCH])
       err.mockRestore()
     })
   })

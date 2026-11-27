@@ -20,13 +20,14 @@ import { supabase } from "../../lib/supabase.js"
 import { getAppSettings, settingsReadFailed } from "../../lib/app-settings.js"
 import { getPluginServices } from "../../lib/private-plugins/services-registry.js"
 import type { PluginAlternateRouteRequest, PluginRoutedRunPricing } from "../../lib/private-plugins/types.js"
-import { bindRowlessRouteToken, rowlessRouteTokenOf, rowlessRunTokenFor, type RowlessRouteToken } from "../../lib/video-route-decision.js"
+import { bindRowlessRouteToken, foreignRowlessRouteToken, rowlessRouteTokenOf, rowlessRunTokenFor, type RowlessRouteToken } from "../../lib/video-route-decision.js"
 import { priceFactorKey } from "../../lib/video-route-policy.js"
 import { getVideoRouteSettings } from "./video-route-settings.js"
 import { deliveredTask, readRouteLedger, type RouteLedger } from "../../lib/video-route-ledger.js"
 import { resolveRouteLedger } from "../../lib/video-route-resolve.js"
 import { reserveCreditsForJob, type CreditReservation } from "../../middleware/credit-guard.js"
-import { commitRoutedCharge, deferRoutedSettlement, releaseRejectedCharge } from "./video-route-receipt.js"
+import { commitRoutedCharge, deferRoutedSettlement, patchSettleOrAlert, releaseRejectedCharge, watchForLateBill, LATE_BILL_READ_MS } from "./video-route-receipt.js"
+import { ledgerBilledUsd, routeLossOf } from "./video-route-loss.js"
 import { recordVideoRouteAlert } from "./video-route-alerts.js"
 import { applyServiceMarkup } from "./service-margin.js"
 import { routedQuote, routedPriceIdOf, routedSettlementCredits } from "./video-route-pricing.js"
@@ -182,6 +183,9 @@ export function routedRunChargeOf(run: RowlessRouteToken, opts: RoutedDeliveryOp
 
 /** The persisted delivery, including a waived stitch fee, is authoritative on replay. */
 export async function settleRoutedRunJob(usageLogId: string, jobId: string, token: string, _opts?: RoutedDeliveryOptions): Promise<void> {
+  // Another environment's run (staging and production share one database) is refused before
+  // anything is read from or written to the ledger for it (a recovery reaches here directly).
+  if (foreignRowlessRouteToken(token)) throw new Error("This routed reservation belongs to another environment")
   const run = rowlessRunTokenFor(token, jobId, 0)
   if (!run || !run.feeId || typeof run.feeChargedCredits !== "number") throw new Error(`job ${jobId}: its routed run token does not verify for this job`)
   const { data, error } = await supabase.from("jobs").select("status, user_id, usage_log_id, run:metadata->videoRouteRun").eq("id", jobId).maybeSingle()
@@ -201,18 +205,25 @@ export async function settleRoutedRunJob(usageLogId: string, jobId: string, toke
   }
   // An admin released it (a bill held, or one the route never reported): the hold goes back, whatever the ledger says.
   if (ledger.settle?.decision === "rejected") {
-    // The loss recorded is the best known: the real bill of what was billed, the quote of what was
-    // not. (A replay after the release finds the loss already recorded, and keeps it.)
-    const best = routedRunChargeOf(run, opts, ledger, settings, true)
-    const loss = ledger.settle.state === "waived" ? (ledger.settle.uncollected ?? 0) : best.kind === "billed" ? best.charged : (ledger.settle.credits ?? run.reserveChargedCredits ?? 0)
-    return releaseRejectedCharge(usageLogId, jobId, loss, { unbilledSends: best.kind === "billed" ? best.usedQuote : true })
+    // The loss recorded is the one loss rule over every segment (nothing is charged): the route's
+    // bill of each, the quote of one it has not billed yet — never the run's fee. A replay computes the same.
+    return releaseRejectedCharge(usageLogId, jobId, routeLossOf(ledger, "nothing", 0), { knownUsd: ledgerBilledUsd(ledger) })
   }
   const charge = routedRunChargeOf(run, opts, ledger, settings, ledger.settle?.atQuote === true)
   if (charge.kind === "pending") return deferRoutedSettlement(jobId, charge.reason, charge.cause)
   // The total about to be charged against the sum of the segments' quotes; a bill held for a decision raises no factor.
-  const outcome = await commitRoutedCharge(usageLogId, jobId, charge.charged, { billedUsd: charge.billedUsd, quotedUsd: charge.quotedUsd, policy: settings.video_route_policy, model: run.model, unbilledSends: charge.usedQuote })
+  const outcome = await commitRoutedCharge(usageLogId, jobId, charge.charged, {
+    billedUsd: charge.billedUsd, quotedUsd: charge.quotedUsd, policy: settings.video_route_policy, model: run.model, unbilledSends: charge.usedQuote,
+    releaseLoss: routeLossOf(ledger, "nothing", 0),
+    knownUsd: ledgerBilledUsd(ledger),
+  })
   // A bill an admin rejected moves no price.
   if (outcome === "released") return
+  // A segment given up on whose bill arrived since is not charged: its loss is recorded beside the charge,
+  // and while one may still be billed the route is read for it afterwards.
+  const notCharged = routeLossOf(ledger, "delivered", 0)
+  if (notCharged.usd > 0) await patchSettleOrAlert(jobId, "The loss of its segments that were not charged", { loss: { credits: notCharged.credits, usd: notCharged.usd } })
+  if (notCharged.unbilled && !charge.usedQuote) await watchForLateBill(jobId, LATE_BILL_READ_MS.closed, { knownUsd: ledgerBilledUsd(ledger) })
   for (const seg of charge.over) {
     const parsed = routedPriceIdOf(seg.priceId)
     if (!parsed) continue

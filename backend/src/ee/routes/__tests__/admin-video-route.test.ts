@@ -22,6 +22,12 @@ const h = vi.hoisted(() => ({
   previews: {} as Record<string, { credits: number | null; billedUsd: number | null; quotedUsd: number | null; usedQuote: boolean; anomalous: boolean; routeId: string | undefined }>,
   resolves: [] as unknown[][],
   onResolve: null as null | (() => void),
+  schema: { status: "whole", missing: [], checkInstalled: true } as { status: "whole" | "incomplete" | "unverified"; missing: string[]; checkInstalled?: boolean },
+  schemaAsks: [] as unknown[],
+}))
+// The schema check (lib/video-route-schema.ts) has its own suite: here, what a save does with each answer.
+vi.mock("@/lib/video-route-schema.js", () => ({
+  videoRouteSchemaState: async (opts: unknown) => (h.schemaAsks.push(opts), h.schema),
 }))
 // The re-read of the route before a decision (lib/video-route-resolve.ts) has its own suite: here, that it is asked, and what a changed total does.
 vi.mock("@/lib/video-route-resolve.js", () => ({
@@ -128,6 +134,8 @@ beforeEach(async () => {
   h.previews = {}
   h.resolves = []
   h.onResolve = null
+  h.schema = { status: "whole", missing: [], checkInstalled: true }
+  h.schemaAsks = []
   h.recover.mockReset().mockResolvedValue(true)
   h.admin = true
   _resetPluginServicesForTests()
@@ -296,6 +304,47 @@ describe("a model is put on the alternate route only where the loaded route can 
   })
 })
 
+describe("a save that routes a model or turns on unpaid-charge enforcement needs the schema PROVEN whole", () => {
+  const routed = () => policy({ "seedance-2": { route: "alternate" } })
+  const save = (p: unknown) => app.inject({ method: "PUT", url: URL, headers: as, payload: { expectedUpdatedAt: savedAt(), policy: p } })
+
+  it("refuses with the schema check function not installed (409 schema_unverified, saying so), asked fresh, and saves nothing", async () => {
+    capableRoute()
+    h.schema = { status: "unverified", missing: [], checkInstalled: false }
+    for (const p of [routed(), { ...policy({}), enforceUnpaidCharges: true }]) {
+      const res = await save(p)
+      expect(res.statusCode).toBe(409)
+      expect(res.json().error).toMatchObject({ code: "schema_unverified", message: expect.stringContaining("schema check function is not installed") })
+    }
+    expect(h.schemaAsks).toEqual([{ fresh: true }, { fresh: true }])
+    expect(h.rows.has(videoRoutePolicyKey())).toBe(false)
+  })
+
+  it("fails CLOSED when the check could not be asked, and names what is proven missing", async () => {
+    capableRoute()
+    h.schema = { status: "unverified", missing: [] }
+    expect((await save(routed())).json().error).toMatchObject({ code: "schema_unverified", message: expect.stringContaining("could not be verified just now") })
+    h.schema = { status: "incomplete", missing: ["trigger recover_video_allowance on deployment_user_allowances"], checkInstalled: true }
+    expect((await save(routed())).json().error).toMatchObject({ code: "schema_incomplete", message: expect.stringContaining("recover_video_allowance") })
+    expect(h.rows.has(videoRoutePolicyKey())).toBe(false)
+  })
+
+  it("a save that routes nothing and turns nothing on (and the revert) is never asked about the schema", async () => {
+    h.schema = { status: "unverified", missing: [], checkInstalled: false }
+    expect((await save(policy({ "seedance-2": { route: "default" } }))).statusCode).toBe(200)
+    expect((await app.inject({ method: "POST", url: `${URL}/revert`, headers: as })).statusCode).toBe(200)
+    expect(h.schemaAsks).toEqual([])
+  })
+
+  it("enforcement already on is not 'turned on' again by a later save", async () => {
+    h.rows.set(videoRoutePolicyKey(), { value: { ...policy({}), enforceUnpaidCharges: true }, updated_at: "on" })
+    h.schema = { status: "unverified", missing: [], checkInstalled: false }
+    const res = await app.inject({ method: "PUT", url: URL, headers: as, payload: { expectedUpdatedAt: "on", policy: { ...policy({}), enforceUnpaidCharges: true, billAnomalyMultiple: 6 } } })
+    expect(res.statusCode).toBe(200)
+    expect(h.schemaAsks).toEqual([])
+  })
+})
+
 describe("a policy save made over a newer policy is refused (another admin saved since)", () => {
   it("answers 409 and leaves the newer policy, then saves once the page is reloaded", async () => {
     capableRoute()
@@ -340,7 +389,7 @@ describe("the bill anomaly multiple and unpaid-charge enforcement", () => {
 describe("held settlements", () => {
   const JOB = "00000000-0000-4000-8000-0000000000b1"
   const OTHER = "00000000-0000-4000-8000-0000000000b2"
-  const held = (job_id: string, env = getRuntimeEnv()) => ({ id: h.ledger.length + 1, job_id, env, kind: "settle", state: "hold", decision: null, credits: 900, billed_usd: "1.8", quoted_usd: "0.2", note: "9x", updated_at: "2026-11-27T00:00:00Z" })
+  const held = (job_id: string, env = getRuntimeEnv()) => ({ id: h.ledger.length + 1, job_id, env, kind: "settle", state: "hold", decision: null, credits: 900, billed_usd: "1.8", quoted_usd: "0.2", note: "9x", detail: { heldAt: "2026-11-26T12:00:00Z" }, created_at: "2026-11-26T11:00:00Z", updated_at: "2026-11-27T00:00:00Z" })
 
   it("lists this environment's held settlements only", async () => {
     h.ledger = [held(JOB), held(OTHER, "another-environment"), { ...held(OTHER), state: "retry" }]
@@ -348,8 +397,8 @@ describe("held settlements", () => {
     h.previews[JOB] = { credits: 905, billedUsd: 1.81, quotedUsd: 0.2, usedQuote: false, anomalous: true, routeId: "r1" }
     const shown = (await app.inject({ method: "GET", url: URL, headers: as })).json().data
     // Beside what was recorded when it was held: what a decision would charge right now.
-    expect(shown.holds).toEqual([{ jobId: JOB, kind: "anomaly", credits: 900, billedUsd: 1.8, quotedUsd: 0.2, note: "9x", heldAt: "2026-11-27T00:00:00Z", wouldCharge: 905, totalAnomalous: true }])
-    expect(data.holds).toEqual([{ jobId: JOB, kind: "anomaly", credits: 900, billedUsd: 1.8, quotedUsd: 0.2, note: "9x", heldAt: "2026-11-27T00:00:00Z", wouldCharge: null, totalAnomalous: false }])
+    expect(shown.holds).toEqual([{ jobId: JOB, kind: "anomaly", credits: 900, billedUsd: 1.8, quotedUsd: 0.2, note: "9x", heldAt: "2026-11-26T12:00:00Z", wouldCharge: 905, wouldLose: null, totalAnomalous: true }])
+    expect(data.holds).toEqual([{ jobId: JOB, kind: "anomaly", credits: 900, billedUsd: 1.8, quotedUsd: 0.2, note: "9x", heldAt: "2026-11-26T12:00:00Z", wouldCharge: null, wouldLose: null, totalAnomalous: false }])
   })
 
   /** What settling the job would charge right now (the `wouldCharge` the page shows beside a hold). */
@@ -367,11 +416,12 @@ describe("held settlements", () => {
       expect(h.ledger[0]).toMatchObject({ state: "retry", decision: stored, decided_by: ADMIN })
       // The total a confirm was given for is kept beside it, after one more read of the route.
       if (decision === "confirm") {
-        expect(h.ledger[0]!.detail).toEqual({ decidedForCredits: 900 })
+        // (Kept beside what the row already carries: when it started waiting.)
+        expect(h.ledger[0]!.detail).toEqual({ heldAt: "2026-11-26T12:00:00Z", decidedForCredits: 900 })
         expect(h.resolves).toEqual([[JOB, "r1"]])
       } else {
         // A release is for no total: none is kept, and the route is not read for one.
-        expect(h.ledger[0]!.detail).toEqual({})
+        expect(h.ledger[0]!.detail).toEqual({ heldAt: "2026-11-26T12:00:00Z" })
         expect(h.resolves).toEqual([])
       }
       expect(h.audits.at(-1)).toMatchObject({ action, target_type: "job", target_id: JOB, admin_user_id: ADMIN })
@@ -425,7 +475,7 @@ describe("held settlements", () => {
     expect(res.statusCode).toBe(200)
     expect(res.json().data.decided).toMatchObject({ jobId: JOB, decision: "rejected", settled: true })
     expect(h.ledger[0]).toMatchObject({ state: "retry", decision: "rejected", decided_by: ADMIN, credits: 900 })
-    expect(h.ledger[0]!.detail).toEqual({})
+    expect(h.ledger[0]!.detail).toEqual({ heldAt: "2026-11-26T12:00:00Z" })
     expect(h.resolves).toEqual([])
     expect(h.audits.at(-1)).toMatchObject({ action: "reject_video_route_hold", target_id: JOB })
     expect(h.recover.mock.calls).toEqual([[JOB]])
@@ -493,12 +543,12 @@ describe("held settlements", () => {
 
 describe("an unbilled settlement (the route never reported a bill)", () => {
   const JOB = "00000000-0000-4000-8000-0000000000c1"
-  const unbilled = () => ({ id: 1, job_id: JOB, env: getRuntimeEnv(), kind: "settle", state: "unbilled", decision: null, credits: null, billed_usd: null, quoted_usd: null, note: "no bill in 48 h", updated_at: "2026-11-27T00:00:00Z" })
+  const unbilled = () => ({ id: 1, job_id: JOB, env: getRuntimeEnv(), kind: "settle", state: "unbilled", decision: null, credits: null, billed_usd: null, quoted_usd: null, note: "no bill in 48 h", created_at: "2026-11-25T00:00:00Z", updated_at: "2026-11-27T00:00:00Z" })
 
   it("is listed as such, beside the held bills", async () => {
     h.ledger = [unbilled()]
     const data = (await app.inject({ method: "GET", url: URL, headers: as })).json().data
-    expect(data.holds).toEqual([{ jobId: JOB, kind: "unbilled", credits: null, billedUsd: null, quotedUsd: null, note: "no bill in 48 h", heldAt: "2026-11-27T00:00:00Z", wouldCharge: null, totalAnomalous: false }])
+    expect(data.holds).toEqual([{ jobId: JOB, kind: "unbilled", credits: null, billedUsd: null, quotedUsd: null, note: "no bill in 48 h", heldAt: "2026-11-25T00:00:00Z", wouldCharge: null, wouldLose: null, totalAnomalous: false }])
   })
 
   /** What settling the run at its quote would charge right now. */

@@ -20,7 +20,7 @@ vi.mock("../supabase.js", () => ({
   },
 }))
 
-const { videoRouteSchemaReady, videoRouteSchemaMissing, stopRuleSelect, _resetVideoRouteSchemaForTests } = await import("../video-route-schema.js")
+const { videoRouteSchemaReady, videoRouteSchemaMissing, videoRouteSchemaState, stopRuleSelect, _resetVideoRouteSchemaForTests, VIDEO_ROUTE_SCHEMA_RECHECK_MS } = await import("../video-route-schema.js")
 const { STOP_RULE_COLUMNS } = await import("../stop-rule.js")
 const { markVideoSendStarted } = await import("../video-send-start.js")
 
@@ -63,7 +63,7 @@ describe("videoRouteSchemaMissing — the whole schema, asked once", () => {
     alert.mockRestore()
   })
 
-  it("the check function not installed blocks nothing by itself: the tables and the job's columns are probed, and with all there nothing is missing", async () => {
+  it("the check function not installed: the tables and the job's columns are probed, nothing is PROVEN missing, and the schema is unverified (not whole)", async () => {
     const alert = vi.spyOn(console, "error").mockImplementation(() => {})
     h.state = { data: null, error: { code: "PGRST202", message: "function not found" } }
     expect(await videoRouteSchemaMissing()).toEqual([])
@@ -71,9 +71,11 @@ describe("videoRouteSchemaMissing — the whole schema, asked once", () => {
     expect(h.probes).toBe(8)
     expect(alert).toHaveBeenCalledTimes(1)
     expect(String(alert.mock.calls[0]?.[0])).toMatch(/schema check function not installed.*all there.*triggers and the index could not be verified/)
-    // Remembered: not probed again.
+    // Remembered for a few minutes: not probed again meanwhile.
     await videoRouteSchemaMissing()
     expect(h.probes).toBe(8)
+    // Not whole: the triggers and the index could not be seen.
+    expect(await videoRouteSchemaState()).toEqual({ status: "unverified", missing: [], checkInstalled: false })
     alert.mockRestore()
   })
 
@@ -90,6 +92,47 @@ describe("videoRouteSchemaMissing — the whole schema, asked once", () => {
     await videoRouteSchemaReady()
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(h.stateCalls).toBe(1)
+  })
+})
+
+describe("videoRouteSchemaState — whole, incomplete or unverified, never kept for the life of the process", () => {
+  it("whole only when the check function answers with nothing missing", async () => {
+    expect(await videoRouteSchemaState()).toEqual({ status: "whole", missing: [], checkInstalled: true })
+    h.state = { data: { missing: ["trigger block_unpaid_video_reservation on usage_logs"] }, error: null }
+    const alert = vi.spyOn(console, "error").mockImplementation(() => {})
+    expect(await videoRouteSchemaState({ fresh: true })).toEqual({ status: "incomplete", missing: ["trigger block_unpaid_video_reservation on usage_logs"], checkInstalled: true })
+    alert.mockRestore()
+  })
+
+  it("a check that cannot be asked is unverified and never kept: the next call asks again", async () => {
+    h.state = { data: null, error: { code: "57014", message: "statement timeout" } }
+    expect(await videoRouteSchemaState()).toEqual({ status: "unverified", missing: [] })
+    h.state = { data: { missing: [] }, error: null }
+    expect(await videoRouteSchemaState()).toEqual({ status: "whole", missing: [], checkInstalled: true })
+    expect(h.stateCalls).toBe(2)
+  })
+
+  it("the fallback answer (no check function) is re-asked after a few minutes, so a process picks the function up without a restart", async () => {
+    const alert = vi.spyOn(console, "error").mockImplementation(() => {})
+    const t0 = Date.parse("2026-11-27T10:00:00Z")
+    h.state = { data: null, error: { code: "PGRST202", message: "function not found" } }
+    expect((await videoRouteSchemaState({ now: t0 })).status).toBe("unverified")
+    expect((await videoRouteSchemaState({ now: t0 + 60_000 })).status).toBe("unverified")
+    expect(h.stateCalls).toBe(1)
+    // The function is applied meanwhile.
+    h.state = { data: { missing: [] }, error: null }
+    expect(await videoRouteSchemaState({ now: t0 + VIDEO_ROUTE_SCHEMA_RECHECK_MS + 1 })).toEqual({ status: "whole", missing: [], checkInstalled: true })
+    expect(h.stateCalls).toBe(2)
+    // One alert for the unverified state; none for the same state re-checked, none for "whole".
+    expect(alert).toHaveBeenCalledTimes(1)
+    alert.mockRestore()
+  })
+
+  it("a fresh ask always goes to the database (what a save asks)", async () => {
+    await videoRouteSchemaState()
+    await videoRouteSchemaState({ fresh: true })
+    await videoRouteSchemaState({ fresh: true })
+    expect(h.stateCalls).toBe(3)
   })
 })
 

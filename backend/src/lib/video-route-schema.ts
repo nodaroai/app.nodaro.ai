@@ -25,8 +25,8 @@ export function videoRouteSchemaReady(): Promise<boolean> {
       const { supabase } = await import("./supabase.js")
       // trash-read: a probe for the column itself; no row is read for anyone, a deleted one included.
       const { error } = await supabase.from("jobs").select("video_send_started_at").limit(1)
-      // The first answer also starts the one check of the WHOLE schema (it alerts on its own).
-      void videoRouteSchemaMissing(supabase)
+      // The first answer also starts the check of the WHOLE schema (it alerts on its own).
+      void videoRouteSchemaState({ client: supabase })
       if (!error) return (known = true)
       if (isMissingColumnError(error)) {
         console.error("[ALERT] this database does not have the routed-video columns (jobs.video_send_started_at). The schema must be applied before this code: until it is, a started video send is not marked and a stop cancels as it did before.")
@@ -53,42 +53,91 @@ export async function stopRuleSelect<T extends string>(select: T): Promise<T> {
   return select.replace(STOP_RULE_COLUMNS, STOP_RULE_COLUMNS_BEFORE_MIGRATION) as T
 }
 
-let missingKnown: readonly string[] | undefined
-let missingProbe: Promise<readonly string[]> | undefined
+/**
+ * What this database says of the routed-video schema:
+ *   - `whole`: the check function answered and nothing is missing;
+ *   - `incomplete`: a piece is PROVEN missing (`missing` names each);
+ *   - `unverified`: nothing is proven missing, but the schema could not be
+ *     verified whole — the check function is not installed yet (`checkInstalled:
+ *     false`: the tables and the job's columns were probed directly, the
+ *     triggers and the index cannot be seen from here), or the check could not
+ *     be asked just now (`checkInstalled: undefined`).
+ * Only `whole` lets a policy route a model or enforce unpaid charges
+ * (ee/routes/admin-video-route.ts); reads and alerts carry on in every case.
+ */
+export interface VideoRouteSchemaState {
+  readonly status: "whole" | "incomplete" | "unverified"
+  readonly missing: readonly string[]
+  /** false: the check function is not installed. undefined: the check could not be asked (an error). */
+  readonly checkInstalled?: boolean
+}
+
+/** How long an answer of the check is kept before it is asked again: a process picks up a newly applied schema file without a restart. */
+export const VIDEO_ROUTE_SCHEMA_RECHECK_MS = 5 * 60_000
+
+let stateKnown: { state: VideoRouteSchemaState; at: number } | undefined
+let stateProbe: Promise<VideoRouteSchemaState> | undefined
+/** The last state alerted on: an alert is raised when the state CHANGES, not on every re-check. */
+let lastReported: string | undefined
 
 /**
- * What the routed-video schema lacks in this database, by name: its tables
- * and functions, the job's columns, each trigger, the index (the database
- * answers from its catalog, `video_route_schema_state`). Empty when it is
- * whole. The schema is applied as a chain of small files, and most of its
- * pieces fail SILENTLY when missing — a trigger that is not attached blocks
- * nothing and repays nothing — so this is asked once per process and alerts,
- * naming each missing piece; a routing policy is not saved over one
- * (ee/routes/admin-video-route.ts). A read that fails proves nothing: empty,
- * and asked again.
+ * The routed-video schema as this database answers it ({@link VideoRouteSchemaState}),
+ * from its catalog (`video_route_schema_state`). The schema is applied as a
+ * chain of small files, and most of its pieces fail SILENTLY when missing — a
+ * trigger that is not attached blocks nothing and repays nothing — so this is
+ * asked, and kept for {@link VIDEO_ROUTE_SCHEMA_RECHECK_MS} at most (never for
+ * the life of the process: a process picks the check function up as soon as it
+ * is applied), with an alert whenever the answer changes. `fresh` asks the
+ * database now (a save asks it so). A check that could not be asked is never
+ * kept: it is `unverified`, and asked again next time.
  */
-export function videoRouteSchemaMissing(client?: unknown): Promise<readonly string[]> {
-  if (missingKnown !== undefined) return Promise.resolve(missingKnown)
-  missingProbe ??= (async () => {
-    try {
-      const supabase = client ?? (await import("./supabase.js")).supabase
-      const { data, error } = await (supabase as unknown as { rpc(name: string): Promise<{ data: unknown; error: { code?: string; message: string } | null }> }).rpc("video_route_schema_state")
-      if (error) {
-        // The check itself is not installed yet. That alone blocks nothing: what CAN be read
-        // without it (the tables and the job's columns) is probed, and only a piece PROVEN
-        // missing is reported. The triggers and the index cannot be seen from here.
-        if (error.code === "PGRST202" || error.code === "42883") return report(await probeWithoutCheck(supabase), true)
-        return []
+export function videoRouteSchemaState(opts: { client?: unknown; fresh?: boolean; now?: number } = {}): Promise<VideoRouteSchemaState> {
+  const now = opts.now ?? Date.now()
+  if (!opts.fresh && stateKnown && now - stateKnown.at < VIDEO_ROUTE_SCHEMA_RECHECK_MS) return Promise.resolve(stateKnown.state)
+  if (opts.fresh) return askSchemaState(opts.client, now)
+  stateProbe ??= askSchemaState(opts.client, now).finally(() => {
+    stateProbe = undefined
+  })
+  return stateProbe
+}
+
+async function askSchemaState(client: unknown, now: number): Promise<VideoRouteSchemaState> {
+  let state: VideoRouteSchemaState
+  try {
+    const supabase = client ?? (await import("./supabase.js")).supabase
+    const { data, error } = await (supabase as unknown as { rpc(name: string): Promise<{ data: unknown; error: { code?: string; message: string } | null }> }).rpc("video_route_schema_state")
+    if (error) {
+      // The check itself is not installed yet: what CAN be read without it (the tables and the
+      // job's columns) is probed, and a piece PROVEN missing is named. The triggers and the index
+      // cannot be seen from here, so a schema with nothing proven missing is still only unverified.
+      if (error.code === "PGRST202" || error.code === "42883") {
+        const missing = await probeWithoutCheck(supabase)
+        state = { status: missing.length > 0 ? "incomplete" : "unverified", missing, checkInstalled: false }
+      } else {
+        // Asking failed (a timeout, a dropped connection): this proves nothing either way. Not kept.
+        return { status: "unverified", missing: [] }
       }
+    } else {
       const listed = data && typeof data === "object" ? (data as { missing?: unknown }).missing : undefined
-      return report(Array.isArray(listed) ? listed.filter((m): m is string => typeof m === "string") : [])
-    } catch {
-      return []
-    } finally {
-      missingProbe = undefined
+      const missing = Array.isArray(listed) ? listed.filter((m): m is string => typeof m === "string") : []
+      state = { status: missing.length > 0 ? "incomplete" : "whole", missing, checkInstalled: true }
     }
-  })()
-  return missingProbe
+  } catch {
+    return { status: "unverified", missing: [] }
+  }
+  stateKnown = { state, at: now }
+  report(state)
+  return state
+}
+
+/**
+ * What the routed-video schema lacks in this database, by name (see
+ * {@link videoRouteSchemaState}); empty when nothing is PROVEN missing, which
+ * is not the same as whole. For alerts and reads only: a save asks
+ * {@link videoRouteSchemaState} itself.
+ */
+export async function videoRouteSchemaMissing(client?: unknown): Promise<readonly string[]> {
+  return (await videoRouteSchemaState({ client })).missing
 }
 
 const SCHEMA_TABLES = ["video_route_ledger", "video_route_debts", "video_route_repayments", "video_route_deferred_repayments"] as const
@@ -118,17 +167,20 @@ async function probeWithoutCheck(client: unknown): Promise<string[]> {
   return missing
 }
 
-function report(missing: readonly string[], checkNotInstalled = false): readonly string[] {
-  missingKnown = missing
-  if (checkNotInstalled) console.error(`[ALERT] routed video: schema check function not installed (video_route_schema_state). The tables and the job's columns were probed directly${missing.length > 0 ? "" : " and are all there"}; the triggers and the index could not be verified.`)
-  if (missing.length > 0) console.error(`[ALERT] this database's routed-video schema is incomplete. Missing: ${missing.join("; ")}. Apply the remaining schema files before any model is routed: until then a routing policy cannot be saved here.`)
-  return missing
+/** Alerts once per distinct state (a re-check that finds the same state says nothing again). */
+function report(state: VideoRouteSchemaState): void {
+  const key = `${state.status}|${state.checkInstalled === false ? "no-check" : "check"}|${state.missing.join(";")}`
+  if (key === lastReported) return
+  lastReported = key
+  if (state.checkInstalled === false) console.error(`[ALERT] routed video: schema check function not installed (video_route_schema_state). The tables and the job's columns were probed directly${state.missing.length > 0 ? "" : " and are all there"}; the triggers and the index could not be verified, so no model can be routed and unpaid charges cannot be enforced here until it is.`)
+  if (state.missing.length > 0) console.error(`[ALERT] this database's routed-video schema is incomplete. Missing: ${state.missing.join("; ")}. Apply the remaining schema files before any model is routed: until then a routing policy cannot be saved here.`)
 }
 
 /** Test seam. */
-export function _resetVideoRouteSchemaForTests(value?: boolean, missing?: readonly string[]): void {
+export function _resetVideoRouteSchemaForTests(value?: boolean, state?: VideoRouteSchemaState): void {
   known = value
   probing = undefined
-  missingKnown = missing
-  missingProbe = undefined
+  stateKnown = state ? { state, at: Date.now() } : undefined
+  stateProbe = undefined
+  lastReported = undefined
 }
