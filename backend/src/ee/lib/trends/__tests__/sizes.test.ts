@@ -64,11 +64,18 @@ describe("trendRunSizes", () => {
     expect(trendRunSizes(TRENDS["pulse-flash"]!, here).sizes).toEqual(["720p", "1080p"])
   })
 
-  it("no Prism-family step offered (the settings unread): Nodaro Prism's own sizes, Nodaro Pulse's as declared", () => {
-    const here = trendSizesFrom(DELIVERS as never, null, false)
+  it("no Prism-family step offered (the engine reads no row): Nodaro Prism's own sizes, Nodaro Pulse's as declared", () => {
+    const here = trendSizesFrom(DELIVERS as never, null)
     expect(trendRunSizes(TRENDS.prism!, here).sizes).toEqual(["480p", "720p", "1080p"])
     expect(trendRunSizes(TRENDS["prism-flash"]!, here).sizes).toEqual(["480p", "720p"])
     expect(trendRunSizes(TRENDS.pulse!, here).sizes).toEqual(["720p", "1080p", "4k"])
+  })
+
+  it("the settings unread: every engine choice the engine way, the sizes it makes, as before", () => {
+    const here = { delivered: false as const, unread: true as const }
+    for (const [kind, data] of Object.entries(TRENDS)) {
+      expect(trendRunSizes(data, here), kind).toEqual({ delivered: false, sizes: [...trendResolutions(data)] })
+    }
   })
 
   it("an engine choice the engine declares nothing for: the sizes its engine makes", () => {
@@ -91,7 +98,7 @@ describe("the guest answer's keep key", () => {
     expect(trendSizesKeepKey(here)).toEqual({ keep: true, key: JSON.stringify(deliveredResolutionsOffered(DELIVERS as never, ALL_ON)) })
     const off = trendSizesFrom(DELIVERS as never, { ...ALL_ON, "1080p": "off" })
     expect(trendSizesKeepKey(off)).not.toEqual(trendSizesKeepKey(here))
-    expect(trendSizesKeepKey(trendSizesFrom(DELIVERS as never, null, false))).toEqual({ keep: false })
+    expect(trendSizesKeepKey({ delivered: false, unread: true })).toEqual({ keep: false })
   })
 
   it("names 4K in words", () => {

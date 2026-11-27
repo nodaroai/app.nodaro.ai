@@ -1181,10 +1181,11 @@ describe("video_remake: resolution is the size delivered", () => {
 
   it("names the size an engine that answers the earlier fields delivers, and keeps none of those fields", async () => {
     setPluginSupports({ castSwap: { upscaleChoice: true } as never })
-    const quote = { totalCredits: 20, breakdown: { base: 5, motion: 7, references: 0 }, settlesLower: false, resolution: "480p", outputResolution: "720p", upscale: "next", upscaleOffered: true }
+    // Its step on a breakdown line of its own: folded into the engine's line, the total unchanged, never named.
+    const quote = { totalCredits: 20, breakdown: { base: 5, motion: 7, references: 0, upscale: 8 }, settlesLower: false, resolution: "480p", outputResolution: "720p", upscale: "next", upscaleOffered: true }
     const { fastify } = stubFastify({ "/v1/video-remake/estimate": { statusCode: 200, body: quote } })
     const res = await callTool(serverWith(fastify), "video_remake", ARGS)
-    expect(res.structuredContent).toEqual({ ...PRO, totalCredits: 20, breakdown: { base: 5, motion: 7, references: 0 }, settlesLower: false, resolution: "720p", confirmed: false })
+    expect(res.structuredContent).toEqual({ ...PRO, totalCredits: 20, breakdown: { base: 5, motion: 15, references: 0 }, settlesLower: false, resolution: "720p", confirmed: false })
     expect(res.content[0]!.text).toContain("It is delivered at 720p.")
     expect(String(res.content[0]?.text).toLowerCase()).not.toContain("upscale")
   })

@@ -2733,7 +2733,7 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
       nodaroMotionPreciseUpscale: async () => {
         const settings = await getAppSettings()
         if (settingsReadFailed(settings)) throw new Error("nodaro_motion_precise_upscale: the app settings could not be read")
-        // The one resolver `upscaleTo` (GET /v1/video-remake/style-choice) shares, so the two never drift.
+        // The one resolver the delivered sizes (GET /v1/video-remake/style-choice `resolutions`) share, so the two never drift.
         return enginePreciseUpscale(settings.nodaro_motion_precise_upscale, getPluginSupports().castSwap)
       },
       // Same rules: a failed read throws (the engine reads that as not offered, with an alert). Null only to an

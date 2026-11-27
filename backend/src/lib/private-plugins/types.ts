@@ -5742,15 +5742,20 @@ export interface PluginSupports {
      * turned it on (read at load). Where it is offered is the estimate's to
      * say (`upscaleOffered`), never this flag's. Absent: none of this, and the
      * field is not sent (lib/video-remake-upscale-choice.ts).
+     *
+     * The request read that way is removed (stage 5 of the delivered
+     * resolution): the platform answers none of these fields any more (a
+     * quote's are dropped on the way out, ee/lib/video-remake-estimate-answer.ts)
+     * and reads this flag only to word the admin's Precise upscale rows as the
+     * step's kill switches.
      */
     readonly upscaleChoice?: boolean
     /**
      * What the upscale choice's "next" delivers, per engine (or Flash choice) and engine size, e.g.
      * `{ "nodaro-prism": { "480p": "720p", "720p": "1080p", "1080p": "4k" }, … }` (2026-11-24). What the
-     * engine CAN do, present only while its switch is on: the platform removes what the admin switched off
-     * (`nodaro_motion_precise_upscale` read as a kill switch, as the engine reads it) and answers the rest as
-     * `upscaleTo` on `GET /v1/video-remake/style-choice`. Read defensively (`upscaleNextOf`,
-     * lib/video-remake-upscale-choice.ts): an unknown engine id, size or target is dropped, never thrown on.
+     * engine CAN do, present only while its switch is on. The platform answered it, less what the admin
+     * switched off, as `upscaleTo` on `GET /v1/video-remake/style-choice` until the request read that way was
+     * removed (stage 5): it is read by nothing now, and kept while engines still declare it.
      */
     readonly upscaleNext?: PluginCastSwapUpscaleNext
     /**

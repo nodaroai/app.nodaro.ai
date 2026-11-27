@@ -7006,9 +7006,9 @@ run and a [trend run](#13g-trends-cloud-edition) are both Video Remake runs.
   720p, on Nodaro Prism or on Nodaro Pulse (`resolution: "720p"`, or left out).
   A Nodaro Prism draft preview (`draft: true`, 480p) is covered too. Where the
   deployment's engine does not deliver resolutions yet (an empty `resolutions`
-  in the style choice), or a request still sends `upscale`, `resolution` is the
-  engine's size and the covered runs are Nodaro Prism at 480p and Nodaro Pulse
-  at 720p. Everything else in the run is allowed: its roles, pictures, style,
+  in the style choice), and on a trend whose page does not say
+  `deliveredResolution`, `resolution` is the engine's size and the covered runs
+  are Nodaro Prism at 480p and Nodaro Pulse at 720p. Everything else in the run is allowed: its roles, pictures, style,
   art style and every extra step, whatever they cost.
 - **It is your first run, needed or not.** Your first Video Remake run that
   finishes uses the offer, also when your credits paid all of it (the offer

@@ -172,7 +172,7 @@ import {
   loadedEngineTakesPlanRolesPreviz,
   loadedEngineTakesPreviz,
 } from "../../cast-swap-engines.js"
-import { neutralBreakdown, privacyCreditsOf } from "../../nodaro-motion-quote.js"
+import { neutralBreakdown, privacyCreditsOf, withStepFolded } from "../../nodaro-motion-quote.js"
 import { originalCdnImageUrls } from "../../cdn-original-url.js"
 import { clientRequestIdSchema, errorResult, GET_JOB_POLL_HINT, idempotencyHeaders, parseJobId } from "./_verb-helpers.js"
 import { amountsNote, amountWord, statedAmount, statedAmountRecord, unitFields } from "../amounts.js"
@@ -953,8 +953,9 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor, vide
         } catch {
           return { content: [{ type: "text" as const, text: "The Video Remake quote could not be read." }], isError: true as const }
         }
-        // The neutral key names only (an engine before 0.395.0 also, or only, sends the old ones).
-        const breakdown = neutralBreakdown(quote.breakdown)
+        // The neutral key names only (an engine before 0.395.0 also, or only, sends the old ones); an engine that still
+        // prices the step on a line of its own has it in the engine's line, never named.
+        const breakdown = withStepFolded(neutralBreakdown(quote.breakdown))
         const privacyCredits = privacyCreditsOf(quote)
         const references = breakdown.references
           ? ` That includes ${statedAmount(breakdown.references)} ${amountWord()} to prepare the reference pictures first (prepare_references: false skips it).`

@@ -573,9 +573,13 @@ export const trendRunRequestSchema: z.ZodType<TrendRunRequest> = trendRunRequest
  */
 export const trendRunRequestSchemaDelivered: z.ZodType<TrendRunRequest> = trendRunRequestSchemaOf(["480p", "720p", "1080p", "4k"])
 
-/** The run request schema for the way this deployment's engine reads a trend run (sizes.ts `TrendSizesHere`). */
-export function trendRunRequestSchemaFor(here: { readonly delivered: boolean }): z.ZodType<TrendRunRequest> {
-  return here.delivered ? trendRunRequestSchemaDelivered : trendRunRequestSchema
+/**
+ * The run request schema for the way this deployment's engine reads a trend run (sizes.ts `TrendSizesHere`): "4k"
+ * taken wherever the engine reads trend runs the delivered way, its settings read (`delivered`) or not (`unread`,
+ * where the composition refuses it as a size the trend does not list).
+ */
+export function trendRunRequestSchemaFor(here: { readonly delivered: boolean; readonly unread?: true }): z.ZodType<TrendRunRequest> {
+  return here.delivered || here.unread === true ? trendRunRequestSchemaDelivered : trendRunRequestSchema
 }
 // `draft: true` above 480p is refused by the composition, which knows the trend's
 // engine: Seedance 2.5 answers `validation_error` (draft is 480p only), Kling 4

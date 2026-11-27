@@ -193,6 +193,11 @@ export function firstRemakeRunAllowed(body: unknown): boolean {
  * declares `castSwap.deliveredResolution`, and the body is no draft (`draft: true`, the legacy `quality: "draft"`),
  * carries no `upscale` key, and is a direct run (no `trendRun`) or a trend run that says so (`trendRun.delivered:
  * true`, ee/lib/trends/sizes.ts) on an engine that reads trend runs that way (`castSwap.trendDeliveredResolution`).
+ *
+ * A body that still sends `upscale` (no Nodaro client does) keeps being judged by the engine's size, whichever engine
+ * is loaded: an engine from before stage 5 reads it so, and against one that drops the key the judgement errs only
+ * toward not covering (a 720p preview it would make from 480p is judged a 720p take), never toward covering a larger
+ * run than the offer pays for. It goes once no engine version in use reads `upscale`.
  */
 export function readsDeliveredResolution(body: Record<string, unknown>): boolean {
   if (!loadedEngineDeliversResolution()) return false

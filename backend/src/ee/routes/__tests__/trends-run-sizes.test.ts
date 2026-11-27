@@ -390,18 +390,38 @@ describe("trend sizes with an engine that reads trend runs by the size delivered
     }
   })
 
-  it("settings that cannot be read: the engine's own Prism sizes, answered but never kept", async () => {
+  it("settings that cannot be read: the page and the run the engine way (its own sizes, no marker), never kept", async () => {
     settings.fails = true
     const first = await detailOf("prism", {}, "?locale=en")
     expect(first.statusCode).toBe(200)
     expect(first.json().data.resolutions).toEqual(["480p", "720p", "1080p"])
-    expect(first.json().data.deliveredResolution).toBe(true)
+    expect(first.json().data).not.toHaveProperty("deliveredResolution")
     expect(first.headers["cache-control"]).toBe("no-store")
+    // Pulse too (its sizes need no setting, but the request is answered one way).
+    expect((await detailOf("pulse")).json().data).toMatchObject({ resolutions: ["720p", "1080p"] })
+    // What the page offered is what runs: an engine size, no marker, exactly the body of before.
+    for (const send of [runOf, estimateOf]) {
+      engine.calls = []
+      expect((await send("prism", {})).statusCode).toBeLessThan(300)
+      expect(engine.calls[0]!.body).toMatchObject({ resolution: "480p", draft: false })
+      expect(engine.calls[0]!.body.trendRun).not.toHaveProperty("delivered")
+    }
+    engine.calls = []
+    expect((await runOf("prism", { resolution: "1080p" })).statusCode).toBe(202)
+    expect(engine.calls[0]!.body).toMatchObject({ resolution: "1080p", draft: false })
+    expect(engine.calls[0]!.body.trendRun).not.toHaveProperty("delivered")
+    // 4K is no size the page offered then: refused as one, nothing sent.
+    engine.calls = []
+    const big = await runOf("prism", { resolution: "4k" })
+    expect(big.statusCode).toBe(400)
+    expect(big.json().error.code).toBe("resolution_unsupported")
+    expect(engine.calls).toHaveLength(0)
+    // Read again once the settings can be.
     const reads = settings.reads
     settings.fails = false
     const next = await detailOf("prism", {}, "?locale=en")
     expect(settings.reads).toBeGreaterThan(reads)
-    expect(next.json().data.resolutions).toEqual(["720p", "1080p", "4k"])
+    expect(next.json().data).toMatchObject({ resolutions: ["720p", "1080p", "4k"], deliveredResolution: true })
   })
 
   it("a guest's kept page follows the sizes: a change of the sizes is never answered from the copy kept before it", async () => {
@@ -425,6 +445,19 @@ describe("an engine that reads trend runs by the size delivered: \"4k\" before i
     const res = await runOf("prism", { resolution: "4k" })
     expect(res.statusCode).toBe(400)
     expect(res.json().error.code).toBe("validation_error")
+  })
+
+  it("an engine that still answers the earlier quote fields: the trend's quote names none of them, the step in the engine's line", async () => {
+    await boot(DELIVERS)
+    engine.refusal = {
+      status: 200,
+      body: { totalCredits: 300, breakdown: { base: 20, motion: 200, references: 0, upscale: 80 }, resolution: "1080p", outputResolution: "4k", upscale: "next", upscaleOffered: true },
+    }
+    const res = await estimateOf("prism", { resolution: "4k" })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data).toEqual({ expectedCredits: 300, holdCredits: 300, engine: "nodaro-prism", engineName: "Nodaro Prism", breakdown: { base: 20, motion: 280, references: 0 } })
+    expect(res.body.toLowerCase()).not.toContain("upscale")
+    expect(res.body).not.toContain("outputResolution")
   })
 
   it("the size refusals of an engine that does not: trend_run_rejected, as before", async () => {

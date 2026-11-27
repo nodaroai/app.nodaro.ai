@@ -72,12 +72,26 @@ export function renderReused(quote: { renderReused?: unknown; breakdown?: unknow
   return (finite(b.motionHd) ? b.motionHd : b.seedanceHd) === 0
 }
 
-/** A quote with its breakdown's neutral names and `privacyCredits` in place of the old `maskingCredits`. A new object. */
+/** The sizes a quote may name as the one delivered. */
+const DELIVERED_SIZES: ReadonlySet<unknown> = new Set(["480p", "720p", "1080p", "4k"])
+
+/**
+ * A quote with its breakdown's neutral names, `privacyCredits` in place of the old `maskingCredits`, and nothing of
+ * how a size is made: an older server's `outputResolution` is the size delivered (`resolution`), and its `upscale` and
+ * `upscaleOffered` are dropped. A new object.
+ */
 export function neutralQuote<T extends { breakdown?: unknown }>(quote: T): T {
-  const { maskingCredits, privacyCredits, ...rest } = quote as T & { maskingCredits?: unknown; privacyCredits?: unknown }
+  const { maskingCredits, privacyCredits, outputResolution, upscale: _upscale, upscaleOffered: _offered, ...rest } = quote as T & {
+    maskingCredits?: unknown
+    privacyCredits?: unknown
+    outputResolution?: unknown
+    upscale?: unknown
+    upscaleOffered?: unknown
+  }
   const privacy = finite(privacyCredits) ? privacyCredits : finite(maskingCredits) ? maskingCredits : undefined
   return {
     ...(rest as T),
+    ...(DELIVERED_SIZES.has(outputResolution) ? { resolution: outputResolution } : {}),
     ...(quote.breakdown !== undefined ? { breakdown: neutralParts(quote.breakdown) } : {}),
     ...(privacy !== undefined ? { privacyCredits: privacy } : {}),
   }

@@ -17,9 +17,12 @@
  *              platform.
  *
  * Read once per request (`readTrendSizesHere`), so the guest answer's keep key, the page and the run all use one
- * answer. A settings read that fails, or throws, answers the sizes with no Prism-family step (`precise` null, as
- * style-choice answers then: Nodaro Prism's and Prism Flash's own engine sizes, Nodaro Pulse's as declared) and
- * says it was not read (`settingsRead: false`), so that answer is never kept. Nothing is cached here.
+ * answer. A settings read that fails, or throws, where the sizes depend on it (an engine that reads trend runs the
+ * delivered way and declares a Prism-family step) answers the ENGINE way for that request (`unread: true`): the page
+ * lists the sizes the trend's engine choice makes, without `deliveredResolution`, and a run is composed as before
+ * (no marker, an engine size), so what the page offered is what runs; such an answer is never kept. Only "4k" stays
+ * a size a request may name (the composition refuses it, `resolution_unsupported`, rather than the schema). Nothing
+ * is cached here.
  */
 import type { NodaroMotionEngine, VideoRemakeFlashEngine } from "@nodaro/shared/models"
 import { getAppSettings, settingsReadFailed } from "../../../lib/app-settings.js"
@@ -38,13 +41,15 @@ import type { TrendRunSize, TrendVersionData } from "./types.js"
 
 /** How this deployment's engine reads a trend run's size, and (read the delivered way) what each engine choice offers. */
 export type TrendSizesHere =
-  | { readonly delivered: false }
+  | {
+      readonly delivered: false
+      /** The engine reads trend runs the delivered way, but the settings its sizes depend on could not be read. */
+      readonly unread?: true
+    }
   | {
       readonly delivered: true
       /** Per engine choice, the sizes delivered here, smallest (the default) first. */
       readonly resolutions: VideoRemakeResolutions
-      /** False when the settings were needed and could not be read: the answer is then never kept. */
-      readonly settingsRead: boolean
     }
 
 /** One trend's sizes: whether they are sizes delivered, and the list, its default first. */
@@ -53,11 +58,17 @@ export interface TrendRunSizes {
   readonly sizes: readonly TrendRunSize[]
 }
 
-/** The answer from the engine's declaration and the Precise upscale as the engine is handed it (null: unread). Pure. */
-export function trendSizesFrom(cs: PluginSupports["castSwap"] | undefined, precise: unknown, settingsRead = true): TrendSizesHere {
+/**
+ * The answer from the engine's declaration and the Precise upscale as the engine is handed it (`enginePreciseUpscale`;
+ * null where the engine reads no row). Pure.
+ */
+export function trendSizesFrom(cs: PluginSupports["castSwap"] | undefined, precise: unknown): TrendSizesHere {
   if (!engineDeliversTrendResolution(cs)) return { delivered: false }
-  return { delivered: true, resolutions: deliveredResolutionsOffered(cs, precise), settingsRead }
+  return { delivered: true, resolutions: deliveredResolutionsOffered(cs, precise) }
 }
+
+/** The answer where the settings the delivered sizes depend on could not be read: the engine way, for this request. */
+const UNREAD: TrendSizesHere = { delivered: false, unread: true }
 
 /**
  * What this deployment offers a trend run now: the settings read only where the sizes depend on them (an engine
@@ -69,10 +80,10 @@ export async function readTrendSizesHere(): Promise<TrendSizesHere> {
   if (!deliveredResolutionsReadSettings(cs)) return trendSizesFrom(cs, null)
   try {
     const settings = await getAppSettings()
-    if (settingsReadFailed(settings)) return trendSizesFrom(cs, null, false)
+    if (settingsReadFailed(settings)) return UNREAD
     return trendSizesFrom(cs, enginePreciseUpscale(settings.nodaro_motion_precise_upscale, cs))
   } catch {
-    return trendSizesFrom(cs, null, false)
+    return UNREAD
   }
 }
 
@@ -93,9 +104,8 @@ export function trendRunSizes(data: Pick<TrendVersionData, "engine" | "flash">, 
  * step does not). Null the other way (the kept answers' keys stay as they were), or when the answer must not be kept.
  */
 export function trendSizesKeepKey(here: TrendSizesHere): { keep: false } | { keep: true; key: string | null } {
-  if (!here.delivered) return { keep: true, key: null }
-  if (!here.settingsRead) return { keep: false }
-  return { keep: true, key: JSON.stringify(here.resolutions) }
+  if (here.delivered) return { keep: true, key: JSON.stringify(here.resolutions) }
+  return here.unread ? { keep: false } : { keep: true, key: null }
 }
 
 /** A size in words ("4K" for "4k"). */
