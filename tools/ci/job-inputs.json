@@ -236,6 +236,7 @@
         "backend/scripts/verify-retained-image-copies-concurrency.mjs",
         "backend/scripts/verify-retained-images-concurrency.mjs",
         "backend/scripts/verify-subscription-claim-concurrency.mjs",
+        "backend/scripts/verify-video-route-credit-concurrency.mjs",
         "backend/scripts/verify-yearly-monthly-credits-concurrency.mjs",
         "supabase/migrations/**",
         "supabase/tests/**"

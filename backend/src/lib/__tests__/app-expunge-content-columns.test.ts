@@ -73,6 +73,13 @@ const KEPT_JOB_COLUMNS = [
   // mark, and `rawExtensionUrl` (no chain lookup reads it once `output_data`
   // is gone).
   "server_output",
+  // Server-only reservation, receipt, admission and payer bookkeeping.
+  "metadata",
+  "video_route_addons_base",
+  "video_send_started_at",
+  // Added by the schema ahead of the code that uses it: nothing writes it yet. The
+  // change that fills it erases it instead.
+  "video_assembly_recovery",
   "id",
   "user_id",
   "job_type",
