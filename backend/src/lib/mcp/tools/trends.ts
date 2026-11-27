@@ -34,7 +34,7 @@ import {
   type NodaroMotionEngine,
 } from "@nodaro/shared/models"
 import type { McpSession } from "../session.js"
-import { neutralBreakdown, privacyCreditsOf } from "../../nodaro-motion-quote.js"
+import { neutralBreakdown, privacyCreditsOf, withStepFolded } from "../../nodaro-motion-quote.js"
 import { mcpInject } from "../internal-request.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { registerTask } from "../tasks.js"
@@ -249,7 +249,7 @@ function quoteOf(body: string): TrendQuote | null {
   return {
     expectedCredits: q.expectedCredits,
     holdCredits: q.holdCredits,
-    breakdown: neutralBreakdown(q.breakdown),
+    breakdown: withStepFolded(neutralBreakdown(q.breakdown)),
     ...(privacyCredits !== undefined ? { privacyCredits } : {}),
   }
 }

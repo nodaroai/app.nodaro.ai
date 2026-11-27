@@ -2461,11 +2461,11 @@ interface VideoRemakeFullQualityEstimate {
   kind?: "same-take" | "new-take" // VideoRemakeFullQualityKind: "same-take" (absent from an older server
                                   // = "same-take"); "new-take" was Nodaro Pulse's, which has none now
   totalCredits: number // base + the render
-  breakdown: { base?: number; motionHd?: number; motion?: number; upscale?: number } & Record<string, number>
+  breakdown: { base?: number; motionHd?: number; motion?: number } & Record<string, number>
                        // base: the Full Quality job's own steps; motionHd: the draft's 1080p
-                       // render, 0 when an earlier try's render is reused; motion: a new take (Pulse's, before);
-                       // upscale: a Topaz upscale of the render, when the deployment's setting adds it
+                       // render; motion: a new take (Pulse's, before)
   availableUntil: string // ISO time: 7 days after the run completed
+  renderReused?: boolean // an earlier try's 1080p render is reused (absent from an older server: motionHd 0)
 }
 
 interface VideoRemakeFullQualityResult {
@@ -3120,12 +3120,9 @@ pass `draft: true` when you want to finish the take later. Nodaro Pulse
 makes no drafts and has no Full Quality: run it again at 1080p instead. The
 quote's `kind` is `"same-take"` (`"new-take"` was Pulse's). It spends credits;
 quote it first with `fullQualityEstimate(jobId)` (free), whose `totalCredits`
-is `breakdown.base` plus `breakdown.motionHd` (0 when an earlier failed try of
-this draft already finished the 1080p render, which is then reused), plus
-`breakdown.upscale` when the deployment's setting adds a Topaz upscale to 1080p
-Precise runs (the render is upscaled, then scaled back to 1080p): a Topaz
-step that fails or is refused is not charged; one that finished is charged
-even if the run then delivers without it (rare). One Full Quality per draft: a repeat answers the same job with
+is `breakdown.base` plus `breakdown.motionHd`; `renderReused` is `true` when an
+earlier failed try of this draft already finished the 1080p render, which is
+then reused (an older server leaves it out and answers `motionHd` 0). One Full Quality per draft: a repeat answers the same job with
 `existing: true` and charges nothing; the server keys it by the draft, so no
 idempotency key is taken. The new job keeps the draft's origin; `sessionId`
 files it in a session. Refusals carry a `VideoRemakeFullQualityRefusalCode`:

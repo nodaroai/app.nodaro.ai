@@ -178,6 +178,34 @@ describe("modify_video with a Video Remake engine", () => {
     expect(calls).toEqual([])
   })
 
+  it("names the engines' sizes as video_remake does: only the sizes offered here, the engine's own, or none", async () => {
+    const { fastify } = stubFastify({})
+    const resolutionWith = async (videoRemakeSizes: Parameters<typeof registerVideoVerbs>[0]["videoRemakeSizes"]) => {
+      const server = buildServer()
+      const session = newSession({ userId: "u1", scopes: ["workflows:execute"] as Scope[], clientName: "test", offer: await resolveToolOffer("u1") })
+      registerVideoVerbs({ server, session, fastify, videoRemakeSizes })
+      const def = (await listTools(server)).find((t) => t.name === "modify_video")!
+      const resolution = (def.inputSchema as { properties: Record<string, { description?: string; enum?: string[] }> }).properties.resolution!
+      // Only the engines' clause (this tool's own models' sizes come first, Seedance's 4K among them).
+      return { ...resolution, description: (resolution.description ?? "").split("happyhorse-edit (720p/1080p); ")[1] ?? "" }
+    }
+    const all = await resolutionWith({ kind: "delivered", resolutions: { "nodaro-prism": ["720p", "1080p", "4k"], "nodaro-pulse": ["720p", "1080p", "4k"], "nodaro-prism-flash": ["720p", "1080p"], "nodaro-pulse-flash": ["720p", "1080p"] } })
+    expect(all.description).toContain("delivered: nodaro-prism and nodaro-pulse 720p (default)/1080p/4k")
+    expect(all.description).not.toContain("flash:")
+    const noFourK = await resolutionWith({ kind: "delivered", resolutions: { "nodaro-prism": ["720p", "1080p"], "nodaro-pulse": ["720p", "1080p"], "nodaro-prism-flash": ["720p"], "nodaro-pulse-flash": ["720p"] } })
+    expect(noFourK.description).not.toMatch(/4k/i)
+    // The enum stays every size: a size not offered is the route's refusal.
+    expect(noFourK.enum).toContain("4k")
+    const engine = await resolutionWith({ kind: "engine" })
+    expect(engine.description).toContain("the engine's size: nodaro-prism 480p (default)/720p/1080p, nodaro-pulse 720p (default)/1080p")
+    expect(engine.description).not.toMatch(/4k/i)
+    for (const here of [{ kind: "unread" as const }, undefined]) {
+      const unread = await resolutionWith(here)
+      expect(unread.description).toContain("nodaro-prism / nodaro-pulse: the size delivered, as offered here")
+      expect(unread.description).not.toMatch(/4k/i)
+    }
+  })
+
   it.each([
     ["reference_image_url", "https://cdn.example/a.png"],
     ["reference_image_urls", ["https://cdn.example/a.png"]],

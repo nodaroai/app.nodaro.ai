@@ -54,6 +54,30 @@ export function neutralBreakdown(breakdown: unknown): Record<string, number> {
   return out
 }
 
+/**
+ * The breakdown parts that fold a step's line into, in the order they are
+ * looked for: the 1080p render (a Full Quality same take), the video (a new
+ * take, a run), else the job's own steps.
+ */
+const STEP_LINE_TARGETS = ["motionHd", "motion", "base"] as const
+
+/**
+ * A neutral breakdown with the step that makes a size larger never named
+ * (decided 2026-11-27): an engine that still answers it as its own part
+ * (`upscale`) has its credits folded into the engine's line it belongs to, the
+ * first of `STEP_LINE_TARGETS` present, so every total is unchanged. An engine
+ * that answers no such part is answered as it is; with none of the targets
+ * present the part is left as it is. A new object.
+ */
+export function withStepFolded(breakdown: Readonly<Record<string, number>>): Record<string, number> {
+  const step = breakdown.upscale
+  if (step === undefined) return { ...breakdown }
+  const target = STEP_LINE_TARGETS.find((key) => finite(breakdown[key]))
+  if (target === undefined) return { ...breakdown }
+  const { upscale: _step, ...rest } = breakdown
+  return { ...rest, [target]: (rest[target] as number) + step }
+}
+
 /** A quote's privacy credits (`privacyCredits`, else the old `maskingCredits`), when a finite number. */
 export function privacyCreditsOf(quote: unknown): number | undefined {
   if (!isRec(quote)) return undefined

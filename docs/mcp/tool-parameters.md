@@ -2372,7 +2372,7 @@ Needs `workflows:execute`.
 | `video_asset_id` | string |  |  |
 | `model` | string |  | No model: a Video Remake quote on `nodaro-prism` (nothing runs); name `seedance-2-5` for an edit that runs at once. Options: nodaro-prism, nodaro-pulse, wan, wan-flash, wan-videoedit, luma-modify, runway-aleph, happyhorse-edit, seedance-2-5, seedance-2-5-flash. An unknown model is refused. `seedance-2-5`/`seedance-2-5-flash` edit by instruction, keeping length and ratio (clip 4-30s; billed input + output seconds, settled to the delivered length). `wan`/`wan-flash` make a new clip featuring the input video's subject; they do not edit or restyle the clip. `happyhorse-edit` (3-60s clip; 720p default) and `wan-videoedit` (2-10s) bill per clip second, else refused uncharged (per 10 s: happyhorse-edit 720p 1540<!-- credits: happyhorse-edit:720p:per-4s@2.5 --> cr, wan-videoedit 660<!-- credits: wan-videoedit:1080p:per-4s@2.5 -->, min 352<!-- credits: wan-videoedit -->). |
 | `duration` | string |  | Wan / Wan Flash only — 5s or 10s output. One of `5`, `10`. |
-| `resolution` | string |  | seedance-2-5 (480p-4k, 2160p/uhd = 4k; 480p when no model is named), seedance-2-5-flash (480p/720p), Wan / Wan Flash / happyhorse-edit (720p/1080p); nodaro-prism / nodaro-pulse: the size delivered, 720p (default), 1080p or 4k. One of `480p`, `720p`, `1080p`, `4k`, `2160p`, `uhd`. |
+| `resolution` | string |  | seedance-2-5 (480p-4k, 2160p/uhd = 4k; 480p when no model is named), seedance-2-5-flash (480p/720p), Wan / Wan Flash / happyhorse-edit (720p/1080p); delivered: nodaro-prism and nodaro-pulse 720p (default)/1080p/4k. One of `480p`, `720p`, `1080p`, `4k`, `2160p`, `uhd`. |
 | `aspect_ratio` | string |  | Runway Aleph only. One of `16:9`, `9:16`, `4:3`, `3:4`, `1:1`, `21:9`. |
 | `audio` | boolean |  | Wan Flash only — generate the clip with audio. |
 | `multi_shots` | boolean |  | Wan Flash only — several shots with transitions instead of one continuous shot. |
@@ -3794,7 +3794,7 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | `previz_lighting` | boolean |  | previz only: also take the clip's lighting direction and changes. |
 | `previz_sound` | string |  | previz only: keep the clip's sound, or have it generated. One of `clip`, `generated`. |
 | `motion_length` | string |  | nodaro-pulse only: cut the clip to whole seconds at its end (default) or start. One of `cut-end`, `cut-start`. |
-| `resolution` | string |  | The size delivered. nodaro-prism and nodaro-pulse: "720p" (default), "1080p" or "4k"; their Flash choices: "720p" (default) or "1080p". A size not offered here is refused (resolution_not_offered, naming the sizes offered). One of `480p`, `720p`, `1080p`, `4k`. |
+| `resolution` | string |  | The size delivered: nodaro-prism and nodaro-pulse: "720p" (default), "1080p" or "4k"; nodaro-prism-flash and nodaro-pulse-flash: "720p" (default) or "1080p". A size not offered is refused (resolution_not_offered, its offered naming the sizes offered). One of `480p`, `720p`, `1080p`, `4k`. |
 | `draft` | boolean |  | true = a 480p draft (nodaro-prism only) that full_quality can finish at 1080p. Default false: plain. |
 | `prepare_references` | boolean |  | Default true: prepare the reference pictures first. |
 | `quality` | string |  | Deprecated: use resolution + draft. "draft" means a 480p draft. Always `draft`. |

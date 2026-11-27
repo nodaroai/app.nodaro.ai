@@ -13,6 +13,12 @@
  *   privacyCredits  was maskingCredits
  *
  * (The same renames as the platform's `backend/src/lib/nodaro-motion-quote.ts`.)
+ *
+ * The step that makes a size larger is never named: a server that still
+ * answers it as its own part (`upscale`) has its credits folded into the
+ * engine's line, the first of the 1080p render (`motionHd`), the video
+ * (`motion`) or the job's own steps (`base`) present, so the total is unchanged
+ * (the platform's `withStepFolded`).
  */
 const RENAMES: Readonly<Record<string, readonly string[]>> = {
   base: ["castSwap"],
@@ -25,7 +31,22 @@ const OLD_KEYS: ReadonlySet<string> = new Set(Object.values(RENAMES).flat())
 
 const finite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v)
 
-/** A breakdown with the neutral key names only: new key first, else the old one; other parts as given. */
+/** The parts a server's step line is folded into, in the order they are looked for. */
+const STEP_LINE_TARGETS = ["motionHd", "motion", "base"] as const
+
+/** The parts with a server's step line folded into the engine's (see above). A new object. */
+function withStepFolded(parts: Record<string, number>): Record<string, number> {
+  const step = parts.upscale
+  const target = STEP_LINE_TARGETS.find((key) => finite(parts[key]))
+  if (step === undefined || target === undefined) return parts
+  const { upscale: _step, ...rest } = parts
+  return { ...rest, [target]: rest[target]! + step }
+}
+
+/**
+ * A breakdown with the neutral key names only: new key first, else the old one; other parts as given, and a
+ * server's step line folded into the engine's.
+ */
 export function neutralParts(breakdown: unknown): Record<string, number> {
   if (!breakdown || typeof breakdown !== "object" || Array.isArray(breakdown)) return {}
   const b = breakdown as Record<string, unknown>
@@ -36,7 +57,19 @@ export function neutralParts(breakdown: unknown): Record<string, number> {
     const from = old.find((k) => finite(b[k]))
     if (from !== undefined) out[key] = b[from] as number
   }
-  return out
+  return withStepFolded(out)
+}
+
+/**
+ * Whether a Full Quality quote reuses an earlier try's 1080p render: the server's `renderReused` when it answers one
+ * (its render line then carries the folded step), else an older server's render line of 0, read before any fold.
+ */
+export function renderReused(quote: { renderReused?: unknown; breakdown?: unknown }): boolean {
+  if (typeof quote.renderReused === "boolean") return quote.renderReused
+  const breakdown = quote.breakdown
+  if (!breakdown || typeof breakdown !== "object" || Array.isArray(breakdown)) return false
+  const b = breakdown as Record<string, unknown>
+  return (finite(b.motionHd) ? b.motionHd : b.seedanceHd) === 0
 }
 
 /** A quote with its breakdown's neutral names and `privacyCredits` in place of the old `maskingCredits`. A new object. */
@@ -57,7 +90,8 @@ const PART_LABELS: Readonly<Record<string, string>> = {
   motionExpected: "video, expected",
   motionHd: "1080p render",
   privacy: "clip preparation",
-  upscale: "Topaz upscale",
+  // Folded into the engine's line above; named so only where there is no such line to fold it into.
+  upscale: "video, finishing",
 }
 
 /** A breakdown part as people read it; a part not listed here is shown as its own name. */

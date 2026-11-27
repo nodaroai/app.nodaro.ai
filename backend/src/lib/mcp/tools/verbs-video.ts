@@ -7,6 +7,7 @@ import { COMBINE_VIDEOS_MAX_CLIPS, combineVideosTooManyClipsMessage } from "../.
 import { buildCompositePrompt } from "../prompt-builder-bridge.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import type { RegisterOpts } from "./verbs-image.js"
+import { videoRemakeEnginesSizes } from "../video-remake-sizes.js"
 import { registerOverlayImagesVerb } from "./verbs-video-overlay.js"
 import { registerVideoMaskVerbs } from "./verbs-video-mask.js"
 import { registerReplaceVideoSpanVerb } from "./verbs-video-span.js"
@@ -214,7 +215,7 @@ function mcpVideoRefCaps(provider: string): { images?: number; videos?: number; 
 
 const executeGate: ToolGate = { required: ["workflows:execute"] }
 
-export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): void {
+export function registerVideoVerbs({ server, session, fastify, videoRemakeSizes }: RegisterOpts): void {
   if (!passesGate(session, executeGate)) return
 
   // ── generate_video (text-to-video) ──
@@ -1689,6 +1690,8 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
   const REMAKE_ENGINE_WHEN_NO_MODEL: (typeof NODARO_MOTION_ENGINES)[number] = "nodaro-prism"
   // The sizes this tool's own models take; Video Remake's engines also deliver 4K, listed only where they are offered.
   // Seedance 2.5 renders 4K too (decided 2026-11-25), and reads 2160p / uhd as 4k (decided 2026-11-27).
+  // Video Remake's engines' sizes are named as video_remake names them (lib/mcp/video-remake-sizes.ts): never one this
+  // deployment's engine does not offer; the enum stays every size, so a size not offered is the route's refusal.
   const V2V_OWN_RESOLUTIONS = ["480p", "720p", "1080p", "4k", "2160p", "uhd"] as const
   const VIDEO_REMAKE_SIZES_AND_4K_SPELLINGS = [...VIDEO_REMAKE_DELIVERED_SIZES, "2160p", "uhd"] as const
   const DIRECT_EDIT_INSTEAD = 'To run an instruction edit at once instead, call modify_video again with model: "seedance-2-5" (or another edit model).'
@@ -1746,7 +1749,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
             `(${videoToVideoClipPriceHint()}).`,
           ),
         duration: z.enum(["5", "10"]).optional().describe("Wan / Wan Flash only — 5s or 10s output."),
-        resolution: z.enum(remakeEngines.length ? VIDEO_REMAKE_SIZES_AND_4K_SPELLINGS : V2V_OWN_RESOLUTIONS).optional().describe(`seedance-2-5 (480p-4k, 2160p/uhd = 4k; 480p when no model is named), seedance-2-5-flash (480p/720p), Wan / Wan Flash / happyhorse-edit (720p/1080p)${remakeEngines.length ? "; nodaro-prism / nodaro-pulse: the size delivered, 720p (default), 1080p or 4k" : ""}.`),
+        resolution: z.enum(remakeEngines.length ? VIDEO_REMAKE_SIZES_AND_4K_SPELLINGS : V2V_OWN_RESOLUTIONS).optional().describe(`seedance-2-5 (480p-4k, 2160p/uhd = 4k; 480p when no model is named), seedance-2-5-flash (480p/720p), Wan / Wan Flash / happyhorse-edit (720p/1080p)${remakeEngines.length ? `; ${videoRemakeEnginesSizes(videoRemakeSizes)}` : ""}.`),
         aspect_ratio: z
           .enum(["16:9", "9:16", "4:3", "3:4", "1:1", "21:9"])
           .optional()

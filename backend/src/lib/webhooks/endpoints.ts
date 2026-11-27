@@ -11,7 +11,7 @@
 import type { FastifyRequest } from "fastify"
 import { supabase } from "../supabase.js"
 import { getRuntimeEnv } from "../runtime-env.js"
-import { CHILD_JOB_COLUMN } from "../public-job-data.js"
+import { CHILD_JOB_COLUMN, redactRecordedJobEvent } from "../public-job-data.js"
 import { webhookBodyProviderWords } from "../provider-words.js"
 import type {
   WebhookDeliveryStatus,
@@ -127,8 +127,9 @@ export function toDeliveryResponse(row: DeliveryRow, hideBody = false, canRead =
     error: row.last_error,
     // The body as recorded — less the provider words of its job where this
     // deployment keeps them for its admins, or where the job belongs to a run of
-    // a workflow its owner cannot open (lib/provider-words.ts).
-    requestBody: !hideBody && typeof row.payload === "string" ? webhookBodyProviderWords(row.payload, canRead) : null,
+    // a workflow its owner cannot open (lib/provider-words.ts), and less a server-only
+    // job key a body recorded before it joined the rule carries (lib/public-job-data.ts).
+    requestBody: !hideBody && typeof row.payload === "string" ? webhookBodyProviderWords(redactRecordedJobEvent(row.payload), canRead) : null,
     createdAt: row.created_at,
     lastAttemptAt: row.last_attempt_at,
     nextAttemptAt: row.status === "pending" ? row.next_retry_at : null,

@@ -1133,6 +1133,31 @@ describe("video_remake: resolution is the size delivered", () => {
     expect(JSON.stringify(tool).toLowerCase()).not.toContain("upscale")
   })
 
+  it("names the sizes this deployment offers per engine choice, and no other (the enum stays every size, so the route refuses)", async () => {
+    const { fastify } = stubFastify({})
+    const toolWith = async (videoRemakeSizes: Parameters<typeof registerCastSwapTools>[0]["videoRemakeSizes"]) => {
+      const server = buildServer()
+      registerCastSwapTools({ server, session: newSession({ userId: "u1", scopes: ["workflows:execute"], clientName: "test" }), fastify, videoRemakeSizes })
+      const tool = (await listTools(server)).find((t) => t.name === "video_remake")!
+      const resolution = (tool.inputSchema as { properties: Record<string, { description?: string; enum?: string[] }> }).properties.resolution!
+      return { description: tool.description ?? "", resolution }
+    }
+    const offered = await toolWith({ kind: "delivered", resolutions: { "nodaro-prism": ["720p", "1080p"], "nodaro-pulse": ["720p", "1080p", "4k"], "nodaro-prism-flash": ["720p"], "nodaro-pulse-flash": ["720p", "1080p"] } })
+    expect(offered.description).toContain("resolution is the size delivered, 720p by default, up to 4k.")
+    expect(offered.resolution.description).toContain('nodaro-prism and nodaro-pulse-flash: "720p" (default) or "1080p"; nodaro-pulse: "720p" (default), "1080p" or "4k"; nodaro-prism-flash: "720p" (default) only.')
+    expect(offered.resolution.enum).toEqual(["480p", "720p", "1080p", "4k"])
+    const noFourK = await toolWith({ kind: "delivered", resolutions: { "nodaro-prism": ["720p", "1080p"], "nodaro-pulse": ["720p", "1080p"], "nodaro-prism-flash": ["720p"], "nodaro-pulse-flash": ["720p"] } })
+    expect(`${noFourK.description} ${noFourK.resolution.description}`).not.toMatch(/4k/i)
+    // An engine that does not deliver resolutions: its own sizes, as before.
+    const engine = await toolWith({ kind: "engine" })
+    expect(engine.resolution.description).toContain('nodaro-prism: "480p" (default), "720p" or "1080p"')
+    expect(`${engine.description} ${engine.resolution.description}`).not.toMatch(/4k/i)
+    // The settings unread: no size named, the refusal pointed to.
+    const unread = await toolWith({ kind: "unread" })
+    expect(`${unread.description} ${unread.resolution.description}`).not.toMatch(/\d+p\b|4k/i)
+    expect(unread.resolution.description).toContain("resolution_not_offered")
+  })
+
   it("never sends upscale, quote and run alike, whatever the engine declares and an older client sends", async () => {
     for (const castSwap of [undefined, { upscaleChoice: true }, { upscaleChoice: true, deliveredResolution: true }]) {
       _resetPluginSupportsForTests()

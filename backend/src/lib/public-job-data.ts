@@ -1,4 +1,4 @@
-import { withoutServerOnlyKeys } from "./job-output-visibility.js"
+import { isServerOnlyOutputKey, withoutServerOnlyKeys } from "./job-output-visibility.js"
 import { jobRowProviderWords } from "./provider-words.js"
 
 /**
@@ -30,6 +30,34 @@ export function redactPrivateJobData<T>(value: T): T {
  */
 export function redactPrivateJobOutput<T>(output: T): T {
   return redactPrivateJobData(withoutServerOnlyKeys(output))
+}
+
+/**
+ * A webhook event body already recorded (`webhook_deliveries.payload`: what a
+ * retry sends again and what the endpoint's delivery log shows), its job's
+ * `input_data` and `output_data` without their server-only top-level keys. A
+ * body is recorded from a job read that had already dropped them, so only one
+ * recorded before a key joined the rule (Video Remake's reference audio keys,
+ * lib/job-output-visibility.ts) carries any. The same text, byte for byte,
+ * whenever there is nothing to drop (no job, no such key, or a body that is
+ * not an event).
+ */
+export function redactRecordedJobEvent(body: string): string {
+  let event: unknown
+  try {
+    event = JSON.parse(body)
+  } catch {
+    return body
+  }
+  if (!isPlainRecord(event) || !isPlainRecord(event.data) || !isPlainRecord(event.data.job)) return body
+  const job = event.data.job
+  const carries = (["input_data", "output_data"] as const).some((key) => isPlainRecord(job[key]) && Object.keys(job[key]).some(isServerOnlyOutputKey))
+  if (!carries) return body
+  return JSON.stringify({ ...event, data: { ...event.data, job: redactPrivateJobData(job) } })
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
 }
 
 /**

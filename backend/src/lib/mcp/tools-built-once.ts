@@ -27,11 +27,13 @@
  * its scopes (as a set), whether it carries a conversation, its addresses,
  * what the deployment offers it (every tool's refusal and every gateable
  * node's verdict for its viewer), whether Site Capture is offered, the metered
- * LLM pricing switch, the edition switches registration reads, the node
- * universe, and which surface profile and plugin services and engines the
- * process holds. A value that changes while the process runs (an Availability
- * override an admin saves, the admin's model switch, the metered switch when
- * its schema is found) changes the shape, so the next request builds anew; a
+ * LLM pricing switch, the sizes `video_remake` names (video-remake-sizes.ts),
+ * the edition switches registration reads, the node universe, and which
+ * surface profile and plugin services and engines the process holds. A value
+ * that changes while the process runs (an Availability override an admin
+ * saves, the admin's model switch, the metered switch when its schema is
+ * found, the admin's switches that decide Video Remake's sizes) changes the
+ * shape, so the next request builds anew; a
  * build no shape asks for any more ages out of the cache.
  *
  * THE CACHE is per Fastify instance (a tool calls its routes on the instance
@@ -83,6 +85,7 @@ import { getPluginServices } from "../private-plugins/services-registry.js"
 import { getPluginEngines } from "../private-plugins/engine-registry.js"
 import { scene3DProEngineReady } from "../../services/scene3d/scene3d-engine.js"
 import { insertAppReport } from "../app-reports.js"
+import { videoRemakeSizesShape } from "./video-remake-sizes.js"
 
 /**
  * Each session path a tool registration may read, and what it varies by. The
@@ -382,6 +385,8 @@ export function buildShapeOf(session: McpSession, registration: McpRegistration)
     // follows the function the description asks, whatever it comes to read.
     siteCaptureOffered({ offer }),
     llmMeteredPricing(),
+    // The sizes video_remake's description names, which follow the admin's settings.
+    videoRemakeSizesShape(registration.videoRemakeSizes),
     [hasCredits(), hasOrganizations(), siteCaptureEnabled(), scene3DProEngineReady(), externalWalletConfigured(), nodeUniverseLoaded()],
     [identityOf(runtimeSurfaceProfile()), identityOf(getPluginServices()), identityOf(getPluginEngines())],
   ])
@@ -498,8 +503,8 @@ async function sharedBuildFor(session: McpSession, registration: McpRegistration
  * `buildMcpServer`'s (tools-built-once-equivalence.test.ts).
  */
 export async function mcpServerForRequest(opts: McpBuildOpts): Promise<McpServer | Server> {
-  const { session, offer } = await resolveMcpSession(opts)
-  const registration: McpRegistration = { fastify: opts.fastify, conversation: Boolean(opts.conversation), offer }
+  const { session, offer, videoRemakeSizes } = await resolveMcpSession(opts)
+  const registration: McpRegistration = { fastify: opts.fastify, conversation: Boolean(opts.conversation), offer, videoRemakeSizes }
   const shared = session.firstParty || session.scopedProjectId !== undefined ? undefined : await sharedBuildFor(session, registration)
   if (shared) return requestServer(shared, session)
   stats.ownBuilds++

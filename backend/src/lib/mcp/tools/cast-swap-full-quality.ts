@@ -37,7 +37,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import type { McpSession } from "../session.js"
-import { neutralBreakdown } from "../../nodaro-motion-quote.js"
+import { neutralBreakdown, withStepFolded } from "../../nodaro-motion-quote.js"
 import { mcpInject } from "../internal-request.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { registerTask } from "../tasks.js"
@@ -63,10 +63,23 @@ interface FullQualityQuote {
   totalCredits: number
   /**
    * `base` (the Full Quality job's own steps), and the engine's other parts by their neutral names (`motionHd`: the
-   * 1080p render, 0 when reused; `upscale`: a Topaz upscale of it, when the deployment's setting adds one).
+   * 1080p render, 0 when reused). An engine that still answers a part for the step that makes the render larger has
+   * it folded into the render's line (`withStepFolded`): it is never named.
    */
-  breakdown: { base: number; motionHd?: number; upscale?: number } & Record<string, number>
+  breakdown: { base: number; motionHd?: number } & Record<string, number>
   availableUntil: string
+  /** Whether an earlier try's 1080p render is reused, where the engine says so (absent from an older engine). */
+  renderReused?: boolean
+}
+
+/**
+ * A quote, and whether an earlier try's 1080p render is reused: the engine's `renderReused` when it answers one (its
+ * render line then carries the folded step, so a 0 no longer says it), else an older engine's render line of 0, read
+ * before any part is folded into it.
+ */
+interface ReadQuote {
+  quote: FullQualityQuote
+  renderReused: boolean
 }
 
 type Rec = Record<string, unknown>
@@ -83,28 +96,32 @@ function dataOf(body: string): unknown {
   }
 }
 
-function quoteOf(body: string): FullQualityQuote | null {
+function quoteOf(body: string): ReadQuote | null {
   const q = dataOf(body)
   if (!isRec(q) || !finite(q.totalCredits) || !isRec(q.breakdown) || typeof q.availableUntil !== "string") return null
   // Only the breakdown's own numeric parts, by their neutral names (an engine before 0.395.0
   // also, or only, sends the old ones; before 0.397.0 `castSwap` for `base`); a new engine's
   // other part names pass through.
-  const breakdown = neutralBreakdown(q.breakdown) as FullQualityQuote["breakdown"]
-  if (!finite(breakdown.base)) return null
+  const parts = neutralBreakdown(q.breakdown)
+  if (!finite(parts.base)) return null
+  const breakdown = withStepFolded(parts) as FullQualityQuote["breakdown"]
   const kind = q.kind === "same-take" || q.kind === "new-take" ? q.kind : undefined
-  return { ...(kind ? { kind } : {}), totalCredits: q.totalCredits, breakdown, availableUntil: q.availableUntil }
+  const answered = typeof q.renderReused === "boolean" ? q.renderReused : undefined
+  return {
+    quote: { ...(kind ? { kind } : {}), totalCredits: q.totalCredits, breakdown, availableUntil: q.availableUntil, ...(answered !== undefined ? { renderReused: answered } : {}) },
+    renderReused: answered ?? parts.motionHd === 0,
+  }
 }
 
-function quoteSentence(q: FullQualityQuote): string {
+function quoteSentence({ quote: q, renderReused }: ReadQuote): string {
   if (q.kind === "new-take") {
     return (
       `Full Quality makes a NEW take of this run at 1080p from the same inputs (it will not match the 720p run frame for frame; the 720p run stays), ` +
       `for about ${statedAmount(q.totalCredits)} ${amountWord()}. Available until ${q.availableUntil}.`
     )
   }
-  const reused = q.breakdown.motionHd === 0 ? " An earlier try's 1080p render is reused, so only the finishing is charged." : ""
-  const upscaled = finite(q.breakdown.upscale) && q.breakdown.upscale > 0 ? " It includes a Topaz upscale of the 1080p render, scaled back to 1080p." : ""
-  return `Finishing this draft at Full Quality (the same take at 1080p) costs about ${statedAmount(q.totalCredits)} ${amountWord()}.${reused}${upscaled} Available until ${q.availableUntil}.`
+  const reused = renderReused ? " An earlier try's 1080p render is reused, so only the finishing is charged." : ""
+  return `Finishing this draft at Full Quality (the same take at 1080p) costs about ${statedAmount(q.totalCredits)} ${amountWord()}.${reused} Available until ${q.availableUntil}.`
 }
 
 /** The quote as the agent reads it: every figure in the deployment's unit when it has one (lib/mcp/amounts.ts). */
@@ -155,7 +172,7 @@ export function registerCastSwapFullQualityTools({ server, session, fastify }: R
     const res = await mcpInject(fastify, session, { method: "POST", url: `${fullQualityUrl(id)}/estimate`, payload: {} })
     if (res.statusCode >= 400) return { error: refusal(res.statusCode, res.body) }
     const q = quoteOf(res.body)
-    return q ? { quote: q } : { error: failure("The Full Quality quote could not be read.") }
+    return q ? { read: q } : { error: failure("The Full Quality quote could not be read.") }
   }
 
   server.registerTool(
@@ -176,8 +193,8 @@ export function registerCastSwapFullQualityTools({ server, session, fastify }: R
       const q = await quote(args.job_id)
       if (q.error) return q.error
       return {
-        content: [{ type: "text" as const, text: `${quoteSentence(q.quote)} Nothing was charged; full_quality starts it.` }],
-        structuredContent: statedQuote(q.quote),
+        content: [{ type: "text" as const, text: `${quoteSentence(q.read)} Nothing was charged; full_quality starts it.` }],
+        structuredContent: statedQuote(q.read.quote),
       }
     },
   )
@@ -207,11 +224,11 @@ export function registerCastSwapFullQualityTools({ server, session, fastify }: R
             {
               type: "text" as const,
               text:
-                `${quoteSentence(q.quote)} If this run already has a Full Quality job running or done, confirming returns it at no charge. ` +
+                `${quoteSentence(q.read)} If this run already has a Full Quality job running or done, confirming returns it at no charge. ` +
                 "Present this to the user; call full_quality again with confirm: true once they accept.",
             },
           ],
-          structuredContent: { ...statedQuote(q.quote), confirmed: false },
+          structuredContent: { ...statedQuote(q.read.quote), confirmed: false },
         }
       }
 

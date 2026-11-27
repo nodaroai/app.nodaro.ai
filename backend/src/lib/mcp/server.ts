@@ -61,6 +61,7 @@ import { resolveSessionWorkspace } from "./workspace-session.js"
 import { installToolOffer, resolveToolOffer, type ToolOffer } from "./tool-offer.js"
 import type { McpLaneAddresses } from "../mcp-lane-addresses.js"
 import { installDeploymentName, mcpServerInfo } from "./deployment-name.js"
+import { resolveVideoRemakeSizes, type VideoRemakeSizesHere } from "./video-remake-sizes.js"
 
 export interface McpBuildOpts {
   userId: string
@@ -147,9 +148,9 @@ async function assertProjectOwnership(userId: string, projectId: string): Promis
  * `/v1/swap-face` route does not exist in the codebase. v1.2+ may revisit.
  */
 export async function buildMcpServer(opts: McpBuildOpts): Promise<McpServer> {
-  const { session, offer } = await resolveMcpSession(opts)
+  const { session, offer, videoRemakeSizes } = await resolveMcpSession(opts)
   const server = createMcpServer()
-  registerMcpTools(server, session, { fastify: opts.fastify, conversation: Boolean(opts.conversation), offer })
+  registerMcpTools(server, session, { fastify: opts.fastify, conversation: Boolean(opts.conversation), offer, videoRemakeSizes })
   return server
 }
 
@@ -159,7 +160,9 @@ export async function buildMcpServer(opts: McpBuildOpts): Promise<McpServer> {
  * ways of serving a request start here (`buildMcpServer`, and the shared build
  * of tools-built-once.ts), so they cannot resolve a caller differently.
  */
-export async function resolveMcpSession(opts: McpBuildOpts): Promise<{ session: McpSession; offer: ToolOffer | undefined }> {
+export async function resolveMcpSession(
+  opts: McpBuildOpts,
+): Promise<{ session: McpSession; offer: ToolOffer | undefined; videoRemakeSizes: VideoRemakeSizesHere | undefined }> {
   // Resolved once, at session creation, and re-validated there rather than
   // trusted from the stored preference — see workspace-session.ts. Returns
   // undefined on any build without organizations.
@@ -168,7 +171,8 @@ export async function resolveMcpSession(opts: McpBuildOpts): Promise<{ session: 
   if (projectScope) await assertProjectOwnership(opts.userId, projectScope.projectId)
   // What this deployment offers the session (tool-offer.ts): undefined where
   // it restricts nothing, and then no tool is judged.
-  const offer = await resolveToolOffer(opts.userId)
+  // The sizes video_remake names (video-remake-sizes.ts): the deployment's, never the caller's.
+  const [offer, videoRemakeSizes] = await Promise.all([resolveToolOffer(opts.userId), resolveVideoRemakeSizes()])
   // `firstParty` is named here rather than left to the spread: it is a
   // security flag, and a reader grepping for it must find it at every hop.
   const session = newSession({
@@ -178,7 +182,7 @@ export async function resolveMcpSession(opts: McpBuildOpts): Promise<{ session: 
     firstParty: opts.firstParty,
     offer,
   })
-  return { session, offer }
+  return { session, offer, videoRemakeSizes }
 }
 
 /** A server with no tool registered yet, as every MCP server starts. */
@@ -230,6 +234,8 @@ export interface McpRegistration {
   conversation: boolean
   /** What the deployment offers the session (`resolveMcpSession`), which decides the list. */
   offer: ToolOffer | undefined
+  /** The sizes `video_remake` names in its description (`resolveMcpSession`); absent: none is named. */
+  videoRemakeSizes?: VideoRemakeSizesHere
 }
 
 /**
@@ -254,7 +260,7 @@ export function registerMcpTools(server: McpServer, session: McpSession, opts: M
   registerWidgetResources(server, session.addresses)
 
   registerPing(server, session)
-  registerVerbs({ server, session, fastify: opts.fastify })
+  registerVerbs({ server, session, fastify: opts.fastify, videoRemakeSizes: opts.videoRemakeSizes })
   registerJobs({ server, session, fastify: opts.fastify })
   registerDiagnose({ server, session, fastify: opts.fastify })
   registerWorkflows({ server, session, fastify: opts.fastify })
@@ -287,7 +293,7 @@ export function registerMcpTools(server: McpServer, session: McpSession, opts: M
     registerRecastTools({ server, session, fastify: opts.fastify })
     // Cast Swap (quote, then confirm): Cloud-only for the same reason — the
     // `/v1/cast-swap` routes are the cloud plugin's.
-    registerCastSwapTools({ server, session, fastify: opts.fastify })
+    registerCastSwapTools({ server, session, fastify: opts.fastify, videoRemakeSizes: opts.videoRemakeSizes })
     // Trends (list, read, quote, then run): Cloud-only — `/v1/trends` is
     // registered under hasCredits() (ee/routes/trends.ts).
     registerTrendTools({ server, session, fastify: opts.fastify })

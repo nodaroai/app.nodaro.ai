@@ -101,9 +101,12 @@
  * the roles are planned as an ordinary clip's, as before it, and the run
  * still states the clip.
  *
- * `resolution` is the size the run DELIVERS (decided 2026-11-26): Nodaro Prism
- * and Nodaro Pulse 720p (default), 1080p or 4K, their Flash choices 720p
- * (default) or 1080p, as this deployment offers them (the route refuses any
+ * `resolution` is the size the run DELIVERS (decided 2026-11-26): the sizes
+ * this deployment's engine offers per engine choice, which the description
+ * and the argument name from the same source `style-choice` answers
+ * `resolutions` from (lib/mcp/video-remake-sizes.ts; decided 2026-11-27: the
+ * engine's own sizes where it does not deliver resolutions, and no size where
+ * the settings could not be read), the smallest the default (the route refuses any
  * other, 400 `resolution_not_offered` with the sizes offered, or 409
  * `resolution_unavailable` for one this request cannot have). How the engine
  * makes the size is its own, so the tool sends no `upscale` key, ever: an
@@ -167,6 +170,7 @@ import { amountsNote, amountWord, statedAmount, statedAmountRecord, unitFields }
 import { statedName } from "../deployment-name.js"
 import { checkIntentArg, intentMismatchSentence, runIntentArg, videoRemakeIntentMismatch } from "./_video-remake-intent.js"
 import { VIDEO_REMAKE_DELIVERED_SIZES, deliveredSizeLabel, deliveredSizeOfQuote, type VideoRemakeDeliveredSize } from "../../video-remake-delivered-resolution.js"
+import { videoRemakeResolutionArg, videoRemakeResolutionSentence, type VideoRemakeSizesHere } from "../video-remake-sizes.js"
 import { loadedEngineTakesPortion } from "../../video-remake-portion.js"
 
 const executeGate: ToolGate = { required: ["workflows:execute"] }
@@ -182,6 +186,11 @@ export interface RegisterCastSwapToolsOpts {
   fastify: FastifyInstance
   /** Set by `videoRemakeQuote` only: the quote is asked for through another tool. */
   quoteFor?: VideoRemakeQuoteFor
+  /**
+   * The sizes this deployment offers (`resolveMcpSession`), which the description and the `resolution` argument
+   * name; absent (a stand-in registration), no size is named.
+   */
+  videoRemakeSizes?: VideoRemakeSizesHere
 }
 
 /**
@@ -506,7 +515,7 @@ function refusal(statusCode: number, body: string) {
   return errorResult(statusCode, body)
 }
 
-export function registerCastSwapTools({ server, session, fastify, quoteFor }: RegisterCastSwapToolsOpts): void {
+export function registerCastSwapTools({ server, session, fastify, quoteFor, videoRemakeSizes }: RegisterCastSwapToolsOpts): void {
   if (!passesGate(session, executeGate)) return
   // What the deployment offers decides whether its tools are listed (lib/mcp/tool-needs.ts).
 
@@ -525,7 +534,7 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor }: Re
         "Without `confirm` it returns the PRICE QUOTE only (nothing is charged): show the credits to the user, and call again with `confirm: true` only once they accept. " +
         "That returns a job id: poll it with wait_for_job. `preview: true` renders 4 s first, a cheaper check of the look. " +
         "Where offered, portion_start + portion_sec run a part of the clip (a source up to 10 min), priced by its length. " +
-        'engine picks the engine: "nodaro-prism" (Nodaro Prism, the default) or "nodaro-pulse" (Nodaro Pulse; no draft); resolution is the size delivered, 720p by default, up to 4k. ' +
+        `engine picks the engine: "nodaro-prism" (Nodaro Prism, the default) or "nodaro-pulse" (Nodaro Pulse; no draft); ${videoRemakeResolutionSentence(videoRemakeSizes)}. ` +
         "Image and video URLs must be http(s): upload local files with the upload tools first." +
         (recastOffered(session) ? ` ${RECAST_POINTER}` : "") +
         amountsNote(),
@@ -647,7 +656,9 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor }: Re
         resolution: z
           .enum(VIDEO_REMAKE_DELIVERED_SIZES)
           .optional()
-          .describe('The size delivered. nodaro-prism and nodaro-pulse: "720p" (default), "1080p" or "4k"; their Flash choices: "720p" (default) or "1080p". A size not offered here is refused (resolution_not_offered, naming the sizes offered).'),
+          // The sizes this deployment's engine offers (video-remake-sizes.ts); the enum stays every size, so a size
+          // not offered is the route's refusal, which names the sizes offered.
+          .describe(videoRemakeResolutionArg(videoRemakeSizes)),
         draft: z.boolean().optional().describe("true = a 480p draft (nodaro-prism only) that full_quality can finish at 1080p. Default false: plain."),
         prepare_references: z.boolean().optional().describe("Default true: prepare the reference pictures first."),
         quality: z.enum(["draft"]).optional().describe('Deprecated: use resolution + draft. "draft" means a 480p draft.'),

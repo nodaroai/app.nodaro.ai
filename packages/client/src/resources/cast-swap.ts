@@ -1051,10 +1051,9 @@ export interface VideoRemakeFullQualityEstimate {
    * The parts of the quote, by name, for display only: `base` (the Full
    * Quality job's own steps; an older server names it
    * `castSwap` instead: read `base`, else `castSwap`), and `motionHd` (a same
-   * take: the 1080p render, 0 when an earlier try of this draft already
-   * finished that render, which is then reused) or `motion` (a new take),
-   * and `upscale` (a Topaz upscale of the 1080p render, scaled back to 1080p,
-   * when the deployment's setting adds that step to 1080p Precise runs).
+   * take: the 1080p render; an older server answers 0 when an earlier try of
+   * this draft already finished that render, see {@link renderReused}) or
+   * `motion` (a new take).
    */
   breakdown: {
     base?: number
@@ -1062,10 +1061,11 @@ export interface VideoRemakeFullQualityEstimate {
     castSwap?: number
     motionHd?: number
     motion?: number
-    upscale?: number
   } & Record<string, number>
   /** ISO time until which the run can be finished at Full Quality (7 days after it completed). */
   availableUntil: string
+  /** Whether an earlier try's 1080p render is reused, so only the finishing is charged. Absent from an older server: read `breakdown.motionHd === 0`. */
+  renderReused?: boolean
 }
 
 /** Options for {@link VideoRemakeResource.fullQuality}. */

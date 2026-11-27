@@ -24,11 +24,27 @@
 const SERVER_ONLY_OUTPUT_KEY_PREFIX = "__"
 
 /**
+ * Video Remake's reference audio keys, server-only like the `__` keys (decided
+ * 2026-11-27): the admin's per-engine-size choice of what audio the clip sent
+ * to the video model carries, which the platform puts in a direct run's
+ * request (`input_data.prismReferenceAudio` / `pulseReferenceAudio`,
+ * middleware/nodaro-motion-prism-reference-audio.ts and its Pulse twin) and a
+ * trend run's composition sends, and what the engine records it did with it
+ * (`output_data.prismReferenceAudioSemitones`, `…Resolution`, `…Fallback`,
+ * `…FallbackReason`, `pulseReferenceAudioResolution`, and any later key of the
+ * same family). It is admin configuration, never a caller's: no job read
+ * returns it, an admin's included, for rows stored before this rule too. Only
+ * a top-level key of `input_data` / `output_data` that starts with one of
+ * these is covered; the engine and the admin's own reads use the raw columns.
+ */
+const SERVER_ONLY_KEY_FAMILIES = ["prismReferenceAudio", "pulseReferenceAudio"] as const
+
+/**
  * Whether a top-level `input_data` or `output_data` key is server-only (see
- * the convention above).
+ * the convention above, and the reference audio keys).
  */
 export function isServerOnlyOutputKey(key: string): boolean {
-  return key.startsWith(SERVER_ONLY_OUTPUT_KEY_PREFIX)
+  return key.startsWith(SERVER_ONLY_OUTPUT_KEY_PREFIX) || SERVER_ONLY_KEY_FAMILIES.some((family) => key.startsWith(family))
 }
 
 /**

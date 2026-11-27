@@ -7011,20 +7011,16 @@ MCP: [`estimate_full_quality` / `full_quality`](./mcp/tools.md), CLI:
 
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/v1/video-remake/:jobId/full-quality/estimate` | Quote it. Free: nothing is created or reserved. Returns `{ kind, totalCredits, breakdown, availableUntil }`. |
+| `POST` | `/v1/video-remake/:jobId/full-quality/estimate` | Quote it. Free: nothing is created or reserved. Returns `{ kind, totalCredits, breakdown, availableUntil, renderReused }`. |
 | `POST` | `/v1/video-remake/:jobId/full-quality` | Start it. Returns `202 { jobId }`, or `200 { jobId, existing: true }` when this run's Full Quality is already running or done (nothing new is started or charged). Optional body `{ sessionId }`. |
 
 `:jobId` is the draft's job id. The quote
 is `totalCredits`: `breakdown.base` (the Full Quality job's own steps)
-plus `breakdown.motionHd` (the 1080p render of the draft's take), plus
-`breakdown.upscale` when the deployment's setting adds a Topaz upscale to
-1080p Precise runs (the render is upscaled, then scaled back to 1080p; it
-settles to the units Topaz used; a Topaz step that fails or is refused is not
-charged, one that finished is charged even if the Full Quality then delivers
-without it, which is rare).
-`motionHd` is 0 when an earlier
+plus `breakdown.motionHd` (the 1080p render of the draft's take).
+`renderReused` is `true` when an earlier
 failed try of this draft already finished that render: it is reused, and only
-the finishing is charged. `availableUntil` is when the 7 days end. Quote first:
+the finishing is charged (an older server leaves `renderReused` out and answers
+`motionHd` 0 instead). `availableUntil` is when the 7 days end. Quote first:
 the price depends on the draft. The quote does not look for a Full Quality
 already running; when one is, the start answers it (`existing: true`) free.
 
