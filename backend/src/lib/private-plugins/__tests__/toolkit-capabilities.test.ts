@@ -145,4 +145,8 @@ describe("tk.capabilities", () => {
     expect(buildToolkit().capabilities?.proStopFinishesSegment).toBe(true)
     expect(buildToolkit().capabilities?.proDeliveryFallback).toBe(true)
   })
+
+  it("advertises the Video Remake Quality choice the engine gates on (its first-Remake offer reads `quality`)", () => {
+    expect(buildToolkit().capabilities?.castSwapQuality).toBe(true)
+  })
 })

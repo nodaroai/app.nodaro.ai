@@ -3797,7 +3797,7 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | `resolution` | string |  | The size delivered: nodaro-prism and nodaro-pulse: "720p" (default), "1080p" or "4k"; nodaro-prism-flash and nodaro-pulse-flash: "720p" (default) or "1080p". A size not offered is refused (resolution_not_offered, its offered naming the sizes offered). One of `480p`, `720p`, `1080p`, `4k`. |
 | `draft` | boolean |  | true = a 480p draft (nodaro-prism only) that full_quality can finish at 1080p. Default false: plain. |
 | `prepare_references` | boolean |  | Default true: prepare the reference pictures first. |
-| `quality` | string |  | Deprecated: use resolution + draft. "draft" means a 480p draft. Always `draft`. |
+| `quality` | string |  | How resolution is made: "economy" (default) one size below, then enlarged to it; "full" at the size itself, sharper, costs more. Quote each; where there is one way only, that way runs. "draft" (deprecated): a 480p draft. One of `full`, `economy`, `draft`. |
 | `session_id` | string |  | A generation session to file the result in. At least 1 character. |
 | `confirm` | boolean |  | true ONLY after the user accepted the quoted credits in this conversation. |
 | `check_intent` | boolean |  | Quote only: also check (free) if the prompt asks for something Video Remake does not do; a mismatch comes back as intent { code, meaning }. |

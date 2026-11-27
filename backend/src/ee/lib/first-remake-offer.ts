@@ -164,9 +164,11 @@ export function resetFirstRemakeSchemaCheck(): void {
  * Nodaro Prism), its resolution (absent = the engine's default: 480p on
  * Prism, 720p on Pulse; a draft is 480p, and the legacy `quality: "draft"`
  * means 480p draft; read by the size delivered, `readsDeliveredResolution`:
- * Prism's 720p, or its 480p where no step is offered), and a preview.
- * Everything else in the body is allowed. A trend run is judged the same way:
- * its injected body is the one the engine reads.
+ * Prism's 720p, or its 480p where no step is offered), and a preview. On
+ * Nodaro Prism read the new way, a run that asks for `quality: "full"` above
+ * 480p is not covered (the covered run is the stepped-up one). Everything else
+ * in the body is allowed. A trend run is judged the same way: its injected body
+ * is the one the engine reads.
  */
 export function firstRemakeRunAllowed(body: unknown): boolean {
   if (!isRecord(body)) return false
@@ -174,6 +176,13 @@ export function firstRemakeRunAllowed(body: unknown): boolean {
   const engine = body.engine === undefined ? "seedance-2-5" : castSwapEngineFrom(body.engine)
   if (engine === undefined) return false
   const resolution = body.resolution
+  // Nodaro Prism's covered run is the 480p take (stepped up to 720p where the size is the one delivered): what
+  // "economy" (and no `quality`) asks for. "full" above 480p has the engine make that size itself, a different and
+  // dearer run: never covered, however the body is read here. (An engine that reads the body the new way although
+  // this rule would not, a body with an `upscale` key the engine now ignores, would make it Full.) At 480p there is
+  // no step, so "full" is the same run. An engine that does not take the choice is never sent it
+  // (middleware/video-remake-quality.ts).
+  if (engine === "seedance-2-5" && body.quality === "full" && resolution !== "480p") return false
   // Read the new way, Nodaro Prism's covered run is asked by the size it delivers: 720p (its 480p take stepped up),
   // absent = 720p; 480p where the deployment offers no step (then the engine's own size). Never 1080p or 4K.
   if (engine === "seedance-2-5" && readsDeliveredResolution(body)) {

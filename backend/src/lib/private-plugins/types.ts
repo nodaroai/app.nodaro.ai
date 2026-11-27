@@ -4419,6 +4419,15 @@ export interface PluginCapabilities {
    * run only with its assembled video there.
    */
   readonly proDeliveryFallback?: boolean
+  /**
+   * Video Remake's Quality choice (2026-11-27, lib/video-remake-quality.ts): this host knows
+   * `quality: "full" | "economy"` on a Video Remake run and its estimate — its first-Remake offer reads it
+   * (a Full run above 480p is not covered) — and reads the estimate's `quality` / `qualityOffered` /
+   * `engineResolution` and the completion's `quality` and before-upscale fields. The engine honours the
+   * choice only where this is true; on an older host it reads the older "draft" alone and refuses the two
+   * values, and makes every request exactly as before the choice.
+   */
+  readonly castSwapQuality?: boolean
 }
 
 /**
@@ -5821,6 +5830,24 @@ export interface PluginSupports {
      * `engineDeliversTrendResolution`). Absent: every trend run as before.
      */
     readonly trendDeliveredResolution?: boolean
+    /**
+     * Video Remake's Quality choice (2026-11-27): a run and its estimate read the delivered-resolution way take
+     * `quality: "full" | "economy"` ("economy", and a request naming neither: the size made one below and stepped
+     * up, as before the choice; "full": the engine makes the delivered size itself, no step). Only for a request
+     * that names it, the estimate answers `quality`, `qualityOffered` and (economy) `engineResolution`, and the
+     * completed job's output `quality` and, where the step was applied, the take before it. Declared only while
+     * the delivered-resolution mode is on (read at load). Absent: the engine accepts the older `quality: "draft"`
+     * alone and refuses any other value, so the platform never sends it the choice
+     * (middleware/video-remake-quality.ts, lib/video-remake-quality.ts).
+     */
+    readonly quality?: boolean
+    /**
+     * The delivered sizes each engine choice can make itself in Full, e.g. `{ "nodaro-prism": ["480p", "720p",
+     * "1080p"], "nodaro-pulse": ["720p", "1080p"] }`. The platform keeps those a step also delivers on this
+     * deployment and answers them as `quality` on `GET /v1/video-remake/style-choice`. Read defensively
+     * (`qualityFullOf`, lib/video-remake-quality.ts): an unknown engine id or size is dropped, never thrown on.
+     */
+    readonly qualityFull?: Readonly<Record<string, ReadonlyArray<"480p" | "720p" | "1080p" | "4k">>>
   }
 }
 

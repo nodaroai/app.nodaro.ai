@@ -2420,6 +2420,8 @@ interface VideoRemakeParams {
   motionLength?: "cut-end" | "cut-start" // VideoRemakeMotionLength, nodaro-pulse only; default "cut-end"
   resolution?: VideoRemakeResolution // the size delivered: "720p" (default), "1080p" or "4k";
                                    // Flash choices "720p" (default) or "1080p" (see The size delivered)
+  quality?: VideoRemakeQuality     // "economy" (default: rendered one size below, then upscaled) or
+                                   // "full" (rendered at the size, costs more); see Quality
   draft?: boolean                  // default false; true = a 480p draft whose same take Full Quality can
                                    // finish at 1080p (leave resolution out); true above 480p is a 400;
                                    // nodaro-pulse has no draft (true = 400 draft_unsupported)
@@ -2436,6 +2438,7 @@ type VideoRemakeEngineChoice = VideoRemakeEngine | VideoRemakeFlashEngine
 type VideoRemakeStyle = "precise" | "motion"            // how the run follows the clip (see below)
 type VideoRemakeEngineLegacyId = …     // @deprecated: the ids older clients sent; still accepted in a request, never returned
 type VideoRemakeResolution = "480p" | "720p" | "1080p" | "4k" // a size delivered ("4k" lower-case)
+type VideoRemakeQuality = "full" | "economy" // how the size delivered is made (see Quality)
 
 interface VideoRemakeEstimate {
   engine?: VideoRemakeEngineChoice // the engine quoted, or the Flash choice asked for
@@ -2562,6 +2565,29 @@ as `{}`), the deployment's engine does not deliver resolutions yet:
 `resolution` is then the size it makes, Nodaro Prism `"480p"` (default),
 `"720p"` or `"1080p"`, Nodaro Pulse `"720p"` (default) or `"1080p"`, Nodaro
 Prism Flash `"480p"` (default) or `"720p"`, Nodaro Pulse Flash `"720p"`.
+
+**Quality** (`quality`, `VideoRemakeQuality`): how the size delivered is made.
+`"economy"` (the default) renders one size below and upscales the result to
+`resolution`; faces and motion can look processed. `"full"` renders at
+`resolution` itself, with no upscale step, and costs more. The choice exists
+where `styleChoice()` lists the size under `quality`, per engine choice (e.g.
+`{ "nodaro-prism": ["720p", "1080p"], "nodaro-pulse": ["1080p"] }`; `{}` or
+absent: no Quality control). Anywhere else a size is made one way only and the
+request is made that way, never refused for it. 480p is never listed (the two
+ways are the same run there), and 4K only for an engine choice that renders 4K
+itself here: where `resolutions` offers 4K and `quality` does not list it, 4K
+is rendered at 1080p and upscaled, so say that Full is not available at 4K for
+that choice. To price the two, call
+`estimate()` once per value: an estimate whose request names `quality` answers
+`quality` (how this quote is made), `qualityOffered` (`true` only when both
+ways exist for this request: read it on the `"economy"` estimate) and, with
+`"economy"`, `engineResolution` (the size rendered before the upscale). A
+completed job of such a run says `quality` (`VideoRemakeJobOutput.quality`),
+and, read by its owner, an Economy run whose upscale step was applied also
+carries the video before it: `engineVideoUrl`, `engineWidth`, `engineHeight`
+and `engineResolution` ("Before upscale"; never on someone else's read). The version before upscaling is kept
+with the result and counts toward your storage. A request that names no
+`quality` is sent and answered exactly as before.
 
 **A part of the clip, and short clips** (each where the deployment's engine
 has it switched on; read any answer other than `true`, a missing one included,

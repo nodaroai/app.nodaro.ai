@@ -137,6 +137,22 @@ describe("firstRemakeRunAllowed — a request read the new way (resolution = the
     expect(firstRemakeRunAllowed(body)).toBe(false)
   })
 
+  it("covers the stepped-up Prism run only: quality economy as no quality, never quality full", () => {
+    expect(firstRemakeRunAllowed({ preview: true, quality: "economy" })).toBe(true)
+    expect(firstRemakeRunAllowed({ preview: true, resolution: "720p", quality: "economy" })).toBe(true)
+    expect(firstRemakeRunAllowed({ preview: true, quality: "full" })).toBe(false)
+    // However the body would be read here: an `upscale` key the engine ignores never lets a Full run through.
+    for (const upscale of ["next", "off", true]) {
+      expect(firstRemakeRunAllowed({ preview: true, upscale, quality: "full" }), String(upscale)).toBe(false)
+      expect(firstRemakeRunAllowed({ preview: true, upscale, resolution: "720p", quality: "full" }), String(upscale)).toBe(false)
+    }
+    expect(firstRemakeRunAllowed({ preview: true, engine: "nodaro-prism", resolution: "720p", quality: "full" })).toBe(false)
+    // At 480p there is no step: the same run either way.
+    expect(firstRemakeRunAllowed({ preview: true, resolution: "480p", quality: "full" })).toBe(true)
+    // Nodaro Pulse makes 720p itself either way: the same run.
+    expect(firstRemakeRunAllowed({ preview: true, engine: "nodaro-pulse", resolution: "720p", quality: "full" })).toBe(true)
+  })
+
   it("reads a body that still sends upscale, a draft and a trend run exactly as before", () => {
     // Old mode: the engine's size. Prism 720p is a larger engine run, never covered; 480p is.
     expect(firstRemakeRunAllowed({ preview: true, resolution: "720p", upscale: "next" })).toBe(false)

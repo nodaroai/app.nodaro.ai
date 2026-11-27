@@ -4,6 +4,7 @@ import { supabase } from "../lib/supabase.js"
 import { requireScope } from "../lib/scopes.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { withOwnerOnlyOutputFields, withOwnerOnlyRowFields, type JobReader } from "../lib/job-owner-output.js"
 import { CHILD_JOB_COLUMN, TRASHED_JOB_COLUMN, TREND_RUN_MARKER_SELECT, maskTrendRunError, maskTrendRunErrors, nonAdminJobInputData, redactPrivateJobData } from "../lib/public-job-data.js"
 import { registerJobTrashRoutes } from "./job-trash.js"
 import { registerJobTitleRoute } from "./job-title.js"
@@ -121,7 +122,15 @@ function pickKeys(row: Record<string, unknown>, keys: readonly string[]): Record
  * keeps the provider's words for its admins (maskTrendRunError, which applies
  * lib/provider-words.ts).
  */
-export function sanitizeJobForPublic(job: JobRecord, isAdmin: boolean): JobRecord | PublicJob {
+export function sanitizeJobForPublic(
+  job: JobRecord,
+  isAdmin: boolean,
+  /**
+   * Who is reading, on a read of the reader's own jobs (or an admin's read): the job's OWNER alone then also reads
+   * the fields of its output that are theirs only (lib/job-owner-output.ts). Absent: none of them, for anyone.
+   */
+  reader?: JobReader,
+): JobRecord | PublicJob {
   // A trend run's failure text is replaced for a non-admin (maskTrendRunError).
   const redacted = maskTrendRunError(redactPrivateJobData(job), isAdmin) as unknown as Record<string, unknown>
   const picked = pickKeys(redacted, isAdmin ? [...PUBLIC_JOB_KEYS, ...ADMIN_ONLY_JOB_KEYS] : PUBLIC_JOB_KEYS)
@@ -142,6 +151,12 @@ export function sanitizeJobForPublic(job: JobRecord, isAdmin: boolean): JobRecor
   // admins read `provider` / `resolvedModel` for forensics. The key list is
   // shared with every other owner-facing read of a job's input.
   if (!isAdmin && picked.input_data && typeof picked.input_data === "object") picked.input_data = nonAdminJobInputData(picked.input_data)
+
+  // The owner's own fields of the output (lib/job-owner-output.ts): only for the job's owner, read from the raw row.
+  if (reader && Object.hasOwn(picked, "output_data")) {
+    const raw = job as unknown as { user_id?: unknown; output_data?: unknown }
+    picked.output_data = withOwnerOnlyOutputFields(picked.output_data, raw.output_data, raw.user_id, reader)
+  }
 
   return picked as unknown as JobRecord | PublicJob
 }
@@ -328,7 +343,8 @@ export async function jobRoutes(app: FastifyInstance) {
       data: {
         // An old render has no stored Preview label: fill it from the order
         // (read-time only; the Executions tab reads this job).
-        ...sanitizeJobForPublic(fillJobRenderQuality(judged!) as unknown as JobRecord, isAdmin),
+        // The reader: the job's owner reads its owner-only output fields (an admin reading it does not).
+        ...sanitizeJobForPublic(fillJobRenderQuality(judged!) as unknown as JobRecord, isAdmin, { userId }),
         credit_status: runCredits.get(job.id)?.status ?? null,
         // What the run was charged once its hold settled, its steps included,
         // and the run's hold; `credits` stays the job's own hold.
@@ -362,7 +378,7 @@ export async function jobRoutes(app: FastifyInstance) {
     const { data: read, error } = await readWithLaneStamp("job", (stamp) => {
       let query = supabase
         .from("jobs")
-        .select(`id, status, progress, output_data, error_message, error_detail, error_hint, completed_at, reconcile_attempts, usage_log_id, workflow_execution_id, ${ORDER_QUALITY_COLUMNS}, ${TREND_RUN_MARKER_SELECT}${stamp}`)
+        .select(`id, status, progress, output_data, error_message, error_detail, error_hint, completed_at, reconcile_attempts, usage_log_id, user_id, workflow_execution_id, ${ORDER_QUALITY_COLUMNS}, ${TREND_RUN_MARKER_SELECT}${stamp}`)
         .eq("id", id)
         .is(TRASHED_JOB_COLUMN, null)
 
@@ -395,12 +411,14 @@ export async function jobRoutes(app: FastifyInstance) {
       usage_log_id: usageLogId,
       // Read for the queue's clock only; never sent.
       lane_queued_at: _laneQueuedAt,
+      // Read to tell the job's owner (lib/job-owner-output.ts); never sent on this lean answer.
+      user_id: _ownerUserId,
       ...rest
     } = fillJobRenderQuality(maskTrendRunError(judged!, isAdmin), { dropJobType: true }) as Record<string, unknown> & { usage_log_id?: string | null }
     const creditMap = await creditStatusMapFor([usageLogId])
     // Where a job waiting for a slot stands (no gate read for any other job).
     const queues = await queueInfoFor(waitingRowsOf("job", [job]))
-    return redactPrivateJobData({
+    const answered = redactPrivateJobData({
       data: {
         ...rest,
         credit_status: creditStatusOf(usageLogId, creditMap),
@@ -410,6 +428,8 @@ export async function jobRoutes(app: FastifyInstance) {
         ...queueField(job.id, queues),
       },
     })
+    // The job's owner also reads its owner-only output fields (an admin reading it does not).
+    return { ...answered, data: withOwnerOnlyRowFields(answered.data, job as unknown as { user_id?: unknown; output_data?: unknown }, { userId }) }
   })
 
   app.get<{
@@ -607,7 +627,7 @@ export async function jobRoutes(app: FastifyInstance) {
     const sanitizedJobs = cleanedJobs.map((job) => {
       // An old render has no stored Preview label: fill it from the order.
       const sanitized = {
-        ...sanitizeJobForPublic(fillJobRenderQuality(job) as JobRecord, isAdmin),
+        ...sanitizeJobForPublic(fillJobRenderQuality(job) as JobRecord, isAdmin, { userId: req.userId }),
         credit_status: runCredits.get(job.id as string)?.status ?? null,
         ...publicCreditFieldsOf(job.id as string, runCredits),
         ...ownerStateFields(job.id, ownerState),
@@ -675,7 +695,7 @@ export async function jobRoutes(app: FastifyInstance) {
     const { data: jobs, error } = await readWithLaneStamp("job", (stamp) => {
       let query = supabase
         .from("jobs")
-        .select(`id, status, output_data, error_message, error_detail, error_hint, workflow_execution_id, ${ORDER_QUALITY_COLUMNS}, ${TREND_RUN_MARKER_SELECT}${stamp}`)
+        .select(`id, status, output_data, error_message, error_detail, error_hint, user_id, workflow_execution_id, ${ORDER_QUALITY_COLUMNS}, ${TREND_RUN_MARKER_SELECT}${stamp}`)
         .in("id", jobIds)
         .is(TRASHED_JOB_COLUMN, null)
 
@@ -700,11 +720,13 @@ export async function jobRoutes(app: FastifyInstance) {
     const queues = await queueInfoFor(waitingRowsOf("job", rows))
     // The reopen restore reads this: an old render's Preview label comes from
     // the order (read-time only; the answer stays lean).
+    // Each job's owner also reads its owner-only output fields (lib/job-owner-output.ts); `user_id` is read for that
+    // alone and never sent on this lean answer.
     return {
-      data: redactPrivateJobData(
-        fillJobsRenderQuality(maskTrendRunErrors(rows, isAdmin), { dropJobType: true })
-          .map((row) => ({ ...withoutLaneStamp(row), ...queueField(String(row.id), queues) })),
-      ),
+      data: fillJobsRenderQuality(maskTrendRunErrors(rows, isAdmin), { dropJobType: true }).map((row) => {
+        const { user_id: _ownerUserId, ...answered } = redactPrivateJobData({ ...withoutLaneStamp(row), ...queueField(String(row.id), queues) }) as Record<string, unknown>
+        return withOwnerOnlyRowFields(answered, row as { user_id?: unknown; output_data?: unknown }, { userId })
+      }),
     }
   })
 

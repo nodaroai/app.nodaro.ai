@@ -33,6 +33,7 @@ import {
   ListTasksRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js"
 import { TREND_RUN_MARKER_SELECT, redactPrivateJobOutput, trendRunErrorText, TRASHED_JOB_COLUMN } from "../public-job-data.js"
+import { withOwnerOnlyOutputFields, type JobReader } from "../job-owner-output.js"
 
 export interface Task {
   taskId: string
@@ -364,7 +365,8 @@ export function registerTaskHandlers(server: McpServer, getUserId: () => string)
     const t = getTask(taskId)
     if (!t) throw new Error(`Unknown taskId: ${taskId}`)
     if (t.userId !== getUserId()) throw new Error("forbidden")
-    return await waitForTerminal(t.taskId, t.abortController.signal)
+    // The task's owner is the caller (checked above): they read the job's owner-only output fields too.
+    return await waitForTerminal(t.taskId, t.abortController.signal, { userId: getUserId() })
   })
 
   inner.setRequestHandler(CancelTaskRequestSchema, async (req) => {
@@ -402,7 +404,7 @@ export function registerTaskHandlers(server: McpServer, getUserId: () => string)
  * plan suggested `output_url` but per v1.1 Task 4 we standardised on
  * `output_data`.)
  */
-async function waitForTerminal(jobId: string, signal: AbortSignal): Promise<{
+async function waitForTerminal(jobId: string, signal: AbortSignal, reader: JobReader): Promise<{
   taskId: string
   status: string
   output?: unknown
@@ -417,7 +419,8 @@ async function waitForTerminal(jobId: string, signal: AbortSignal): Promise<{
   while (Date.now() - start < TIMEOUT_MS && !signal.aborted) {
     const { data } = await supabase
       .from("jobs")
-      .select(`status, output_data, error_message, ${TREND_RUN_MARKER_SELECT}`)
+      // `user_id` is read to tell the job's owner (lib/job-owner-output.ts); never answered.
+      .select(`status, output_data, error_message, user_id, ${TREND_RUN_MARKER_SELECT}`)
       .is(TRASHED_JOB_COLUMN, null)
       .eq("id", jobId)
       .maybeSingle()
@@ -454,7 +457,7 @@ async function waitForTerminal(jobId: string, signal: AbortSignal): Promise<{
       return {
         taskId: jobId,
         status: data.status,
-        output: redactPrivateJobOutput(data.output_data ?? null),
+        output: withOwnerOnlyOutputFields(redactPrivateJobOutput(data.output_data ?? null), data.output_data, data.user_id, reader),
         error: trendRunErrorText(data.error_message, { trend: data.trend_run_marker }, false),
       }
     }

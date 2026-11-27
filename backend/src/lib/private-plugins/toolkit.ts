@@ -1819,6 +1819,10 @@ const HOST_CAPABILITIES: PluginCapabilities = Object.freeze({
   proStopFinishesSegment: true,
   // `markJobCompleted` accepts a run delivered as simple cuts or as its separate clips, and retries the assembly in the background.
   proDeliveryFallback: true,
+  // Video Remake's Quality choice (lib/video-remake-quality.ts): this host reads `quality: "full" | "economy"` where it
+  // reads the run (the first-Remake offer covers only the Economy run) and reads its answers. The engine honours the
+  // choice only on a host that says so; on an older one it refuses the two values, as before the choice.
+  castSwapQuality: true,
   mixAudioDuck: true,
   audioFxLossless: true,
   seedanceDraft: true,

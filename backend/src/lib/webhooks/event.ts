@@ -121,7 +121,8 @@ async function jobFor(d: ClaimedDelivery): Promise<Record<string, unknown> | nul
     { id: d.jobId, usage_log_id: usageLogId, credits: typeof row.credits === "number" ? row.credits : null, input_data: row.input_data },
   ], d.userId)
   return {
-    ...(sanitizeJobForPublic(fillJobRenderQuality(row) as unknown as JobRecord, false) as unknown as Record<string, unknown>),
+    // The endpoint's owner is the job's (the read above): they read its owner-only output fields too (lib/job-owner-output.ts).
+    ...(sanitizeJobForPublic(fillJobRenderQuality(row) as unknown as JobRecord, false, { userId: d.userId }) as unknown as Record<string, unknown>),
     credit_status: credits.get(d.jobId)?.status ?? null,
     ...publicCreditFieldsOf(d.jobId, credits),
   }

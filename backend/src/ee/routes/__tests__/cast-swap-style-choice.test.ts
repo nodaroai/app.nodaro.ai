@@ -65,7 +65,7 @@ const NO_PRECISE_ART_STYLE = { "nodaro-prism": false, "nodaro-pulse": false, "mo
 const NO_PRECISE_ART_STYLE_ALONE = { "nodaro-prism": false, "nodaro-pulse": false, "motion-prism": false, "motion-pulse": false }
 const NO_CUSTOM_STYLE = { "nodaro-prism": false, "nodaro-pulse": false, "motion-prism": false, "motion-pulse": false }
 const NO_FLASH = { "nodaro-prism": false, "nodaro-pulse": false, "motion-prism": false, "motion-pulse": false }
-const USER = { engines: { "nodaro-prism": "user", "nodaro-pulse": "user", "motion-prism": "user", "motion-pulse": "user" }, styleOnly: NO_STYLE_ONLY, preciseArtStyle: NO_PRECISE_ART_STYLE, preciseArtStyleAlone: NO_PRECISE_ART_STYLE_ALONE, customStyle: NO_CUSTOM_STYLE, planRoles: false, planRolesPreviz: false, previz: false, roleFace: false, flash: NO_FLASH, resolutions: {}, portion: false, shortClips: false, longClips: null }
+const USER = { engines: { "nodaro-prism": "user", "nodaro-pulse": "user", "motion-prism": "user", "motion-pulse": "user" }, styleOnly: NO_STYLE_ONLY, preciseArtStyle: NO_PRECISE_ART_STYLE, preciseArtStyleAlone: NO_PRECISE_ART_STYLE_ALONE, customStyle: NO_CUSTOM_STYLE, planRoles: false, planRolesPreviz: false, previz: false, roleFace: false, flash: NO_FLASH, resolutions: {}, quality: {}, portion: false, shortClips: false, longClips: null }
 
 let app: FastifyInstance
 
@@ -105,9 +105,9 @@ describe("GET /v1/cast-swap/style-choice", () => {
 
   it("answers each forced engine's choice, the other 'user'", async () => {
     h.style = { "nodaro-pulse": "flex" }
-    expect((await app.inject({ method: "GET", url: URL })).json()).toEqual({ engines: { "nodaro-prism": "user", "nodaro-pulse": "flex", "motion-prism": "user", "motion-pulse": "flex" }, styleOnly: NO_STYLE_ONLY, preciseArtStyle: NO_PRECISE_ART_STYLE, preciseArtStyleAlone: NO_PRECISE_ART_STYLE_ALONE, customStyle: NO_CUSTOM_STYLE, planRoles: false, planRolesPreviz: false, previz: false, roleFace: false, flash: NO_FLASH, resolutions: {}, portion: false, shortClips: false, longClips: null })
+    expect((await app.inject({ method: "GET", url: URL })).json()).toEqual({ engines: { "nodaro-prism": "user", "nodaro-pulse": "flex", "motion-prism": "user", "motion-pulse": "flex" }, styleOnly: NO_STYLE_ONLY, preciseArtStyle: NO_PRECISE_ART_STYLE, preciseArtStyleAlone: NO_PRECISE_ART_STYLE_ALONE, customStyle: NO_CUSTOM_STYLE, planRoles: false, planRolesPreviz: false, previz: false, roleFace: false, flash: NO_FLASH, resolutions: {}, quality: {}, portion: false, shortClips: false, longClips: null })
     h.style = { "nodaro-prism": "precise", "nodaro-pulse": "flex", "motion-prism": "precise", "motion-pulse": "flex" }
-    expect((await app.inject({ method: "GET", url: URL })).json()).toEqual({ engines: { "nodaro-prism": "precise", "nodaro-pulse": "flex", "motion-prism": "precise", "motion-pulse": "flex" }, styleOnly: NO_STYLE_ONLY, preciseArtStyle: NO_PRECISE_ART_STYLE, preciseArtStyleAlone: NO_PRECISE_ART_STYLE_ALONE, customStyle: NO_CUSTOM_STYLE, planRoles: false, planRolesPreviz: false, previz: false, roleFace: false, flash: NO_FLASH, resolutions: {}, portion: false, shortClips: false, longClips: null })
+    expect((await app.inject({ method: "GET", url: URL })).json()).toEqual({ engines: { "nodaro-prism": "precise", "nodaro-pulse": "flex", "motion-prism": "precise", "motion-pulse": "flex" }, styleOnly: NO_STYLE_ONLY, preciseArtStyle: NO_PRECISE_ART_STYLE, preciseArtStyleAlone: NO_PRECISE_ART_STYLE_ALONE, customStyle: NO_CUSTOM_STYLE, planRoles: false, planRolesPreviz: false, previz: false, roleFace: false, flash: NO_FLASH, resolutions: {}, quality: {}, portion: false, shortClips: false, longClips: null })
   })
 
   it("answers 'user' everywhere while this environment's engine does not enforce it, without reading the settings", async () => {
@@ -144,7 +144,7 @@ describe("styleOnly: which engines take a style-only run", () => {
     setPluginSupports({ castSwap: { ...CS, styleChoice: true, styleOnly: true } })
     h.style = { "nodaro-pulse": "flex" }
     const first = (await app.inject({ method: "GET", url: URL })).json()
-    expect(first).toEqual({ engines: { "nodaro-prism": "user", "nodaro-pulse": "flex", "motion-prism": "user", "motion-pulse": "flex" }, styleOnly: STYLE_ONLY, preciseArtStyle: NO_PRECISE_ART_STYLE, preciseArtStyleAlone: NO_PRECISE_ART_STYLE_ALONE, customStyle: NO_CUSTOM_STYLE, planRoles: false, planRolesPreviz: false, previz: false, roleFace: false, flash: NO_FLASH, resolutions: {}, portion: false, shortClips: false, longClips: null })
+    expect(first).toEqual({ engines: { "nodaro-prism": "user", "nodaro-pulse": "flex", "motion-prism": "user", "motion-pulse": "flex" }, styleOnly: STYLE_ONLY, preciseArtStyle: NO_PRECISE_ART_STYLE, preciseArtStyleAlone: NO_PRECISE_ART_STYLE_ALONE, customStyle: NO_CUSTOM_STYLE, planRoles: false, planRolesPreviz: false, previz: false, roleFace: false, flash: NO_FLASH, resolutions: {}, quality: {}, portion: false, shortClips: false, longClips: null })
     first.styleOnly["nodaro-pulse"] = true
     expect((await app.inject({ method: "GET", url: URL })).json().styleOnly).toEqual(STYLE_ONLY)
   })
@@ -187,7 +187,7 @@ describe("preciseArtStyle: which engines take an art style on a Precise run", ()
     setPluginSupports({ castSwap: { ...CS, styleChoice: true, preciseArtStyle: true } })
     h.style = { "nodaro-pulse": "flex" }
     const first = (await app.inject({ method: "GET", url: URL })).json()
-    expect(first).toEqual({ engines: { "nodaro-prism": "user", "nodaro-pulse": "flex", "motion-prism": "user", "motion-pulse": "flex" }, styleOnly: NO_STYLE_ONLY, preciseArtStyle: PRECISE_ART_STYLE, preciseArtStyleAlone: NO_PRECISE_ART_STYLE_ALONE, customStyle: NO_CUSTOM_STYLE, planRoles: false, planRolesPreviz: false, previz: false, roleFace: false, flash: NO_FLASH, resolutions: {}, portion: false, shortClips: false, longClips: null })
+    expect(first).toEqual({ engines: { "nodaro-prism": "user", "nodaro-pulse": "flex", "motion-prism": "user", "motion-pulse": "flex" }, styleOnly: NO_STYLE_ONLY, preciseArtStyle: PRECISE_ART_STYLE, preciseArtStyleAlone: NO_PRECISE_ART_STYLE_ALONE, customStyle: NO_CUSTOM_STYLE, planRoles: false, planRolesPreviz: false, previz: false, roleFace: false, flash: NO_FLASH, resolutions: {}, quality: {}, portion: false, shortClips: false, longClips: null })
     first.preciseArtStyle["nodaro-pulse"] = true
     expect((await app.inject({ method: "GET", url: URL })).json().preciseArtStyle).toEqual(PRECISE_ART_STYLE)
   })
@@ -220,7 +220,7 @@ describe("preciseArtStyleAlone: where an art style alone is a Precise run's chan
     setPluginSupports({ castSwap: { ...CS, styleChoice: true, preciseArtStyleAlone: true } })
     h.style = { "nodaro-pulse": "flex" }
     const first = (await app.inject({ method: "GET", url: URL })).json()
-    expect(first).toEqual({ engines: { "nodaro-prism": "user", "nodaro-pulse": "flex", "motion-prism": "user", "motion-pulse": "flex" }, styleOnly: NO_STYLE_ONLY, preciseArtStyle: NO_PRECISE_ART_STYLE, preciseArtStyleAlone: ALONE, customStyle: NO_CUSTOM_STYLE, planRoles: false, planRolesPreviz: false, previz: false, roleFace: false, flash: NO_FLASH, resolutions: {}, portion: false, shortClips: false, longClips: null })
+    expect(first).toEqual({ engines: { "nodaro-prism": "user", "nodaro-pulse": "flex", "motion-prism": "user", "motion-pulse": "flex" }, styleOnly: NO_STYLE_ONLY, preciseArtStyle: NO_PRECISE_ART_STYLE, preciseArtStyleAlone: ALONE, customStyle: NO_CUSTOM_STYLE, planRoles: false, planRolesPreviz: false, previz: false, roleFace: false, flash: NO_FLASH, resolutions: {}, quality: {}, portion: false, shortClips: false, longClips: null })
     first.preciseArtStyleAlone["nodaro-pulse"] = true
     expect((await app.inject({ method: "GET", url: URL })).json().preciseArtStyleAlone).toEqual(ALONE)
   })
@@ -778,6 +778,63 @@ describe("portion and shortClips: a part of the clip and 2-second clips, as the 
     }
     Object.assign(h, { failed: false, throws: false })
     expect((await get()).json()).toEqual({ ...USER, previz: true, portion: true, shortClips: true })
+  })
+})
+
+describe("quality: the delivered sizes where a run has a Quality choice here", () => {
+  const get = () => app.inject({ method: "GET", url: URL })
+  const DELIVERED = {
+    "nodaro-prism": [{ size: "720p", from: "480p", native: true }, { size: "1080p", from: "720p", native: true }, { size: "4k", from: "1080p" }],
+    "nodaro-pulse": [{ size: "720p", native: true }, { size: "1080p", from: "720p", native: true }, { size: "4k", from: "1080p" }],
+    "nodaro-prism-flash": [{ size: "720p", from: "480p", native: true }, { size: "1080p", from: "720p" }],
+    "nodaro-pulse-flash": [{ size: "720p", native: true }, { size: "1080p", from: "720p" }],
+  }
+  const FULL = { "nodaro-prism": ["480p", "720p", "1080p"], "nodaro-pulse": ["720p", "1080p"], "nodaro-prism-flash": ["480p", "720p"], "nodaro-pulse-flash": ["720p"] }
+  const TAKES = { ...CS, upscaleChoice: true, preciseUpscale: true, deliveredResolution: true, deliveredResolutions: DELIVERED, quality: true, qualityFull: FULL }
+  // Full's sizes that are also delivered by a step: Pulse's 720p is made by the engine either way, so it has no choice.
+  const ALL = { "nodaro-prism": ["720p", "1080p"], "nodaro-pulse": ["1080p"], "nodaro-prism-flash": ["720p"] }
+
+  it("answers the sizes the engine makes itself that a step also delivers, cacheable", async () => {
+    setPluginSupports({ castSwap: TAKES } as never)
+    const res = await get()
+    expect(res.json().quality).toEqual(ALL)
+    expect(res.headers["cache-control"]).toBe(`public, max-age=${STYLE_CHOICE_MAX_AGE_SECONDS}`)
+    expect(h.reads).toBe(1)
+  })
+
+  it("lists 4K only where the engine declares it makes 4K itself", async () => {
+    setPluginSupports({ castSwap: { ...TAKES, qualityFull: { ...FULL, "nodaro-prism": [...FULL["nodaro-prism"], "4k"] } } } as never)
+    expect((await get()).json().quality).toEqual({ ...ALL, "nodaro-prism": ["720p", "1080p", "4k"] })
+  })
+
+  it("removes the sizes whose step the admin switched off, and every size while the step is withheld here", async () => {
+    setPluginSupports({ castSwap: TAKES } as never)
+    h.preciseUpscale = { "480p": "720p", "720p": "off", "1080p": "off", flash: { "480p": "off", "720p": "off" } }
+    expect((await get()).json().quality).toEqual({ "nodaro-prism": ["720p"], "nodaro-pulse": ["1080p"] })
+    h.topazDisabled = true
+    expect((await get()).json().quality).toEqual({})
+  })
+
+  it("answers no Prism-family size, uncached, when the settings could not be read", async () => {
+    setPluginSupports({ castSwap: TAKES } as never)
+    for (const fail of [{ failed: true }, { throws: true }]) {
+      Object.assign(h, { failed: false, throws: false }, fail)
+      const res = await get()
+      expect(res.json().quality, JSON.stringify(fail)).toEqual({ "nodaro-pulse": ["1080p"] })
+      expect(res.headers["cache-control"]).toBe("no-store")
+    }
+  })
+
+  it("is {} where the engine does not take the choice or deliver resolutions, whatever else it declares", async () => {
+    for (const castSwap of [CS, { ...TAKES, quality: undefined }, { ...TAKES, quality: "true" }, { ...TAKES, deliveredResolution: undefined }, { ...TAKES, qualityFull: undefined }, { ...TAKES, qualityFull: [] }]) {
+      setPluginSupports({ castSwap } as never)
+      expect((await get()).json().quality, JSON.stringify(castSwap)).toEqual({})
+    }
+  })
+
+  it("reads what the engine declares defensively: unknown engine choices and sizes are dropped, a size once", async () => {
+    setPluginSupports({ castSwap: { ...TAKES, qualityFull: { "nodaro-prism": ["1080p", "8k", 7, "720p", "720p"], "nodaro-pulse": "1080p", "motion-max": ["720p"], __proto__: { "nodaro-prism-flash": ["720p"] } } } } as never)
+    expect((await get()).json().quality).toEqual({ "nodaro-prism": ["720p", "1080p"] })
   })
 })
 

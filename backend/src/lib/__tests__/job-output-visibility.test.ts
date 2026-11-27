@@ -48,6 +48,27 @@ describe("withoutServerOnlyKeys", () => {
   })
 })
 
+describe("Video Remake's version before upscale is never added by the redaction (it knows no reader)", () => {
+  const output = {
+    videoUrl: "https://cdn.example/job-1.mp4",
+    resolution: "1080p",
+    quality: "economy",
+    __castSwapEngineResolution: "720p",
+    __castSwapUpscaleOutcome: "applied",
+    __castSwapEngineVideoUrl: "https://cdn.example/job-1-engine.mp4",
+    __castSwapEngineWidth: 1280,
+    __castSwapEngineHeight: 720,
+  }
+  const ANSWERED = { videoUrl: "https://cdn.example/job-1.mp4", resolution: "1080p", quality: "economy" }
+
+  it("every redaction entry point drops the server-only keys and adds none of the owner's names (lib/job-owner-output.ts adds them, for the owner)", () => {
+    expect(withoutServerOnlyKeys(output)).toEqual(ANSWERED)
+    expect(redactPrivateJobOutput(output)).toEqual(ANSWERED)
+    expect(redactPrivateJobData({ id: "job-1", user_id: "someone", output_data: output })).toEqual({ id: "job-1", user_id: "someone", output_data: ANSWERED })
+    expect(redactPrivateJobData([{ output_data: output }])).toEqual([{ output_data: ANSWERED }])
+  })
+})
+
 describe("redactPrivateJobData — server-only output keys", () => {
   it("strips __ keys from a row's output_data and input_data, wherever the row sits in the answer", () => {
     const answer = {

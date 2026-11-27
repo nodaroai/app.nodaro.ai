@@ -434,6 +434,7 @@ import { registerSequenceExecutionGuard } from "./middleware/sequence-execution-
 import { registerRetiredVideoProviderHook } from "./middleware/retired-video-provider.js"
 import { registerServerOnlyBodyKeysHook } from "./middleware/server-only-body-keys.js"
 import { registerNodaroMotionEngineHook } from "./middleware/nodaro-motion-engine.js"
+import { registerVideoRemakeQualityHook } from "./middleware/video-remake-quality.js"
 import { videoRemakeRewriteUrl } from "./lib/video-remake-paths.js"
 import { registerNodaroMotionPulseAudioHook } from "./middleware/nodaro-motion-pulse-audio.js"
 import { registerNodaroMotionPrismReferenceAudioHook } from "./middleware/nodaro-motion-prism-reference-audio.js"
@@ -674,6 +675,8 @@ export async function buildApp() {
   // A Video Remake run or quote naming its engine by any id (public, earlier
   // or internal) reaches the plugin's route as the internal id every engine takes.
   registerNodaroMotionEngineHook(app)
+  // Its Quality choice (`quality: "full" | "economy"`) reaches only an engine that takes it; any other would refuse the value.
+  registerVideoRemakeQualityHook(app)
   // A direct Video Remake run's Pulse audio is the admin's setting, never the caller's
   // (a trend run keeps the one its trend composed).
   registerNodaroMotionPulseAudioHook(app)

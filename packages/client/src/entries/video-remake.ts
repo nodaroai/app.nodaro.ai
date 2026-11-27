@@ -26,6 +26,7 @@ export {
   type VideoRemakeParams,
   type VideoRemakeEstimate,
   type VideoRemakeResolution,
+  type VideoRemakeQuality,
   type VideoRemakeJobOutput,
   type VideoRemakeLongClips,
   type VideoRemakePartial,

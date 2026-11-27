@@ -6198,9 +6198,9 @@ length, with its own cast and new music, and can change the motion itself.
 
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/v1/video-remake/estimate` | Quote a run in credits before starting it. Free: nothing is created or reserved. Returns `{ engine, totalCredits, expectedCredits, breakdown, privacyCredits?, settlesLower, firstRemakeOffer?, resolution? }`: `totalCredits` is held when the run starts, `expectedCredits` is what it is expected to be charged (`firstRemakeOffer`: see [First Remake on us](#first-remake-on-us); `resolution`, the size the run delivers: see The size delivered below). |
+| `POST` | `/v1/video-remake/estimate` | Quote a run in credits before starting it. Free: nothing is created or reserved. Returns `{ engine, totalCredits, expectedCredits, breakdown, privacyCredits?, settlesLower, firstRemakeOffer?, resolution? }`: `totalCredits` is held when the run starts, `expectedCredits` is what it is expected to be charged (`firstRemakeOffer`: see [First Remake on us](#first-remake-on-us); `resolution`, the size the run delivers: see The size delivered below; a request that names `quality` is also answered `quality`, `qualityOffered` and `engineResolution?`: see Quality below). |
 | `POST` | `/v1/video-remake` | Start the run. Returns `202 { jobId }`; follow the job like any other (`GET /v1/jobs/:id`). Takes an `Idempotency-Key` (see below). |
-| `GET` | `/v1/video-remake/style-choice` | Whether you choose a run's `style`, per engine, or it is fixed as Motion (`"precise"` sets only what Nodaro's own apps run), whether the engine takes a style-only run, whether a Precise run takes an art style (see Style below), whether a run may state a 3D previz clip (`previz`, see A 3D previz clip below), whether such a clip's roles can be planned (`planRolesPreviz`, see Roles planned from the prompt below), whether a person role may keep its own face (`roleFace`, see The Face chip below), whether each engine's Flash choice is offered (`flash`, see Flash choices below), and the sizes each engine choice delivers here (`resolutions`, see The size delivered below), whether a run takes a part of the clip (`portion`), whether a clip of 2 s or more is accepted (`shortClips`) and whether a whole clip longer than 30 s runs in parts (`longClips`; all three under A part of the clip, short clips and long clips below). Public: no sign-in needed. |
+| `GET` | `/v1/video-remake/style-choice` | Whether you choose a run's `style`, per engine, or it is fixed as Motion (`"precise"` sets only what Nodaro's own apps run), whether the engine takes a style-only run, whether a Precise run takes an art style (see Style below), whether a run may state a 3D previz clip (`previz`, see A 3D previz clip below), whether such a clip's roles can be planned (`planRolesPreviz`, see Roles planned from the prompt below), whether a person role may keep its own face (`roleFace`, see The Face chip below), whether each engine's Flash choice is offered (`flash`, see Flash choices below), and the sizes each engine choice delivers here (`resolutions`, see The size delivered below), the sizes where a run has a Quality choice (`quality`, see Quality below), whether a run takes a part of the clip (`portion`), whether a clip of 2 s or more is accepted (`shortClips`) and whether a whole clip longer than 30 s runs in parts (`longClips`; all three under A part of the clip, short clips and long clips below). Public: no sign-in needed. |
 | `GET` | `/v1/video-remake/advanced` | Whether the Video Remake page shows its Advanced options (see below). Public: no sign-in needed. |
 | `POST` | `/v1/video-remake/describe-style` | Put an image's visual style into words, for a run's custom style (see A custom style below). Body `{ imageUrl, note? }`; returns `{ text, medium?, tones? }`. Free: no job, nothing charged. Signed in; 10 calls a minute per account. |
 | `POST` | `/v1/video-remake/plan-roles` | Plan a run's roles from a request in the person's own words and loose reference images (see Roles planned from the prompt below). Body `{ videoUrl, prompt, images, engine?, roles?, references?, preview?, previewStart?, portionStart?, portionSec?, clipKind?, previz? }`; returns `{ prompt, roles, references, postPrompt, removed, unresolved }`. Free: no job, nothing charged. Signed in; 6 calls a minute and 60 a day per account. |
@@ -6310,6 +6310,55 @@ engine does not deliver resolutions yet, and `resolution` is the size it
 makes: Nodaro Prism `"480p"` (the default), `"720p"` or `"1080p"`, Nodaro
 Pulse `"720p"` (the default) or `"1080p"`, Nodaro Prism Flash `"480p"` (the
 default) or `"720p"`, Nodaro Pulse Flash `"720p"`.
+
+**Quality.** `quality` on a run and its estimate says how the size delivered
+is made:
+
+- `"economy"` (the default): the video is rendered one size below, then
+  upscaled to `resolution`. Faces and motion can look processed.
+- `"full"`: the video is rendered at `resolution` itself, with no upscale
+  step. It costs more.
+
+The choice exists where `GET /v1/video-remake/style-choice` lists the size
+under `quality`, per engine choice:
+
+```json
+{ "quality": { "nodaro-prism": ["720p", "1080p"], "nodaro-pulse": ["1080p"] } }
+```
+
+Show a Quality control for exactly those sizes; `{}` (a server from before it
+leaves it out: read that as `{}`) means there is none. Anywhere else a size is
+made one way only and the request is made that way: `quality` is never
+refused for it. It is not read on a draft or a trend run. At 480p, and at a
+size the engine makes itself with no upscale step, the two ways are the same
+run, so no size like that is listed.
+
+4K is listed only for an engine choice that renders 4K itself, where the
+deployment has turned that on. Where `resolutions` offers 4K and `quality`
+does not list it, a 4K video is rendered at 1080p and upscaled, whatever
+`quality` says: tell the person that Full is not available at 4K for that
+engine choice.
+
+To price the two, call the estimate once per value. Only an estimate whose
+request names `quality` answers how its quote is made:
+
+| Field | Meaning |
+|-------|---------|
+| `quality` | `"economy"` or `"full"`: how this quote is made. Where the size can be made one way only, it says that way, whatever was asked. |
+| `qualityOffered` | `true` only when both ways exist for this request. Read it on the `"economy"` estimate; when it is `false`, only the way `quality` names can be had for this request (say so beside the control). |
+| `engineResolution` | Only with `"economy"`: the size the video is rendered at before the upscale (`"480p"`, `"720p"` or `"1080p"`). |
+
+A run whose request named `quality` records it in `input_data.quality`, and
+its completed `output_data` says `quality` as it was made. On its owner's own
+reads of the job (`GET /v1/jobs/:id`, `GET /v1/jobs`, the status polls, the
+job's webhook events, and the MCP `get_job`, `wait_for_job`, `list_jobs` and
+task results), an Economy run whose upscale step was applied also carries the
+video before that step: `engineVideoUrl`, `engineWidth`, `engineHeight` and
+`engineResolution` (show it beside `videoUrl`, as "Before upscale"). Nobody
+else reads them, not even on a public job. The version before upscaling is
+kept with the result and counts toward your storage; permanently deleting
+the result from your Library deletes it too and gives that storage back. A request that names no `quality`
+is run, quoted and answered exactly as before, with none of these fields.
 
 **A part of the clip, short clips and long clips.** Three choices a deployment
 may turn on for its engine. Each is off unless `GET /v1/video-remake/style-choice`
@@ -7014,6 +7063,10 @@ run and a [trend run](#13g-trends-cloud-edition) are both Video Remake runs.
   finishes uses the offer, also when your credits paid all of it (the offer
   then covered nothing). A first run your credits can pay is paid with them,
   as any run.
+- **A Full run on Nodaro Prism at 720p is not covered.** The offer covers the
+  Economy run (`quality` left out, or `"economy"`): a request that names
+  `quality: "full"` there is answered as any other run the offer does not
+  cover (`402 first_remake_option_locked`).
 - **The offer's credits are held for that run alone.** They are not added to
   your balance: only the run's own steps draw on them, and only for what your
   own credits cannot pay (your credits are used first).

@@ -11,6 +11,7 @@
 import { z } from "zod"
 import { DIRECTION_KEYS, getRegisteredSubjectKeys } from "@nodaro/prompts/prompt-builder"
 import { redactPrivateJobData, redactPrivateJobOutput } from "../../public-job-data.js"
+import { withOwnerOnlyOutputFields, type JobReader } from "../../job-owner-output.js"
 import { jobRowProviderWords } from "../../provider-words.js"
 import { failureGuidance } from "./_job-error.js"
 import { statedName } from "../deployment-name.js"
@@ -192,6 +193,8 @@ export type JobView = z.infer<z.ZodObject<typeof JOB_VIEW_SCHEMA>>
 
 export interface JobRowLike {
   id: string
+  /** The job's owner (`jobs.user_id`), where the read selected it: it alone reads the owner-only output fields. */
+  user_id?: string | null
   status?: string | null
   progress?: number | null
   job_type?: string | null
@@ -213,10 +216,14 @@ export interface JobRowLike {
   completed_at?: string | null
 }
 
-/** Normalise a jobs row (public columns) into the envelope. Private remux bases are redacted. */
-export function jobView(row: JobRowLike): JobView {
+/**
+ * Normalise a jobs row (public columns) into the envelope. Private remux bases are redacted. With `reader` (a read of
+ * the reader's own job), the job's owner also reads its owner-only output fields (lib/job-owner-output.ts).
+ */
+export function jobView(row: JobRowLike, reader?: JobReader): JobView {
   const status = row.status ?? "pending"
-  const out = row.output_data ? redactPrivateJobOutput(row.output_data as Record<string, unknown>) : null
+  const redacted = row.output_data ? redactPrivateJobOutput(row.output_data as Record<string, unknown>) : null
+  const out = redacted && reader ? withOwnerOnlyOutputFields(redacted, row.output_data, row.user_id, reader) : redacted
   const view: JobView = {
     jobId: row.id,
     status,

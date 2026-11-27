@@ -569,6 +569,7 @@
         "backend/src/lib/job-output-references.ts",
         "backend/src/lib/job-output-urls.ts",
         "backend/src/lib/job-output-visibility.ts",
+        "backend/src/lib/job-owner-output.ts",
         "backend/src/lib/job-policy-audit.ts",
         "backend/src/lib/job-policy-gate.ts",
         "backend/src/lib/job-policy-outputs.ts",

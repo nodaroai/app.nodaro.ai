@@ -1119,6 +1119,71 @@ describe("video_remake: the intent check (check_intent) and the run's intent", (
   })
 })
 
+describe("video_remake: quality, how the delivered size is made", () => {
+  afterEach(() => _resetPluginSupportsForTests())
+
+  it("lists full, economy and the older draft", async () => {
+    const { fastify } = stubFastify({})
+    const tool = (await listTools(serverWith(fastify))).find((t) => t.name === "video_remake")!
+    const properties = (tool.inputSchema as { properties: Record<string, { description?: string; enum?: string[] }> }).properties
+    expect(properties.quality!.enum).toEqual(["full", "economy", "draft"])
+    expect(properties.quality!.description).toContain('"economy" (default)')
+  })
+
+  it("sends quality as given on the quote and the run", async () => {
+    const quote = { totalCredits: 20, breakdown: { base: 5, motion: 15, references: 0 }, settlesLower: false, resolution: "1080p" }
+    for (const quality of ["full", "economy", "draft"]) {
+      const { fastify, calls } = stubFastify({ "/v1/video-remake/estimate": { statusCode: 200, body: quote }, "/v1/video-remake": { statusCode: 202, body: { jobId: "job-q" } } })
+      await callTool(serverWith(fastify), "video_remake", { ...ARGS, quality })
+      await callTool(serverWith(fastify), "video_remake", { ...ARGS, quality, confirm: true })
+      expect(calls.map((c) => c.payload)).toEqual([{ ...BODY, quality }, { ...BODY, quality }])
+    }
+  })
+
+  it("says how the size is made only where the quote answers it: economy with the size rendered, and that full exists", async () => {
+    const quote = { totalCredits: 20, breakdown: { base: 5, motion: 15, references: 0 }, settlesLower: false, resolution: "720p", quality: "economy", qualityOffered: true, engineResolution: "480p" }
+    const { fastify } = stubFastify({ "/v1/video-remake/estimate": { statusCode: 200, body: quote } })
+    const res = await callTool(serverWith(fastify), "video_remake", { ...ARGS, quality: "economy" })
+    expect(res.structuredContent).toEqual({ ...PRO, totalCredits: 20, breakdown: { base: 5, motion: 15, references: 0 }, settlesLower: false, resolution: "720p", quality: "economy", qualityOffered: true, engineResolution: "480p", confirmed: false })
+    expect(res.content[0]!.text).toContain("It is delivered at 720p. Economy: rendered at 480p, then upscaled; faces and motion can look processed.")
+    expect(res.content[0]!.text).toContain('quality: "full" renders at the size itself')
+  })
+
+  it("says Full is not available where a full request is quoted the Economy way (4K on an engine choice that does not render it itself)", async () => {
+    const quote = { totalCredits: 90, breakdown: { base: 5, motion: 85, references: 0 }, settlesLower: false, resolution: "4k", quality: "economy", qualityOffered: false, engineResolution: "1080p" }
+    const { fastify } = stubFastify({ "/v1/video-remake/estimate": { statusCode: 200, body: quote } })
+    const res = await callTool(serverWith(fastify), "video_remake", { ...ARGS, resolution: "4k", quality: "full" })
+    expect(res.structuredContent).toMatchObject({ resolution: "4k", quality: "economy", qualityOffered: false, engineResolution: "1080p" })
+    expect(res.content[0]!.text).toContain("It is delivered at 4K. Full is not available at this size for this engine choice. Economy: rendered at 1080p, then upscaled; faces and motion can look processed.")
+    expect(res.content[0]!.text).not.toContain('quality: "full" renders at the size itself')
+    // An economy request is told nothing of it.
+    const economy = await callTool(serverWith(fastify), "video_remake", { ...ARGS, resolution: "4k", quality: "economy" })
+    expect(economy.content[0]!.text).not.toContain("Full is not available")
+  })
+
+  it("says a full quote is rendered at the size, and offers nothing where there is one way only", async () => {
+    const quote = { totalCredits: 30, breakdown: { base: 5, motion: 25, references: 0 }, settlesLower: false, resolution: "720p", quality: "full", qualityOffered: false }
+    const { fastify } = stubFastify({ "/v1/video-remake/estimate": { statusCode: 200, body: quote } })
+    const res = await callTool(serverWith(fastify), "video_remake", { ...ARGS, quality: "full" })
+    expect(res.structuredContent).toMatchObject({ quality: "full", qualityOffered: false })
+    expect(res.structuredContent).not.toHaveProperty("engineResolution")
+    expect(res.content[0]!.text).toContain("Full: rendered at the size itself, no upscaling.")
+    expect(res.content[0]!.text).not.toContain('quality: "economy"')
+  })
+
+  it("answers a quote that names no quality fields exactly as before, whatever was asked", async () => {
+    const quote = { totalCredits: 20, breakdown: { base: 5, motion: 15, references: 0 }, settlesLower: false, resolution: "720p", quality: "draft", qualityOffered: "yes", engineResolution: "4k" }
+    const { fastify } = stubFastify({ "/v1/video-remake/estimate": { statusCode: 200, body: quote } })
+    const res = await callTool(serverWith(fastify), "video_remake", { ...ARGS, quality: "full" })
+    expect(res.structuredContent).toEqual({ ...PRO, totalCredits: 20, breakdown: { base: 5, motion: 15, references: 0 }, settlesLower: false, resolution: "720p", confirmed: false })
+    expect(String(res.content[0]?.text).toLowerCase()).not.toMatch(/upscal|economy|full:/)
+    // A full that was asked for and not answered is said, never passed silently.
+    expect(res.content[0]!.text).toContain('quality: "full" is not available for this call')
+    const plain = await callTool(serverWith(fastify), "video_remake", ARGS)
+    expect(String(plain.content[0]?.text)).not.toMatch(/quality/)
+  })
+})
+
 describe("video_remake: resolution is the size delivered", () => {
   afterEach(() => _resetPluginSupportsForTests())
   const run = { statusCode: 202, body: { jobId: "job-res" } }

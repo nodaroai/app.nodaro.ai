@@ -481,10 +481,18 @@ export interface VideoRemakeParams {
    */
   faceMasking?: VideoRemakeFaceMasking
   /**
-   * `"draft"` means 480p draft.
-   * @deprecated use `resolution` + `draft`.
+   * How the delivered size is made (see {@link VideoRemakeQuality}):
+   * `"economy"` (the default) renders one size below and upscales the result
+   * to `resolution`; `"full"` renders at `resolution` itself, with no upscale
+   * step, and costs more. Where {@link VideoRemakeStyleChoice.quality} lists
+   * the size for the engine choice; anywhere else there is one way to make the
+   * size and the request is made that way (never refused for it). Not read on
+   * a draft. Call `estimate()` once per value to price each.
+   *
+   * `"draft"` is the older value, a 480p draft: use `resolution` + `draft`
+   * instead of it.
    */
-  quality?: "draft"
+  quality?: VideoRemakeQuality | "draft"
   /** A generation session to file the result in. */
   sessionId?: string
   /** The client app that sent the run (stored on the job as `input_data.origin`). */
@@ -519,6 +527,21 @@ export interface VideoRemakeParams {
 export type VideoRemakeResolution = "480p" | "720p" | "1080p" | "4k"
 
 /**
+ * How a Video Remake run's delivered size is made (`quality` on `run()` and
+ * `estimate()`, on the estimate's answer and on a completed job's output):
+ *
+ * - `"economy"` (the default): rendered one size below (the estimate's
+ *   `engineResolution`), then upscaled to the size delivered. Faces and motion
+ *   can look processed.
+ * - `"full"`: rendered at the size delivered. No upscaling. Costs more.
+ *
+ * The choice exists where {@link VideoRemakeStyleChoice.quality} lists the
+ * size for the engine choice, and an estimate's `qualityOffered` says whether
+ * a given request has it.
+ */
+export type VideoRemakeQuality = "full" | "economy"
+
+/**
  * The Video Remake keys of a completed job's output (`GET /v1/jobs/:id`,
  * `output_data`) that a client reads; the output carries others too.
  */
@@ -546,6 +569,25 @@ export interface VideoRemakeJobOutput {
    * finished: this says the size the video has.
    */
   resolution?: VideoRemakeResolution
+  /**
+   * How the size was made (see {@link VideoRemakeQuality}). Only on a run
+   * whose request named `quality`.
+   */
+  quality?: VideoRemakeQuality
+  /**
+   * The video before the upscale step, at the size it was rendered at: only
+   * on a run whose request named `quality`, made the `"economy"` way, whose
+   * upscale step was applied, and only on its owner's own reads of the job
+   * (never on someone else's, a public job's included). Show it beside
+   * `videoUrl` ("Before upscale").
+   */
+  engineVideoUrl?: string
+  /** The width of {@link engineVideoUrl}, in pixels. */
+  engineWidth?: number
+  /** The height of {@link engineVideoUrl}, in pixels. */
+  engineHeight?: number
+  /** The size {@link engineVideoUrl} was rendered at. */
+  engineResolution?: Exclude<VideoRemakeResolution, "4k">
   [key: string]: unknown
 }
 
@@ -1023,6 +1065,25 @@ export interface VideoRemakeEstimate {
    * Absent from a server whose engine does not answer it.
    */
   resolution?: VideoRemakeResolution
+  /**
+   * How THIS quote is made (see {@link VideoRemakeQuality}). Only when the
+   * request named `quality` (`"full"` or `"economy"`), on a server whose
+   * engine takes the choice. It can differ from the value asked for: where
+   * the size can be made one way only, it says that way.
+   */
+  quality?: VideoRemakeQuality
+  /**
+   * `true` only when both ways exist for this request. `false`: only the
+   * way {@link quality} names can be had for it (say so beside the control).
+   * Read it on the `"economy"` estimate. Only when the request named
+   * `quality`.
+   */
+  qualityOffered?: boolean
+  /**
+   * The size the video is rendered at before it is upscaled to `resolution`.
+   * Only when {@link quality} is `"economy"`.
+   */
+  engineResolution?: Exclude<VideoRemakeResolution, "4k">
 }
 
 /** `VideoRemakeEstimate.firstRemakeOffer` / `TrendEstimate.firstRemakeOffer`. */
@@ -1272,6 +1333,18 @@ export interface VideoRemakeStyleChoice {
    * server: treat it as `{}`.
    */
   resolutions?: Partial<Record<VideoRemakeEngineChoice, VideoRemakeResolution[]>>
+  /**
+   * Per engine choice, the delivered sizes where a run has a Quality choice
+   * here ({@link VideoRemakeParams.quality}), smallest first: e.g.
+   * `{ "nodaro-prism": ["720p", "1080p"], "nodaro-pulse": ["1080p"] }`. Show
+   * the Quality control for exactly these (an estimate's `qualityOffered`
+   * then says whether a given request has it). An engine choice left out has
+   * none. `{}`, or absent from an older server: no Quality control. `"4k"` is
+   * listed only for an engine choice that renders 4K itself here; where
+   * {@link resolutions} offers 4K and this does not list it, 4K is rendered
+   * at 1080p and upscaled (Full is not available at 4K for that choice).
+   */
+  quality?: Partial<Record<VideoRemakeEngineChoice, VideoRemakeResolution[]>>
   /**
    * Whether a run, its estimate and {@link VideoRemakeResource.planRoles}
    * take a part of the clip here ({@link VideoRemakeParams.portionStart} and
