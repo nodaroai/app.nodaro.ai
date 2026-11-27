@@ -137,6 +137,17 @@ export const LTX_2_5_PRO_IMAGE_TO_VIDEO_MODEL = "ltx/2-5-pro-image-to-video"
  *  back to `ltx-2.5-fast` by an alias. */
 export const LTX_2_5_FAST_AUDIO_TO_VIDEO_MODEL = "ltx/2-5-fast-audio-to-video"
 
+/** MAGI-2's three KIE task models under ONE Nodaro id (`magi-2`): the image-to-
+ *  video config carries the first, the text-to-video config the second, and the
+ *  request builder (magi-2.ts) names the one a run uses — the reference model
+ *  whenever a reference image, video or audio clip is wired. Exported so every
+ *  reverse map of KIE ids (the admin credit audit) resolves them back to
+ *  `magi-2`. Docs: docs.kie.ai MAGI-2 text-to-video, image-to-video and
+ *  reference-to-video (read 2026-11-26). */
+export const MAGI_2_TEXT_TO_VIDEO_MODEL = "magi-2/text-to-video"
+export const MAGI_2_IMAGE_TO_VIDEO_MODEL = "magi-2/image-to-video"
+export const MAGI_2_REFERENCE_TO_VIDEO_MODEL = "magi-2/reference-to-video"
+
 /** PixVerse V6's extend endpoint: any clip by `video_url`, returned whole with
  *  the new seconds joined on. No routing config of its own — pixverse-extend.ts
  *  sends it directly — so no generation menu offers it (its KIE_SPECIAL_MODELS
@@ -1742,6 +1753,30 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
     allowedDurations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
   },
 
+  // MAGI-2 — ONE Nodaro id over three KIE task models, registered in BOTH maps
+  // under that id: this image-to-video config serves a run with frames, the
+  // KIE_TEXT_TO_VIDEO_MODELS one a run without, and the request builder
+  // (magi-2.ts) swaps to MAGI_2_REFERENCE_TO_VIDEO_MODEL whenever a reference is
+  // wired. Dispatched through the bespoke `runMagi2` in video.ts: every body is
+  // an explicit allow-list with an INTEGER duration, so the generic builder
+  // never runs and `extraParams` is DECLARATIVE ONLY (the `generate_audio`
+  // cross-check in video-audio-capability.test.ts). 4-30s, 1080p only, seed
+  // 0-2147483647, `generate_audio` (default true, the same price). KIE bills
+  // 17.6 cr/s on all three task models. `credits`/`cost` are the default tier
+  // (5s @1080p) for audit logging only; the runner reports each run's cost.
+  // No content-filter parameter in any of the three schemas (no safetyLevers).
+  "magi-2": {
+    model: MAGI_2_IMAGE_TO_VIDEO_MODEL,
+    credits: 88,              // KIE: 17.6 cr/s × 5 (5s @1080p)
+    cost: 0.44,
+    imageParam: "first_frame_url",
+    acceptsResolution: true,  // `resolution` 1080p (every MAGI-2 schema; the only value)
+    supportsEndFrame: true,
+    endFrameParam: "last_frame_url",
+    extraParams: { generate_audio: true },
+    allowedDurations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30],
+  },
+
   // Kling 4.0 — two KIE endpoints, two Nodaro ids, each registered in BOTH
   // maps (each endpoint also runs with no image, like wan-3). Dispatched
   // through the bespoke `runKling4` in video.ts (bodies built by kling4.ts):
@@ -2238,6 +2273,18 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
     cost: 1.02,
     acceptsResolution: true,
     allowedDurations: [6, 8, 10],
+  },
+
+  // MAGI-2 — the t2v twin of the i2v entry (same id, same bespoke runMagi2), on
+  // KIE's text-to-video task model; the builder swaps to the reference model
+  // when references are wired. Same rate on every task model.
+  "magi-2": {
+    model: MAGI_2_TEXT_TO_VIDEO_MODEL,
+    credits: 88,              // KIE: 17.6 cr/s × 5 (5s @1080p)
+    cost: 0.44,
+    acceptsResolution: true,
+    extraParams: { generate_audio: true },
+    allowedDurations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30],
   },
 
   // Wan 3.0 Prime T2V — the high-speed tier (faster, higher per-second rate).

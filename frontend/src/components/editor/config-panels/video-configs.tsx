@@ -68,7 +68,7 @@ import { motionTransferShownSize, motionTransferSizes, motionTransferSnap } from
 import { TOPAZ_VIDEO_RESOLUTION_LABELS, VIDEO_UPSCALE_RESOLUTION_LABELS } from "@/lib/topaz-video-labels"
 import { nodeStartFrameOnlyProblem, startFrameOnlyText } from "@/lib/video-start-frame-only"
 import { nodaroTransparentRunsHere, nodaroVideoUpscaleShownMode, topazVideoQuotedTarget } from "@/lib/video-utility-estimate"
-import { isSeedance2Provider, isSeedanceVideoEditProvider, isMinimaxH3Provider, isGeminiOmniProvider, isWan3Provider, isViduQ4Provider, isKling4Provider, isKling4FlashProvider, kling4KeyframeFrameCap, isGrokVideo15Provider, isPixverseV6MaxProvider, isLtx25Provider, videoTakesHdr, videoKeyframesMiddleCap, VIDEO_REF_LIMITS_BY_PROVIDER, defaultVideoAspectRatio, maxSegmentSecFor, supportsExtendRender, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, getMaxVideoPromptChars, getMaxNegativePromptChars, GVP_ANCHOR_CHOICES, type GvpAnchorChoice } from "@nodaro/shared/models"
+import { isSeedance2Provider, isSeedanceVideoEditProvider, isMinimaxH3Provider, isGeminiOmniProvider, isWan3Provider, isViduQ4Provider, isMagi2Provider, isKling4Provider, isKling4FlashProvider, kling4KeyframeFrameCap, isGrokVideo15Provider, isPixverseV6MaxProvider, isLtx25Provider, videoTakesHdr, videoKeyframesMiddleCap, VIDEO_REF_LIMITS_BY_PROVIDER, defaultVideoAspectRatio, maxSegmentSecFor, supportsExtendRender, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, getMaxVideoPromptChars, getMaxNegativePromptChars, GVP_ANCHOR_CHOICES, type GvpAnchorChoice } from "@nodaro/shared/models"
 import { gvpAnchorChoicesFor } from "@nodaro/render-rules"
 import { videoToVideoProviderOf, videoSourceTrimMaxSec, extendHasSoundSwitch, isCatalogExtendProvider, isGrokExtendProvider, isPixverseExtendProvider, pricedOutputDurationSec, snapToNearestDuration, GROK_EXTEND_PROVIDER, type CatalogExtendProvider } from "@nodaro/shared/models"
 import { VIDEO_AUDIT_BUCKET_CREDITS, catalogExtendCreditId, geminiOmniExtendQuoteCreditId, grokExtendCreditId, grokExtendSeconds, grokExtendWiredSourceResolution, ltxExtendDurationSec, pixverseExtendQuality, drivingAudioMaxSec, drivingAudioMinSec, drivingAudioOf, isDrivingAudioRun } from "@nodaro/shared/credits"
@@ -137,6 +137,7 @@ import { EXTEND_VIDEO_ROW_LOCK, lockedVideoDuration, lockedVideoModel, lockedVid
 import { LockableSelectItem } from "./lockable-select-item"
 import { PixverseV6MaxFields, type PixverseV6MaxFieldData } from "./pixverse-v6-max-fields"
 import { Ltx25Fields, ltx25LengthSnap, ltx25OfferedDurations, type Ltx25FieldData } from "./ltx-2-5-fields"
+import { Magi2Fields, type Magi2FieldData } from "./magi-2-fields"
 import { useSnippetPool } from "@/hooks/queries/use-prompt-snippets-queries"
 import { NsfwFilterCheckbox } from "./nsfw-filter-checkbox"
 
@@ -463,6 +464,13 @@ function StartFrameOnlyResolutionNote({ provider, data, hasEndFrame, inBetweenFr
   )
 }
 
+/** Every handle id that carries a reference (image, video or audio) into an
+ * image-to-video run: the ids the input resolver reads as references. */
+const MAGI_2_I2V_REFERENCE_HANDLES: ReadonlySet<string> = new Set([
+  "references", "reference-videos", "reference-audio",
+  "imageReferences", "videoReferences", "audioReferences",
+])
+
 function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, onUpdateNode, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<ImageToVideoData> & { nodeId?: string }) {
   // The free-credit video limits: what the server would refuse is shown locked, with why.
   const freeVideoLimits = useFreeVideoLimits()
@@ -672,7 +680,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
           frame into the reference pool exactly like Seedance 2 / MiniMax H3
           and needs the same preview; `limits` keeps the drop count on the
           provider's own image cap (wan-3 = 10, not Seedance's 9). */}
-      {(isSeedance2Provider(currentI2VProvider) || isMinimaxH3Provider(currentI2VProvider) || isWan3Provider(currentI2VProvider) || isViduQ4Provider(currentI2VProvider)) && (() => {
+      {(isSeedance2Provider(currentI2VProvider) || isMinimaxH3Provider(currentI2VProvider) || isWan3Provider(currentI2VProvider) || isViduQ4Provider(currentI2VProvider) || isMagi2Provider(currentI2VProvider)) && (() => {
         const modeLimits = { ...SEEDANCE_2_REF_LIMITS, ...(VIDEO_REF_LIMITS_BY_PROVIDER[currentI2VProvider] ?? {}) }
         const s2 = resolveSeedance2Inputs({
           firstFrameUrl: connectedImages.some((img) => img.targetHandle !== "endFrame") ? "first" : undefined,
@@ -1381,6 +1389,28 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
           onMapField={onMapField}
         />
       )}
+
+      {/* MAGI-2 — the aspect ratio (reference runs only: a frames-only run keeps
+          the first frame's shape), the sound switch and the seed. A reference
+          of any kind makes it a reference run, so a wired video or audio
+          reference shows the aspect ratio like a wired image does. */}
+      {isMagi2Provider(currentI2VProvider) && (() => {
+        const anyReference = sources.some((s) => MAGI_2_I2V_REFERENCE_HANDLES.has(s.targetHandle ?? ""))
+        return (
+          <Magi2Fields
+            provider={currentI2VProvider}
+            data={data as unknown as Magi2FieldData}
+            onUpdate={(u) => onUpdate(u as Partial<ImageToVideoData>)}
+            showAspectRatio={anyReference}
+            unsetFollowsFrame={anyReference && connectedImages.length > 0}
+            showReferenceLimits={anyReference}
+            idPrefix="i2v"
+            sources={sources}
+            fieldMappings={fieldMappings}
+            onMapField={onMapField}
+          />
+        )
+      })()}
 
       {(data.provider === "wan-i2v" || data.provider === "wan-turbo") && (
         <div>
@@ -3010,6 +3040,22 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
         />
       )}
 
+      {/* MAGI-2 — the sound switch and the seed; its six aspect ratios render
+          in the panel's own selector below. */}
+      {isMagi2Provider(currentProvider) && (
+        <Magi2Fields
+          provider={currentProvider}
+          data={data as unknown as Magi2FieldData}
+          onUpdate={(u) => onUpdate(u as Partial<TextToVideoData>)}
+          showAspectRatio={false}
+          showReferenceLimits={false}
+          idPrefix="t2v"
+          sources={sources}
+          fieldMappings={fieldMappings}
+          onMapField={onMapField}
+        />
+      )}
+
       {isMinimaxH3 && (
         <>
           {/* Two-rate resolution lever (2K default / 768P cheaper) — catalog-
@@ -3090,8 +3136,8 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
           no adaptive member — the KIE layer coerces adaptive → 16:9 there.) */}
       <MappableField field="aspectRatio" label={t("field.aspectRatio")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <AspectRatioSelector
-          options={isSeedance2 ? SEEDANCE_2_VIDEO_RATIOS : isMinimaxH3 || isPixverseV6MaxProvider(currentProvider) || isLtx25T2v ? getAspectRatiosForVideoModel(currentProvider) : VIDEO_RATIOS}
-          value={data.aspectRatio || (isSeedance2 || isMinimaxH3 || isPixverseV6MaxProvider(currentProvider) || isLtx25T2v ? defaultVideoAspectRatio(currentProvider) : undefined)}
+          options={isSeedance2 ? SEEDANCE_2_VIDEO_RATIOS : isMinimaxH3 || isPixverseV6MaxProvider(currentProvider) || isLtx25T2v || isMagi2Provider(currentProvider) ? getAspectRatiosForVideoModel(currentProvider) : VIDEO_RATIOS}
+          value={data.aspectRatio || (isSeedance2 || isMinimaxH3 || isPixverseV6MaxProvider(currentProvider) || isLtx25T2v || isMagi2Provider(currentProvider) ? defaultVideoAspectRatio(currentProvider) : undefined)}
           onValueChange={(v) => onUpdate({ aspectRatio: v as TextToVideoData["aspectRatio"] })}
         />
       </MappableField>
@@ -3226,6 +3272,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
   const isGeminiOmni = isGeminiOmniProvider(currentProvider)
   const isWan3 = isWan3Provider(currentProvider)
   const isViduQ4 = isViduQ4Provider(currentProvider)
+  const isMagi2 = isMagi2Provider(currentProvider)
   const isKling4 = isKling4Provider(currentProvider)
   // Kling 4.0 Flash shares the Kling 4.0 block below (720p only, no frames
   // past the start, no 1080p) — never a member of the Kling 4.0 family set.
@@ -3474,7 +3521,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
           so the drop count uses the PROVIDER's image cap (wan-3 = 10) instead
           of the Seedance default (9). Mirror of the indicator in
           ImageToVideoConfigImpl. */}
-      {(isSeedance2 || isMinimaxH3 || isWan3 || isViduQ4) && (() => {
+      {(isSeedance2 || isMinimaxH3 || isWan3 || isViduQ4 || isMagi2) && (() => {
         const modeLimits = { ...SEEDANCE_2_REF_LIMITS, ...(refCaps ?? {}) }
         const s2 = resolveSeedance2Inputs({
           firstFrameUrl: connectedImages.some((img) => img.targetHandle !== "endFrame") ? "first" : undefined,
@@ -4373,6 +4420,27 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
           onMapField={onMapField}
         />
       )}
+
+      {/* MAGI-2 — the aspect ratio (text and reference runs: hidden while only
+          frames are wired, since the first frame sets the shape), the sound
+          switch and the seed. 1080p only, so no resolution choice. */}
+      {isMagi2 && (() => {
+        const anyReference = connectedRefImages.length > 0 || connectedRefVideos.length > 0 || connectedRefAudio.length > 0
+        return (
+          <Magi2Fields
+            provider={currentProvider}
+            data={data as unknown as Magi2FieldData}
+            onUpdate={(u) => onUpdate(u as Partial<DataView>)}
+            showAspectRatio={connectedImages.length === 0 || anyReference}
+            unsetFollowsFrame={anyReference && connectedImages.length > 0}
+            showReferenceLimits={anyReference}
+            idPrefix="gv"
+            sources={sources}
+            fieldMappings={fieldMappings}
+            onMapField={onMapField}
+          />
+        )
+      })()}
 
       {(currentProvider === "wan-i2v" || currentProvider === "wan-turbo") && (
         <div>

@@ -18,6 +18,7 @@ import {
   KIE_AUDIO_ISOLATION_MODELS, KIE_STT_MODELS,
   KIE_SPEECH_TO_VIDEO_MODELS, KIE_SPECIAL_MODELS, LTX_2_5_FAST_AUDIO_TO_VIDEO_MODEL,
   VIDU_Q4_REFERENCE_MODEL,
+  MAGI_2_REFERENCE_TO_VIDEO_MODEL,
   KLING_4_FLASH_KEYFRAME_MODEL,
 } from "../../providers/kie/models.js"
 import type { KieModelConfig } from "../../providers/kie/models.js"
@@ -210,6 +211,10 @@ export function buildModelMap(): Map<string, ModelMapping[]> {
   // Vidu Q4: one key over two KIE endpoints — the reference-to-video id is not
   // any config's `model`, so map it back to the key that bills it.
   addAlias(VIDU_Q4_REFERENCE_MODEL, "vidu-q4", "i2v")
+
+  // MAGI-2: one key over three KIE task models — the reference-to-video id is
+  // not any config's `model` (the image and text ones are), so map it back too.
+  addAlias(MAGI_2_REFERENCE_TO_VIDEO_MODEL, "magi-2", "i2v")
 
   // Kling 4.0 Flash: one key over two KIE endpoints — the keyframe endpoint is
   // not any config's `model` (the reference endpoint is), so map it back too.

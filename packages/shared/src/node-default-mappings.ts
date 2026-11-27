@@ -229,6 +229,8 @@ const QUALITY_MAP: Record<string, QualityMapping> = {
   "kling-4-keyframes":   { field: "resolution", values: { low: "720p", mid: "720p", high: "1080p" } },
   // Kling 4.0 Flash — 720p only, so every level lands on it.
   "kling-4-flash":       { field: "resolution", values: { low: "720p", mid: "720p", high: "720p" } },
+  // MAGI-2 — 1080p only, so every level lands on it.
+  "magi-2":              { field: "resolution", values: { low: "1080p", mid: "1080p", high: "1080p" } },
   "wan-2.7-i2v":         { field: "resolution", values: { low: "720p", mid: "1080p", high: "1080p" } },
   "wan-2.7-t2v":         { field: "resolution", values: { low: "720p", mid: "1080p", high: "1080p" } },
   "happyhorse":          { field: "resolution", values: { low: "720p", mid: "1080p", high: "1080p" } },

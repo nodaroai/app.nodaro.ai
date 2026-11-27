@@ -157,6 +157,7 @@ Base URL: `https://api.kie.ai`, Auth: `Bearer KIE_API_KEY`
 | `wan-3` | `wan/3-0-video` (bespoke `runWan3`) | [wan 3.0](https://docs.kie.ai/market/wan/3-0-video.md) |
 | `wan-3-prime` | `wan/3-0-video-prime` (bespoke `runWan3`) | [wan 3.0 prime](https://docs.kie.ai/market/wan/3-0-video-prime.md) |
 | `vidu-q4` | `vidu-q4/image-to-video` (bespoke `runViduQ4`; swaps to `vidu-q4/reference-to-video` — `VIDU_Q4_REFERENCE_MODEL` — when a reference image or audio is wired). No t2v entry: KIE has no Q4 text-to-video. | [vidu q4 i2v](https://docs.kie.ai/market/vidu-q4/image-to-video.md) / [r2v](https://docs.kie.ai/market/vidu-q4/reference-to-video.md) |
+| `magi-2` | `magi-2/image-to-video` (bespoke `runMagi2`, body from `magi-2.ts`; a run with no frame takes the t2v config's `magi-2/text-to-video`, and any reference swaps to `magi-2/reference-to-video` — `MAGI_2_REFERENCE_TO_VIDEO_MODEL`) | MAGI-2 image-to-video / reference-to-video (docs.kie.ai, read 2026-11-26) |
 | `kling-4` | `kling-4.0/reference-to-video` (bespoke `runKling4`, body from `kling4.ts`) | [kling 4.0 reference](https://docs.kie.ai/market/kling/v4-reference-to-video.md) |
 | `kling-4-keyframes` | `kling-4.0/keyframe-to-video` (bespoke `runKling4`) | [kling 4.0 keyframe](https://docs.kie.ai/market/kling/v4-keyframe-to-video.md) |
 | `kling-4-flash` | `kling-4.0/flash-reference-to-video` (bespoke `runKling4`; swaps to `kling-4.0/flash-keyframe-to-video` — `KLING_4_FLASH_KEYFRAME_MODEL` — for a start frame alone, see `kling4FlashEndpoint`) | [flash reference](https://docs.kie.ai/market/kling/v4-flash-reference-to-video.md) / [flash keyframe](https://docs.kie.ai/market/kling/v4-flash-keyframe-to-video.md) |
@@ -192,6 +193,7 @@ Base URL: `https://api.kie.ai`, Auth: `Bearer KIE_API_KEY`
 | `seedance-2-5-flash` | `bytedance/seedance-2-5-flash` (ONE KIE id serves every mode) | [seedance 2.5 flash](https://docs.kie.ai/market/bytedance/seedance-2-5-flash.md) |
 | `wan-3` | `wan/3-0-video` (ONE KIE id serves both modes) | [wan 3.0](https://docs.kie.ai/market/wan/3-0-video.md) |
 | `wan-3-prime` | `wan/3-0-video-prime` (ONE KIE id serves both modes) | [wan 3.0 prime](https://docs.kie.ai/market/wan/3-0-video-prime.md) |
+| `magi-2` | `magi-2/text-to-video` (bespoke `runMagi2`; references swap to `magi-2/reference-to-video`, the i2v config carries the frame task model) | MAGI-2 text-to-video (docs.kie.ai, read 2026-11-26) |
 | `kling-4` | `kling-4.0/reference-to-video` (ONE KIE id serves both modes) | [kling 4.0 reference](https://docs.kie.ai/market/kling/v4-reference-to-video.md) |
 | `kling-4-keyframes` | `kling-4.0/keyframe-to-video` (ONE KIE id serves both modes) | [kling 4.0 keyframe](https://docs.kie.ai/market/kling/v4-keyframe-to-video.md) |
 | `kling-4-flash` | `kling-4.0/flash-reference-to-video` (text-only runs; the keyframe endpoint needs a start frame) | [flash reference](https://docs.kie.ai/market/kling/v4-flash-reference-to-video.md) |
@@ -543,6 +545,57 @@ runs) and it declares no `end-frame`.
 - Pricing is ONE per-second `vidu-q4:<N>s:<res>` ladder for both endpoints and
   for audio on/off (no `-ref`, no `:audio`). The 4k rows are closed to the free
   tier (`blockedModels`, derived from the duration tiers).
+
+### MAGI-2 wire notes (`magi-2`, bespoke `runMagi2`)
+
+ONE Nodaro id (decided 2026-11-26) over three KIE task models on `createTask`,
+registered in BOTH model maps under that id. The pure `buildMagi2Request`
+(`magi-2.ts`) picks the task model and builds an allow-listed body
+(`MAGI_2_*_FIELDS`, held by its test):
+
+- **Routing (the Wan 3.0 / Vidu Q4 rule):** inputs go through
+  `resolveSeedance2Inputs` at 10 / 5 / 5. Any reference image, video or audio
+  → `magi-2/reference-to-video`: wired frames join `reference_image_urls`
+  after the caller's own (ordinals unchanged) and are named in the prompt; the
+  frame line is fitted inside the 15,000-character cap. A reference run whose
+  request names no aspect ratio follows its wired frame (the runner measures
+  the frame, `magi2FrameAspect`; unmeasurable → 16:9; decided 2026-11-27). A prompt with only
+  reference audio is a valid request. A first frame and no references →
+  `magi-2/image-to-video` (`first_frame_url`, optional `last_frame_url`; NO
+  `aspect_ratio` — the output follows the first frame). Nothing wired →
+  `magi-2/text-to-video`. A lone last frame (no first frame, no references)
+  becomes the one reference image with a closing-frame line on the routes
+  (`videoProviderFoldsLoneEndFrame`); a workflow run moves it into the start
+  slot first (the DAG's lone-end-frame swap), so there it runs image-to-video.
+- **Body:** `prompt` (an empty one is sent as the platform's default motion
+  text; on the frame and text task models `@image_N` mentions lose their `@`),
+  INTEGER `duration` 4-30 (default 5), `resolution` always `1080p`,
+  `aspect_ratio` (text and reference: the catalog's six, off-list snapped,
+  16:9 for no shape), `generate_audio` always sent (true unless the request
+  turns sound off — `applyVideoAudioToggle`, `field: "generateAudio"`), `seed`
+  only a whole number 0-2147483647. Never `negative_prompt` (the catalog's
+  `noNegativePrompt` drops it), `nsfw_checker` or a string seed.
+- **No content-filter parameter** in any of the three schemas, so no
+  `safetyLevers`.
+- **References:** 10 images (JPG / PNG / WEBP, the shared size normalization),
+  5 videos (MP4 / MOV) and 5 audio clips (MP3 / WAV); each video or audio clip
+  2-30 s, all videos together ≤ 30 s and all audio together ≤ 30 s. Counts are
+  refused on the API and MCP before the hold (`requestRefusesOverLimit`; the
+  editor's Run trims, a workflow run keeps the resolver's trim). Video lengths
+  and containers (`VIDEO_REF_VIDEO_DURATION_LIMITS`, `VIDEO_REF_VIDEO_FORMATS`)
+  and audio lengths (`VIDEO_REF_AUDIO_RULES`) are refused before the hold on
+  the routes and in the workflow run. Audio in another format is converted to
+  MP3 at the provider (`reference-audio-convert.ts`); reference videos are sent
+  as they came.
+- **Billing:** KIE 17.6 cr/s on all three task models, sound on or off,
+  references free. One `magi-2:<N>s:1080p` ladder; the bare id = 5 s. The
+  runner reports `magi2CostUsd(seconds)` as the provider cost and writes a
+  credit-audit row. Poll budget: the default video budget
+  (`MAX_POLL_ATTEMPTS_VIDEO`); a 30 s render's time is not measured yet.
+- **Not measured yet** (staging): the output's codec and frame rate, render
+  time at 30 s, whether a reference video's own sound is used, the real size
+  at 21:9 and 3:4, and whether the model follows `@image_N` or plain-word
+  reference names better.
 
 ### Kling 4.0 wire notes (`kling-4` / `kling-4-keyframes`, bespoke `runKling4`)
 

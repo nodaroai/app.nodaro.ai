@@ -73,6 +73,13 @@ describe("free-credit video locks in the editor", () => {
     expect(openVideoResolution(LIMITS, "seedance-2-5-flash", ["720p", "480p", "720p"])).toBe("480p")
   })
 
+  it("MAGI-2 is open at 4 s / 1080p (its only resolution), longer clips locked", () => {
+    expect(lockedVideoModel(LIMITS, "magi-2")).toBeNull()
+    expect(lockedVideoDuration(LIMITS, "magi-2", 4)).toBeNull()
+    expect(lockedVideoDuration(LIMITS, "magi-2", 5)).not.toBeNull()
+    expect(lockedVideoResolution(LIMITS, "magi-2", "1080p")).toBeNull()
+  })
+
   it("PixVerse V6 Max is open within the limits: 360p for 1-4 s, every other quality and length locked", () => {
     expect(lockedVideoModel(LIMITS, "pixverse-v6-max")).toBeNull()
     for (const d of [1, 2, 3, 4]) expect(lockedVideoDuration(LIMITS, "pixverse-v6-max", d), `${d}s`).toBeNull()

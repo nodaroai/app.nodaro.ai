@@ -69,6 +69,7 @@ describe("GVP_SUPPORTED_PROVIDERS", () => {
       "wan-3-prime",
       "happyhorse-ref2v",
       "vidu-q4",
+      "magi-2",
       // Admitted by its explicit catalog opt-in, `gvpWithoutReferences` (decided
       // 2026-11-12): a start frame and no reference images.
       "pixverse-v6-max",
@@ -249,6 +250,7 @@ describe("GVP_END_FRAME_PROVIDERS", () => {
       "gemini-omni-flash-1-2",
       "wan-3",
       "wan-3-prime",
+      "magi-2",
     ])
   })
 

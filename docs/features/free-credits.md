@@ -142,7 +142,7 @@ Until an account buys anything, its video runs within these limits:
   `gemini-omni-flash-1-2-extend`, included).
 - **Every other video model:** clips of **up to 4 seconds**, at the model's
   **lowest resolution** (for example 480p on Seedance 2 Fast, 720p on VEO 3.1
-  Lite). A model whose shortest clip is longer than 4 seconds is not
+  Lite, 1080p on MAGI-2, its only resolution). A model whose shortest clip is longer than 4 seconds is not
   available, and an "Auto" length is not accepted. Name the resolution: a
   request that leaves it out is refused, because the model would render its
   own default.
