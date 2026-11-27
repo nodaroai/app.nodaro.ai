@@ -39,8 +39,8 @@ async function appWithCors() {
 describe("editor-project routes across origins", () => {
   it("a preflight for PATCH /:id/file with the save headers succeeds from an allowed origin", async () => {
     const app = await appWithCors()
-    const headers = ["authorization", "content-type", "x-holder", "x-content-hash", "x-base-hash", "x-cut-version"]
-    expect([...EDITOR_PROJECT_REQUEST_HEADERS].sort()).toEqual(["x-base-hash", "x-content-hash", "x-cut-version", "x-holder"])
+    const headers = ["authorization", "content-type", "x-holder", "x-content-hash", "x-base-hash", "x-cut-version", "x-release"]
+    expect([...EDITOR_PROJECT_REQUEST_HEADERS].sort()).toEqual(["x-base-hash", "x-content-hash", "x-cut-version", "x-holder", "x-release"])
     const res = await app.inject({
       method: "OPTIONS",
       url: `/v1/editor-projects/${"0".repeat(8)}-0000-4000-8000-${"0".repeat(12)}/file`,

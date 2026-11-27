@@ -39,11 +39,11 @@ import { CUT_RATE_LIMIT, CUT_WINDOW_MS, editorProjectVersionRoutes } from "./edi
  *          (versions newest first: { number, label, author, created_at, size_bytes, kind })
  *   PATCH  /v1/editor-projects/:id        { name }                   → { id, name }
  *   DELETE /v1/editor-projects/:id                                   → { deleted: true } (its files and its versions' files go too)
- *   POST   /v1/editor-projects/:id/claim  { holder, takeover? }      → { held: true } | 409 held_elsewhere
+ *   POST   /v1/editor-projects/:id/claim  { holder, takeover? }      → { held: true, release_on_save: true } | 409 held_elsewhere
  *   POST   /v1/editor-projects/:id/release { holder }                → { released }
  *   GET    /v1/editor-projects/:id/file   ?version (a number)        → the saved content's gzip, or version n's whole content
- *   PUT    /v1/editor-projects/:id/file   (editor-projects-file.ts)  → { revision, saved, version? }
- *   PATCH  /v1/editor-projects/:id/file   (editor-projects-file.ts)  → { revision, saved, version? }
+ *   PUT    /v1/editor-projects/:id/file   (editor-projects-file.ts)  → { revision, saved, version?, released? }
+ *   PATCH  /v1/editor-projects/:id/file   (editor-projects-file.ts)  → { revision, saved, version?, released? }
  *   POST   /v1/editor-projects/:id/versions, /:id/versions/:n/restore (editor-projects-versions.ts)
  *
  * The one-tab claim: a tab claims the project before it edits; a claim not
@@ -195,7 +195,9 @@ export async function editorProjectRoutes(app: FastifyInstance) {
     if (!body.success) return sendValidationError(reply, body.error)
     const held = await claimProject(userId, id, holderOf(body.data.holder), body.data.takeover === true)
     if (!held) throw refuse(409, "held_elsewhere")
-    return { held: true }
+    // `release_on_save`: this platform's saves take `x-release` (editor-projects-file.ts). A page sends that header only
+    // once a claim has said so: to a platform without it, the preflight would refuse the header and the save with it.
+    return { held: true, release_on_save: true }
   }))
 
   app.post("/v1/editor-projects/:id/release", write, route("Failed to release project", async (req, reply, userId) => {

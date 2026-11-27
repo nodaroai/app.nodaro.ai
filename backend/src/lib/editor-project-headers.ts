@@ -12,11 +12,13 @@ export const HOLDER_HEADER = "x-holder"
 export const CONTENT_HASH_HEADER = "x-content-hash"
 export const BASE_HASH_HEADER = "x-base-hash"
 export const CUT_VERSION_HEADER = "x-cut-version"
+/** A save's `x-release: 1`: give the claim up once this save (and its version, when asked) is stored. */
+export const RELEASE_HEADER = "x-release"
 export const REVISION_HEADER = "x-revision"
 export const VERSION_HEADER = "x-version"
 
 /** Request headers a cross-origin editor sends to the file routes. */
-export const EDITOR_PROJECT_REQUEST_HEADERS = [HOLDER_HEADER, CONTENT_HASH_HEADER, BASE_HASH_HEADER, CUT_VERSION_HEADER] as const
+export const EDITOR_PROJECT_REQUEST_HEADERS = [HOLDER_HEADER, CONTENT_HASH_HEADER, BASE_HASH_HEADER, CUT_VERSION_HEADER, RELEASE_HEADER] as const
 
 /** Response headers a cross-origin editor must be able to read. */
 export const EDITOR_PROJECT_EXPOSED_HEADERS = [REVISION_HEADER, VERSION_HEADER] as const
