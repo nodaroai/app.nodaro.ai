@@ -1,16 +1,17 @@
 import type { FastifyBaseLogger, FastifyError, FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
+import { gunzipSync } from "node:zlib"
 import { z } from "zod"
 import { requireAppScope } from "../../lib/scope-prehandler.js"
 import { applyUploadPolicies } from "../../lib/upload-policy.js"
 import type { EditorProjectsStore } from "../lib/editor-projects/bucket.js"
 import { CONTENT_HASH_PATTERN } from "../lib/editor-projects/canonical.js"
 import { failureOf, refuse, refusalOf, sendEditorProjectError } from "../lib/editor-projects/errors.js"
-import { BASE_HASH_HEADER, CONTENT_HASH_HEADER, CUT_VERSION_HEADER, HOLDER_HEADER } from "../../lib/editor-project-headers.js"
+import { BASE_HASH_HEADER, CONTENT_HASH_HEADER, CUT_VERSION_HEADER, HOLDER_HEADER, RELEASE_HEADER } from "../../lib/editor-project-headers.js"
 import type { EditorProjectGates } from "../lib/editor-projects/gates.js"
 import { canonicalContent, patchedContent } from "../lib/editor-projects/heavy.js"
 import { requireRoom, requireRoomFor } from "../lib/editor-projects/storage-ceiling.js"
 import { HOLDER_PATTERN, callerOf, projectIdOf } from "../lib/editor-projects/request.js"
-import { readProject, saveProject, type ProjectRow } from "../lib/editor-projects/rows.js"
+import { readProject, releaseProject, saveProject, type ProjectRow } from "../lib/editor-projects/rows.js"
 import {
   PATCH_BODY_MAX_BYTES,
   PROJECT_BODY_MAX_BYTES,
@@ -32,7 +33,12 @@ import { OWN_AUTHOR } from "../lib/editor-projects/versions.js"
  * answers 200 (`saved: false` included), a version of the saved content is
  * cut with that label, author "you" (ee/lib/editor-projects/version-store.ts).
  * Both answer `{ revision, saved }`, plus `version` when one was cut; a cut
- * that fails is logged and never fails the save.
+ * that fails is logged and never fails the save. Both may carry `x-release: 1`
+ * (a page closing): after the save answers 200 and its version is cut, the
+ * claim is given up for that holder, and the answer carries `released`; a
+ * refused save releases nothing. Such a save waits up to
+ * `RELEASE_TURN_WAIT_MS` for the user's heavy turn instead of being refused
+ * `busy`, since nobody is left to send it again.
  *
  * The order of work is what makes a refusal store nothing, and what keeps a
  * hostile request cheap:
@@ -52,7 +58,15 @@ import { OWN_AUTHOR } from "../lib/editor-projects/versions.js"
  *      PATCH the base, under its row lock) and answers the key it replaced,
  *      which is then deleted. A save it refuses, or one that lost to the same
  *      content, deletes the file it wrote. The row always names a file that
- *      exists.
+ *      exists;
+ *   6. the version `x-cut-version` asks for, then the release `x-release`
+ *      asks for (`releaseAfterSave`).
+ * A PATCH that changes nothing (an empty patch whose `x-base-hash` and
+ * `x-content-hash` are both the saved hash: a closing page's carrier for its
+ * version cut and release) stops after step 2 (`unchangedPatch`): answered
+ * from the row, in the heavy turn as any save (so its release never lands
+ * beside a save of the user's still running here), without the stored file,
+ * the heavy-work thread or the upload policy, none of which it needs.
  *
  * A PATCH takes only add / remove / replace / test, at most 20,000 of them,
  * and at most 2,000 add / remove on an array index (422 `too_complex`)
@@ -67,6 +81,12 @@ const MAX_CUT_LABEL_CHARS = 120
  * an editor autosaving every few seconds stays far below it. Tunable.
  */
 export const SAVE_RATE_LIMIT = { max: 120, timeWindow: "1 minute" } as const
+
+/**
+ * How long a save carrying `x-release` waits for the user's heavy turn (the
+ * save it follows, still being stored) before it too is 429 `busy`.
+ */
+export const RELEASE_TURN_WAIT_MS = 5_000
 
 /** The save headers, each once (a repeated header arrives as an array and is refused). */
 const saveHeaders = z.object({
@@ -118,6 +138,31 @@ function cutVersionLabel(value: string): string {
 function bodyOf(req: FastifyRequest): Buffer {
   if (!Buffer.isBuffer(req.body)) throw refuse(400, "invalid_gzip")
   return req.body
+}
+
+/**
+ * Whether the save asks to give the claim up once stored (`x-release: 1`). Any
+ * other value, or the header twice, is 400 `validation_error`.
+ */
+function releaseAsked(req: FastifyRequest): boolean {
+  const value = req.headers[RELEASE_HEADER]
+  if (value === undefined) return false
+  if (value === "1") return true
+  throw refuse(400, "validation_error")
+}
+
+/** The largest gzip an empty patch is looked for in: `[]` gzips to about 20 bytes. */
+const EMPTY_PATCH_MAX_GZ_BYTES = 64
+
+/** Whether `body` is the gzip of an empty JSON Patch (`[]`): a tiny body only, inflated to at most a few bytes. */
+function isEmptyPatch(body: Buffer): boolean {
+  if (body.length > EMPTY_PATCH_MAX_GZ_BYTES) return false
+  try {
+    const ops: unknown = JSON.parse(gunzipSync(body, { maxOutputLength: 16 }).toString("utf8"))
+    return Array.isArray(ops) && ops.length === 0
+  } catch {
+    return false
+  }
 }
 
 /** The caller's live project that this tab holds (404 / 409 otherwise). */
@@ -282,12 +327,49 @@ async function cutAfterSave(
   }
 }
 
+/**
+ * `x-release`: the claim given up once the save stood (200, `saved: false`
+ * included) and its version, when asked, was cut, so a page closing sends ONE
+ * request and the platform orders its two halves (a release sent beside the
+ * save could land first and refuse it `not_holder`). Only here, after the
+ * save: a refused save throws before it and keeps the claim, which then goes
+ * stale on its own. `released` is false when this holder no longer held it; a
+ * release that fails is logged by name and never fails the save.
+ */
+async function releaseAfterSave<T extends Saved>(save: SaveRequest, asked: boolean, saved: T): Promise<T & { released?: boolean }> {
+  if (!asked) return saved
+  try {
+    return { ...saved, released: await releaseProject(save.userId, save.projectId, save.holder) }
+  } catch (err) {
+    save.log.warn(failureOf(err), "[editor-projects] the claim a save asked to give up was not released; the save stands")
+    return { ...saved, released: false }
+  }
+}
+
+/**
+ * A PATCH that changes nothing: an empty patch whose base and result are both the hash saved now. It is answered
+ * from the row alone (`saved: false`), its claim refreshed and re-checked under the row lock as any save of content
+ * already saved; the stored file is not read (one missing from storage is what a read of it reports). Run in the heavy
+ * turn (`patchContent`), after the row's base was found to be its hash. Null when it is not that request.
+ */
+async function unchangedPatch(save: SaveRequest, body: Buffer, base: string, row: ProjectRow): Promise<Saved | null> {
+  if (base !== save.hash || !isEmptyPatch(body)) return null
+  if (row.content_hash !== save.hash || !isProjectFileKey(save.userId, save.projectId, row.blob_key)) return null
+  try {
+    const kept = await saveProject({ userId: save.userId, id: save.projectId, holder: save.holder, hash: save.hash, sizeBytes: row.size_bytes ?? 0, blobKey: row.blob_key, base: save.hash })
+    return { revision: kept.revision, saved: false }
+  } catch (err) {
+    if (refusalOf(err)?.code === "base_mismatch") return null
+    throw err
+  }
+}
+
 async function putFile(req: FastifyRequest, userId: string, gates: EditorProjectGates) {
   const store = requireStore(req.log)
   const projectId = projectIdOf(req)
   const { holder, hash, cut } = readHeaders(req, false)
   const save = { userId, projectId, holder, hash, log: req.log }
-  return cutAfterSave(save, store, gates, cut, await putContent(req, save, store))
+  return releaseAfterSave(save, releaseAsked(req), await cutAfterSave(save, store, gates, cut, await putContent(req, save, store)))
 }
 
 async function putContent(req: FastifyRequest, save: SaveRequest, store: EditorProjectsStore): Promise<Saved> {
@@ -309,7 +391,7 @@ async function patchFile(req: FastifyRequest, userId: string, gates: EditorProje
   const projectId = projectIdOf(req)
   const { holder, hash, baseHash, cut } = readHeaders(req, true)
   const save = { userId, projectId, holder, hash, log: req.log }
-  return cutAfterSave(save, store, gates, cut, await patchContent(req, save, store, baseHash as string))
+  return releaseAfterSave(save, releaseAsked(req), await cutAfterSave(save, store, gates, cut, await patchContent(req, save, store, baseHash as string)))
 }
 
 async function patchContent(req: FastifyRequest, save: SaveRequest, store: EditorProjectsStore, base: string): Promise<Saved> {
@@ -317,6 +399,9 @@ async function patchContent(req: FastifyRequest, save: SaveRequest, store: Edito
   const body = bodyOf(req)
   const row = await heldProject(save)
   if (!row.content_hash || row.content_hash !== base) return afterBaseMismatch(save)
+  // Nothing to change (its hash landed while it waited its turn): no file read.
+  const unchanged = await unchangedPatch(save, body, base, row)
+  if (unchanged) return unchanged
   const stored = isProjectFileKey(userId, projectId, row.blob_key) ? await store.read(row.blob_key, PROJECT_TEXT_MAX_BYTES) : null
   if (!stored) {
     // The row may have moved on (its old file replaced) since it was read.
@@ -340,7 +425,8 @@ async function patchContent(req: FastifyRequest, save: SaveRequest, store: Edito
 /**
  * Gzip bodies arrive as a Buffer; an over-limit body is 413 `too_large`. Each
  * save holds the user's heavy turn (`gates`, one heavy request per user at a
- * time on this instance; a second is 429 `busy`).
+ * time on this instance; a second is 429 `busy`), and one carrying `x-release`
+ * waits for it up to `RELEASE_TURN_WAIT_MS` first.
  */
 export async function editorProjectFileRoutes(app: FastifyInstance, opts: { gates: EditorProjectGates }) {
   const { gates } = opts
@@ -354,14 +440,16 @@ export async function editorProjectFileRoutes(app: FastifyInstance, opts: { gate
     async (req: FastifyRequest, reply: FastifyReply) => {
       const userId = callerOf(req, reply)
       if (!userId) return reply
-      let release: (() => void) | null = null
+      let endTurn: (() => void) | null = null
       try {
-        release = gates.heavyTurn(userId)
+        // A closing page's last save (it gives the claim up after it): nobody will send it again, so it waits its turn,
+        // which also keeps its release from landing beside a save of the user's still running here.
+        endTurn = releaseAsked(req) ? await gates.awaitHeavyTurn(userId, RELEASE_TURN_WAIT_MS, Buffer.isBuffer(req.body) ? req.body.length : 0) : gates.heavyTurn(userId)
         return await fn(req, userId, gates)
       } catch (err) {
         return sendEditorProjectError(reply, req, err, failure)
       } finally {
-        release?.()
+        endTurn?.()
       }
     }
 

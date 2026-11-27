@@ -121,24 +121,24 @@ describe("the one-tab claim", () => {
     const claim = (holder: string, takeover?: boolean) =>
       json("POST", `/v1/editor-projects/${p.id}/claim`, { holder, ...(takeover === undefined ? {} : { takeover }) })
 
-    expect((await claim(TAB)).json()).toEqual({ held: true })
+    expect((await claim(TAB)).json()).toEqual({ held: true, release_on_save: true })
     const refused = await claim(TAB2)
     expect(refused.statusCode).toBe(409)
     expect(refused.json()).toEqual({ error: "held_elsewhere" })
     expect(p.holder_id).toBe(TAB)
 
-    expect((await claim(TAB2, true)).json()).toEqual({ held: true })
+    expect((await claim(TAB2, true)).json()).toEqual({ held: true, release_on_save: true })
     expect(p.holder_id).toBe(TAB2)
 
     p.holder_seen_at = new Date(Date.now() - 91_000).toISOString()
-    expect((await claim(TAB)).json()).toEqual({ held: true })
+    expect((await claim(TAB)).json()).toEqual({ held: true, release_on_save: true })
     expect(p.holder_id).toBe(TAB)
 
     // Only the holder releases.
     expect((await json("POST", `/v1/editor-projects/${p.id}/release`, { holder: TAB2 })).json()).toEqual({ released: false })
     expect((await json("POST", `/v1/editor-projects/${p.id}/release`, { holder: TAB })).json()).toEqual({ released: true })
     expect(p.holder_id).toBeNull()
-    expect((await claim(TAB2)).json()).toEqual({ held: true })
+    expect((await claim(TAB2)).json()).toEqual({ held: true, release_on_save: true })
   })
 
   it("refuses a holder that is not 8 to 64 letters, digits, - or _", async () => {
