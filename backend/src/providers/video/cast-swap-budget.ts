@@ -55,6 +55,31 @@
  *    which a run without the step keeps exactly; and on the masked bounds the
  *    flat `CAST_SWAP_PRECISE_UPSCALE_WAIT_MS` (15 min), kept from before the
  *    engine recorded a wait.
+ *
+ * Decided 2026-11-25 and 2026-11-27, a long clip: a source over 30 s (at most
+ * 2 minutes) that the engine runs in parts and joins, behind its switch. The
+ * route records the part plan on the queue payload (`longClip`) and hidden in
+ * the stored input (`__longClip`, read when `longClip` is absent, as
+ * `__faceMasking` is): `{ v: 1, sourceSec, videoSec, fps, byFrame, parts:
+ * [{ startFrame, frames }, …] }`, at least two contiguous parts. Such a job
+ * takes the bound its run shape takes today, plus `CAST_SWAP_LONG_CLIP_MS`:
+ *  - the plan over the whole clip before the parts: the role preparation (one
+ *    prep deadline, the engine's `PREP_WAIT_MS`, 10 min) and the shot list of
+ *    the whole source (one LLM step, `LLM_STEP_WAIT_MS`, 6 min);
+ *  - the parts: they run at once (at most 5 of 29.7 s for 2 minutes), each an
+ *    ordinary run beating for itself, so the slowest part is the bound the run
+ *    shape already takes, never one per part;
+ *  - the join of the takes (`LONG_CLIP_JOIN_MS`, 15 min);
+ *  - the one upscale of the joined take: its wait is the one the route
+ *    recorded from the whole picture's length (`preciseUpscaleWaitMs`, at most
+ *    45 min), already added above; the final fit is in the run shape's bound,
+ *    as for a single run.
+ * The 31 minutes are the engine's own addition to its keep-alive for a long
+ * clip (handler.ts `longMs`), flat up to 2 minutes and 5 parts, so the plan's
+ * length and part count gate the addition and do not scale it. A preview, or
+ * a plan that is not one the engine would make (not an object, another `v`,
+ * fewer than two parts, parts that do not follow on), adds nothing: every
+ * other job keeps its bound exactly.
  */
 
 const MINUTE_MS = 60_000
@@ -143,16 +168,55 @@ function carriedUpscaleWaitMs(data: object): number | undefined {
 /** The step's wait on a masked bound, which always allows for it: the carried wait, else the flat default. */
 const upscaleWaitMs = (data: object): number => carriedUpscaleWaitMs(data) ?? CAST_SWAP_PRECISE_UPSCALE_WAIT_MS
 
-/** The budget of one cast-swap job: the "auto" bound when face masking is
- *  "auto" or the run is a depth reference, then "always" (each plus the
- *  upscale's recorded wait, else its default); otherwise the preview bound
- *  only when `data.preview === true`, else the full-clip bound, either one
- *  plus the upscale's wait only when the run carries that step. */
-export function castSwapJobBudgetMs(data: unknown): number | undefined {
-  if (!data || typeof data !== "object") return CAST_SWAP_FULL_BUDGET_MS
+/** A long clip's plan over the whole source: the role preparation (10 min) and the whole source's shot list (one LLM step, 6 min). */
+const LONG_CLIP_PLAN_MS = 10 * MINUTE_MS + 6 * MINUTE_MS
+
+/** A long clip's join of its parts' takes (the engine's `LONG_CLIP_JOIN_MS`). */
+const LONG_CLIP_JOIN_MS = 15 * MINUTE_MS
+
+/** What a long clip's job adds to its run shape's bound: the plan before the parts and the join after them (31 min). */
+export const CAST_SWAP_LONG_CLIP_MS = LONG_CLIP_PLAN_MS + LONG_CLIP_JOIN_MS
+
+/**
+ * Whether the job carries a long clip's plan (`longClip`, else `__longClip`) the engine would make (its
+ * `parseLongClipPlan`): version 1, positive lengths and rate, and at least two parts, each starting where the
+ * one before it ends. A preview never runs in parts.
+ */
+function carriesLongClip(data: object): boolean {
+  const d = data as { longClip?: unknown; __longClip?: unknown; preview?: unknown }
+  if (d.preview === true) return false
+  const plan = d.longClip !== undefined ? d.longClip : d.__longClip
+  if (!plan || typeof plan !== "object" || Array.isArray(plan)) return false
+  const { v, sourceSec, videoSec, fps, byFrame, parts } = plan as Record<string, unknown>
+  const positive = (n: unknown): boolean => typeof n === "number" && Number.isFinite(n) && n > 0
+  if (v !== 1 || !positive(sourceSec) || !positive(videoSec) || !positive(fps) || typeof byFrame !== "boolean") return false
+  if (!Array.isArray(parts) || parts.length < 2) return false
+  let next = 0
+  for (const part of parts as unknown[]) {
+    if (!part || typeof part !== "object") return false
+    const { startFrame, frames } = part as Record<string, unknown>
+    if (startFrame !== next || typeof frames !== "number" || !Number.isInteger(frames) || frames < 1) return false
+    next += frames
+  }
+  return true
+}
+
+/** The bound of one cast-swap job before a long clip's addition (see `castSwapJobBudgetMs`). */
+function runShapeBudgetMs(data: object): number {
   const mode = faceMaskingMode(data)
   if (mode === "auto" || depthReference(data)) return MASK_AUTO_BASE_MS + upscaleWaitMs(data)
   if (mode === "always") return MASK_ALWAYS_BASE_MS + upscaleWaitMs(data)
   const base = (data as { preview?: unknown }).preview === true ? CAST_SWAP_PREVIEW_BUDGET_MS : CAST_SWAP_FULL_BUDGET_MS
   return base + (carriedUpscaleWaitMs(data) ?? 0)
+}
+
+/** The budget of one cast-swap job: the "auto" bound when face masking is
+ *  "auto" or the run is a depth reference, then "always" (each plus the
+ *  upscale's recorded wait, else its default); otherwise the preview bound
+ *  only when `data.preview === true`, else the full-clip bound, either one
+ *  plus the upscale's wait only when the run carries that step. A long clip
+ *  (its part plan, `longClip` / `__longClip`) adds `CAST_SWAP_LONG_CLIP_MS`. */
+export function castSwapJobBudgetMs(data: unknown): number | undefined {
+  if (!data || typeof data !== "object") return CAST_SWAP_FULL_BUDGET_MS
+  return runShapeBudgetMs(data) + (carriesLongClip(data) ? CAST_SWAP_LONG_CLIP_MS : 0)
 }

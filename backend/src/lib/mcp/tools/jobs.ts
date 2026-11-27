@@ -11,7 +11,7 @@ import { CHILD_JOB_COLUMN, TREND_RUN_MARKER_SELECT, maskTrendRunError, maskTrend
 import { jobRowProviderWordsFor } from "../../provider-words.js"
 import { runJobsProviderWords } from "../../provider-words-readers.js"
 import { JOB_STATUSES } from "../../job-status.js"
-import { jobView, JOB_VIEW_SCHEMA, outputSizeOf } from "./_job-view.js"
+import { jobView, JOB_VIEW_SCHEMA, outputSizeOf, partialDeliveryGuidance } from "./_job-view.js"
 import { waitForJob, waitForJobCallSeconds, WAIT_FOR_JOB_CALL_CEILING_S } from "./_wait-for-job.js"
 import { publicCreditFieldsOf, runCreditsFor } from "../../job-credit-status.js"
 import { fillJobRenderQuality, fillJobsRenderQuality } from "../../render-label-fill.js"
@@ -514,7 +514,10 @@ export function registerJobs({ server, session, fastify }: RegisterJobsOpts): vo
                 data: { ...publicData, queue },
                 guidance,
               }
-            : { data: publicData }
+            : publicData.status === "completed" && partialDeliveryGuidance(publicData.output_data as Record<string, unknown> | null)
+              ? // A clip delivered in part: said in words beside the row, so it is never reported as the whole clip.
+                { data: publicData, guidance: partialDeliveryGuidance(publicData.output_data as Record<string, unknown> | null) }
+              : { data: publicData }
       const view = jobView(filled as Parameters<typeof jobView>[0])
       return {
         content: [{ type: "text", text: JSON.stringify({ ...payload, ...unitFields() }, null, 2) }],
@@ -635,7 +638,7 @@ export function registerJobs({ server, session, fastify }: RegisterJobsOpts): vo
         : { jobId: args.job_id, status: waited.status, outputUrl: waited.outputUrl, ...outputSizeOf(waited.outputData), outputData: waited.outputData, errorMessage: waitedError === null || waitedError === undefined ? waitedError : statedName(waitedError), jobType: waited.jobType }
       const summary =
         view.status === "completed"
-          ? `Job ${args.job_id} completed${view.outputUrl ? `: ${view.outputUrl}` : ""}.`
+          ? `Job ${args.job_id} completed${view.outputUrl ? `: ${view.outputUrl}` : ""}.${view.guidance ? ` ${view.guidance}` : ""}`
           : view.status === "pending_review"
             ? `Job ${args.job_id} is held for review. ${view.guidance ?? ""}`
             : `Job ${args.job_id} ${view.status}${view.errorMessage ? `: ${view.errorMessage}` : ""}. ${view.guidance ?? ""}`

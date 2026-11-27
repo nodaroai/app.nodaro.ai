@@ -18,7 +18,8 @@
  *                                      upscaleChoice: boolean,
  *                                      upscaleTo: { [engine]?: { [size]?: nextSize } },
  *                                      portion: boolean,
- *                                      shortClips: boolean }
+ *                                      shortClips: boolean,
+ *                                      longClips: { maxSourceSec: number } | null }
  *
  * TRANSITION SHIM (the 2026-11-17 engine ids): each map also answers every
  * engine under its previous id (`"motion-prism"`, `"motion-pulse"`), the same
@@ -188,6 +189,14 @@
  * declares `castSwap.shortClips`. Like `roleFace` both follow the engine alone
  * and are in every answer, the failed-read one included. A client reading a
  * server from before them finds none and treats each as false.
+ *
+ * `longClips` (decided 2026-11-25 and 2026-11-27) says whether a whole run on
+ * one engine with the Precise style takes a source longer than 30 s, run in
+ * parts joined into one result, and up to how long (`maxSourceSec`): the
+ * engine's own `castSwap.longClips`, declared only while the deployment's
+ * engine switch is on, else `null`. It follows the engine alone and is in
+ * every answer, as `portion` is. A client reading a server from before it
+ * finds none and treats it as `null`.
  */
 import type { FastifyInstance, RouteHandlerMethod } from "fastify"
 import { NODARO_MOTION_ENGINES, NODARO_MOTION_LEGACY_ENGINE_OF, type NodaroMotionEngine } from "@nodaro/shared/models"
@@ -212,7 +221,7 @@ import {
   upscaleToReadsSettings,
   type VideoRemakeUpscaleTo,
 } from "../../lib/video-remake-upscale-choice.js"
-import { engineTakesPortion, engineTakesShortClips } from "../../lib/video-remake-portion.js"
+import { engineLongClips, engineTakesPortion, engineTakesShortClips } from "../../lib/video-remake-portion.js"
 import {
   deliveredResolutionsOffered,
   deliveredResolutionsReadSettings,
@@ -268,8 +277,8 @@ function answer(
   upscaleTo: VideoRemakeUpscaleTo,
   /** Per engine choice, the sizes delivered here (`deliveredResolutionsOffered`); keyed by its own ids. */
   resolutions: VideoRemakeResolutions,
-  /** The engine's part-of-the-clip and short-clip capabilities (`castSwap.portion`, `castSwap.shortClips`); the engine alone. */
-  clipLength: { portion: boolean; shortClips: boolean },
+  /** The engine's part-of-the-clip, short-clip and long-clip capabilities (`castSwap.portion`, `.shortClips`, `.longClips`); the engine alone. */
+  clipLength: { portion: boolean; shortClips: boolean; longClips: { maxSourceSec: number } | null },
 ) {
   return {
     engines: withPreviousEngineIds(engines),
@@ -287,6 +296,8 @@ function answer(
     resolutions,
     portion: clipLength.portion,
     shortClips: clipLength.shortClips,
+    // A fresh record in every answer: a caller's change to one never reaches the next.
+    longClips: clipLength.longClips ? { maxSourceSec: clipLength.longClips.maxSourceSec } : null,
   }
 }
 
@@ -309,7 +320,7 @@ const styleChoiceHandler: RouteHandlerMethod = async (req, reply) => {
   const upscaleChoice = engineTakesUpscaleChoice(castSwap)
   const takesUpscaleTo = upscaleToReadsSettings(castSwap)
   const takesResolutions = deliveredResolutionsReadSettings(castSwap)
-  const clipLength = { portion: engineTakesPortion(castSwap), shortClips: engineTakesShortClips(castSwap) }
+  const clipLength = { portion: engineTakesPortion(castSwap), shortClips: engineTakesShortClips(castSwap), longClips: engineLongClips(castSwap) }
   // What the answer says without the settings: people choose the style, no custom style, no roles planned from the prompt, no 3D previz clip.
   const withoutSettings = () =>
     answer(styleChoices(null), { styleOnly, preciseArtStyle, preciseArtStyleAlone, customStyle: customStyleEngines(false) }, false, false, roleFace, false, flashOfferedEngines(null, castSwap), upscaleChoice, upscaleToOffered(castSwap, null), deliveredResolutionsOffered(castSwap, null), clipLength)

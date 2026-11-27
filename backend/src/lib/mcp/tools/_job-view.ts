@@ -48,6 +48,29 @@ export function outputSizeOf(out: Record<string, unknown> | null | undefined): {
   return whole(width) && whole(height) ? { width, height } : {}
 }
 
+/**
+ * The words for a completed job whose output covers only part of its source (decided 2026-11-27): a Video Remake
+ * clip made in parts whose later part failed, delivered from its start up to that part, with
+ * `output_data.partial = { deliveredSec, sourceSec, parts: { delivered, planned }, reason, message }`. Built from the
+ * numbers (never the stored sentence), so an agent never reports such a result as the whole clip. Undefined when the
+ * output carries no readable record (every other job).
+ */
+export function partialDeliveryGuidance(out: Record<string, unknown> | null | undefined): string | undefined {
+  const partial = out?.partial
+  if (!partial || typeof partial !== "object" || Array.isArray(partial)) return undefined
+  const { deliveredSec, sourceSec, parts } = partial as { deliveredSec?: unknown; sourceSec?: unknown; parts?: unknown }
+  const seconds = (n: unknown): n is number => typeof n === "number" && Number.isFinite(n) && n > 0
+  if (!seconds(deliveredSec) || !seconds(sourceSec) || deliveredSec >= sourceSec) return undefined
+  const s = (n: number): string => `${Math.round(n * 10) / 10} s`
+  const { delivered, planned } = (parts && typeof parts === "object" ? parts : {}) as { delivered?: unknown; planned?: unknown }
+  const whole = (n: unknown): n is number => Number.isSafeInteger(n) && (n as number) > 0
+  const counted = whole(delivered) && whole(planned) && delivered < planned ? ` (${delivered} of its ${planned} parts)` : ""
+  return (
+    `Partial result: this video is only the first ${s(deliveredSec)} of the ${s(sourceSec)} clip${counted}; the rest could not be made and is not in it. ` +
+    "Tell the user it is not the whole clip; do not present it as complete."
+  )
+}
+
 export const HELD_JOB_GUIDANCE =
   "This job finished generating but its output is held for human review and is " +
   "deliberately withheld. Do NOT re-run it — a duplicate would be held too, and " +
@@ -226,6 +249,9 @@ export function jobView(row: JobRowLike): JobView {
   } else if (status === "pending_review") {
     view.retryable = false
     view.guidance = HELD_JOB_GUIDANCE
+  } else if (status === "completed") {
+    const partial = partialDeliveryGuidance(out)
+    if (partial) view.guidance = partial
   }
   return view
 }

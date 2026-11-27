@@ -2583,10 +2583,41 @@ lengthened, run and cut back, and priced at the lengthened length; a 4 s
 preview of a clip under 4 s is still refused `preview_out_of_range`. The
 estimate is the authority on a clip's length (`clip_out_of_range`).
 
+**Long clips** (`styleChoice().longClips`, `VideoRemakeLongClips`): where the
+deployment's engine has it switched on, `styleChoice()` answers
+`longClips: { maxSourceSec }` (else `null`, or absent from an older server:
+read both as off). A whole `run()` (no `preview`, no part of the clip, not a
+trend run) on Nodaro Prism, not its Flash choice, with the Precise style then
+takes a source longer than 30 s, up to `maxSourceSec` seconds, with no field
+of its own: it is made in parts, joined into one result of the source's
+length, and `estimate()` prices the run that will be made. Refusals: `400
+long_clip_too_long` (a whole clip over `maxSourceSec`, from `run()`,
+`estimate()` and `planRoles()`), and `409 long_clip_no_full_quality` from
+`fullQuality()` / `fullQualityEstimate()` (such a run has no Full Quality yet).
+Any other engine, style or run keeps the 30 s limit (`clip_out_of_range`).
+
+**A clip delivered in part** (`VideoRemakeJobOutput.partial`,
+`VideoRemakePartial`): when a later part of a long clip fails after its
+retries (or its take cannot be joined whole), the job still completes, with
+the clip from its start up to that part, never with a gap. Its output carries
+`partial: { deliveredSec, sourceSec, parts: { delivered, planned }, reason, message }`
+and its `durationSec` is the delivered length. `reason` is `"part_failed"`,
+`"short_take"` or `"joined_length"` (open-ended); `message` is one English
+sentence to show the person. The undelivered parts' renders are released, not
+charged; the run's own fee is the one its quote stated, and nothing retries
+the rest on its own. If the first part fails the job fails, with nothing
+delivered. Check `partial` before presenting a result as the whole clip:
+
+```ts
+const { data: job } = await client.jobs.get(jobId)
+const out = job.output_data as VideoRemakeJobOutput
+if (out.partial) console.warn(out.partial.message) // the video covers only the first out.partial.deliveredSec s
+```
+
 **A forced style** (`styleChoice()`, `VideoRemakeStyleChoice`): Nodaro may fix
 an engine's style for everyone as Motion, and every `run()` and `estimate()` on it then
 uses that style whatever `style` says. `styleChoice()` answers
-`{ engines: { "nodaro-prism": VideoRemakeStyleChoiceOption, "nodaro-pulse": VideoRemakeStyleChoiceOption }, styleOnly?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, preciseArtStyle?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, preciseArtStyleAlone?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, customStyle?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, planRoles?: boolean, planRolesPreviz?: boolean, previz?: boolean, roleFace?: boolean, flash?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, resolutions?: { [engineChoice]?: VideoRemakeResolution[] }, portion?: boolean, shortClips?: boolean }`,
+`{ engines: { "nodaro-prism": VideoRemakeStyleChoiceOption, "nodaro-pulse": VideoRemakeStyleChoiceOption }, styleOnly?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, preciseArtStyle?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, preciseArtStyleAlone?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, customStyle?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, planRoles?: boolean, planRolesPreviz?: boolean, previz?: boolean, roleFace?: boolean, flash?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, resolutions?: { [engineChoice]?: VideoRemakeResolution[] }, portion?: boolean, shortClips?: boolean, longClips?: { maxSourceSec: number } | null }`,
 each engine `"user"` (the caller chooses), `"precise"` or `"flex"`
 (`style: "motion"`, fixed as above). `"precise"` changes no request: Nodaro's
 own apps run Precise on that engine and hide their style control, and every
@@ -2829,7 +2860,8 @@ offered here: set the roles yourself; a server from before it answers 404),
 `403 model_not_available` / `403 node_not_available`, `400 video_unreadable`,
 `400 clip_out_of_range` (not 4–30 s, or 2–30 s where `shortClips` is `true`),
 `400 preview_out_of_range`, a part of the clip's refusals (see A part of the
-clip above),
+clip above), `400 long_clip_too_long` (a whole Nodaro Prism clip over
+`longClips.maxSourceSec`, see Long clips above),
 `400 image_unreadable` (an image could not be fetched, is too large or is not
 a picture; the envelope's `details.index`, read as
 `err.details.details.index`, says which), `502 plan_roles_failed` (try again,
@@ -3063,8 +3095,9 @@ a `prePrompt` or `postPrompt` over 4,000 characters (`validation_error`), a `{ro
 (`prompt_too_long`: a `{role:N}` reads as the role's name when it sends no
 images), a clip outside 4–30 s (2–30 s where `styleChoice()` answers
 `shortClips: true`), or a preview past the clip's end
-(`previewStart + 4` > its length), and a part of the clip's own refusals (see
-A part of the clip, and short clips); also for an invalid body
+(`previewStart + 4` > its length), a part of the clip's own refusals (see
+A part of the clip, and short clips) and `long_clip_too_long` (see Long
+clips); also for an invalid body
 (`validation_error`), an address that is not public http(s) (`unsafe_url`) or a
 clip whose length cannot be read (`video_unreadable`). Other refusals: `401`,
 `402 insufficient_credits` (`run()` only), `404` (a `sessionId` you may not use),
@@ -3128,6 +3161,7 @@ idempotency key is taken. The new job keeps the draft's origin; `sessionId`
 files it in a session. Refusals carry a `VideoRemakeFullQualityRefusalCode`:
 `401 unauthorized`, `404 not_found`, `409 not_completed`, `409 not_a_draft`,
 `410 draft_expired`, `409 full_quality_pending`, `409 full_quality_unavailable`,
+`409 long_clip_no_full_quality` (a clip over 30 s made in parts),
 `402 insufficient_credits` (or a workspace cap), `422 job_blocked`,
 `503 job_read_failed` (retryable), `503 estimate_unavailable`,
 `503 host_too_old` — the full table is in the

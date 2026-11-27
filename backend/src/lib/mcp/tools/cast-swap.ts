@@ -127,6 +127,15 @@
  * `preview`, inside the clip, a source of at most 10 minutes) is the route's.
  * The tool has no quote of its own beside `video_remake`: a call without
  * `confirm` is the estimate.
+ *
+ * A long clip (decided 2026-11-25 and 2026-11-27): where the engine declares
+ * `castSwap.longClips`, a whole run on Nodaro Prism with the Precise style
+ * takes a source over 30 s, up to its `maxSourceSec`, made in parts. It needs
+ * no argument (the route decides it, and refuses `long_clip_too_long` past the
+ * declared length), so the tool only says so. Such a job may complete with only
+ * its first parts (`output_data.partial`): the started text then says what to
+ * look for, and get_job / wait_for_job / get_asset say it in words
+ * (`partialDeliveryGuidance`).
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import type { FastifyInstance } from "fastify"
@@ -171,7 +180,7 @@ import { statedName } from "../deployment-name.js"
 import { checkIntentArg, intentMismatchSentence, runIntentArg, videoRemakeIntentMismatch } from "./_video-remake-intent.js"
 import { VIDEO_REMAKE_DELIVERED_SIZES, deliveredSizeLabel, deliveredSizeOfQuote, type VideoRemakeDeliveredSize } from "../../video-remake-delivered-resolution.js"
 import { videoRemakeResolutionArg, videoRemakeResolutionSentence, type VideoRemakeSizesHere } from "../video-remake-sizes.js"
-import { loadedEngineTakesPortion } from "../../video-remake-portion.js"
+import { loadedEngineLongClips, loadedEngineTakesPortion } from "../../video-remake-portion.js"
 
 const executeGate: ToolGate = { required: ["workflows:execute"] }
 
@@ -534,6 +543,7 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor, vide
         "Without `confirm` it returns the PRICE QUOTE only (nothing is charged): show the credits to the user, and call again with `confirm: true` only once they accept. " +
         "That returns a job id: poll it with wait_for_job. `preview: true` renders 4 s first, a cheaper check of the look. " +
         "Where offered, portion_start + portion_sec run a part of the clip (a source up to 10 min), priced by its length. " +
+        "Where offered, a whole clip over 30 s (nodaro-prism, precise) runs in parts and may complete with only the first ones (outputData.partial: say so). " +
         `engine picks the engine: "nodaro-prism" (Nodaro Prism, the default) or "nodaro-pulse" (Nodaro Pulse; no draft); ${videoRemakeResolutionSentence(videoRemakeSizes)}. ` +
         "Image and video URLs must be http(s): upload local files with the upload tools first." +
         (recastOffered(session) ? ` ${RECAST_POINTER}` : "") +
@@ -542,7 +552,7 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor, vide
       // takes an older client's `kling_length` as `motion_length` and ignores `face_masking`
       // (the payload is built field by field). Only the listed keys are in the tool list.
       inputSchema: z.looseObject({
-        video_url: z.string().url().describe("The source clip, 4–30 s (where offered: 2–30 s, or up to 10 min with a part)."),
+        video_url: z.string().url().describe("The source clip, 4–30 s (where offered: 2–30 s, longer whole, or up to 10 min with a part)."),
         roles: z
           .array(
             z.discriminatedUnion("kind", [
@@ -1058,8 +1068,10 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor, vide
       // words this call just read; where the job cannot be read, the words this call read.
       const styleText = describedText !== undefined ? ((await recordedCustomStyle(fastify, session, jobId)) ?? describedText) : undefined
       const styleSentence = styleText !== undefined ? ` The image's style was read as: "${styleText}"` : ""
+      // Where a clip over 30 s is made in parts, its result may cover only the clip's start: what to look for.
+      const longSentence = loadedEngineLongClips() ? " A clip over 30 s is made in parts: if the result's outputData has partial, it covers only the clip's start, and the user must be told." : ""
       return {
-        content: [{ type: "text" as const, text: statedName(`Video Remake started (job ${jobId}). To follow it, ${GET_JOB_POLL_HINT}.`) + styleSentence }],
+        content: [{ type: "text" as const, text: statedName(`Video Remake started (job ${jobId}). To follow it, ${GET_JOB_POLL_HINT}.`) + longSentence + styleSentence }],
         structuredContent: { jobId, confirmed: true, ...(styleText !== undefined ? { custom_style_text: styleText } : {}) },
       }
     },

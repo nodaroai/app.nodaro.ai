@@ -80,3 +80,25 @@ describe("redactPrivateJobData — server-only output keys", () => {
     expect(redactPrivateJobOutput(null)).toBeNull()
   })
 })
+
+/**
+ * A Video Remake clip delivered in part (decided 2026-11-27) completes with `output_data.partial`: a client-readable
+ * record every public job read passes through as stored, beside the hidden plan (`input_data.__longClip`), which no
+ * read returns.
+ */
+describe("a clip delivered in part", () => {
+  const partial = { deliveredSec: 48.25, sourceSec: 120, parts: { delivered: 2, planned: 5 }, reason: "part_failed", message: "We remade the first 0:48 of 2:00." }
+  const row = {
+    id: "j",
+    input_data: { videoUrl: "https://cdn.example.com/clip.mp4", __longClip: { v: 1, sourceSec: 120, parts: [] } },
+    output_data: { videoUrl: "https://cdn.example.com/out.mp4", durationSec: 48.25, partial, __castSwapLongClipPlan: { k: 1 } },
+  }
+
+  it("keeps partial intact and drops only the hidden plan and checkpoints", () => {
+    expect(isServerOnlyOutputKey("partial")).toBe(false)
+    const read = redactPrivateJobData(row)
+    expect(read.output_data).toEqual({ videoUrl: "https://cdn.example.com/out.mp4", durationSec: 48.25, partial })
+    expect(read.input_data).toEqual({ videoUrl: "https://cdn.example.com/clip.mp4" })
+    expect(redactPrivateJobOutput(row.output_data)).toEqual({ videoUrl: "https://cdn.example.com/out.mp4", durationSec: 48.25, partial })
+  })
+})

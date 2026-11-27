@@ -5431,6 +5431,8 @@ An Apply EDL job's `output_data` says what the render was cut from: `quality` (`
 
 An Apply EDL job recorded before `output_data.quality` was written reads back with the quality it was ordered at filled in on every job read above, plus `GET /v1/jobs/:id` and `GET /v1/jobs/:id/status` (`"proxy"` is a preview, anything else the final). The stored job is unchanged.
 
+A completed Video Remake job whose clip was made in parts and delivered only up to a part carries `output_data.partial` (`{ deliveredSec, sourceSec, parts: { delivered, planned }, reason, message }`), and its `durationSec` is the delivered length: the video is not the whole clip (see [A clip delivered in part](#13f-video-remake-cloud-edition)).
+
 A completed Grok Imagine video job (`grok` or `grok-i2v`) whose request named a resolution also carries it in `output_data.recordedResolution`, exactly as the request recorded it, beside its `providerTaskId`; a Grok Extend of that video is priced by that resolution.
 
 All three require `jobs:read` scope when using an OAuth token; admin tokens may
@@ -6198,7 +6200,7 @@ length, with its own cast and new music, and can change the motion itself.
 |---|---|---|
 | `POST` | `/v1/video-remake/estimate` | Quote a run in credits before starting it. Free: nothing is created or reserved. Returns `{ engine, totalCredits, expectedCredits, breakdown, privacyCredits?, settlesLower, firstRemakeOffer?, resolution? }`: `totalCredits` is held when the run starts, `expectedCredits` is what it is expected to be charged (`firstRemakeOffer`: see [First Remake on us](#first-remake-on-us); `resolution`, the size the run delivers: see The size delivered below). |
 | `POST` | `/v1/video-remake` | Start the run. Returns `202 { jobId }`; follow the job like any other (`GET /v1/jobs/:id`). Takes an `Idempotency-Key` (see below). |
-| `GET` | `/v1/video-remake/style-choice` | Whether you choose a run's `style`, per engine, or it is fixed as Motion (`"precise"` sets only what Nodaro's own apps run), whether the engine takes a style-only run, whether a Precise run takes an art style (see Style below), whether a run may state a 3D previz clip (`previz`, see A 3D previz clip below), whether such a clip's roles can be planned (`planRolesPreviz`, see Roles planned from the prompt below), whether a person role may keep its own face (`roleFace`, see The Face chip below), whether each engine's Flash choice is offered (`flash`, see Flash choices below), and the sizes each engine choice delivers here (`resolutions`, see The size delivered below), whether a run takes a part of the clip (`portion`) and whether a clip of 2 s or more is accepted (`shortClips`; both under A part of the clip, and short clips below). Public: no sign-in needed. |
+| `GET` | `/v1/video-remake/style-choice` | Whether you choose a run's `style`, per engine, or it is fixed as Motion (`"precise"` sets only what Nodaro's own apps run), whether the engine takes a style-only run, whether a Precise run takes an art style (see Style below), whether a run may state a 3D previz clip (`previz`, see A 3D previz clip below), whether such a clip's roles can be planned (`planRolesPreviz`, see Roles planned from the prompt below), whether a person role may keep its own face (`roleFace`, see The Face chip below), whether each engine's Flash choice is offered (`flash`, see Flash choices below), and the sizes each engine choice delivers here (`resolutions`, see The size delivered below), whether a run takes a part of the clip (`portion`), whether a clip of 2 s or more is accepted (`shortClips`) and whether a whole clip longer than 30 s runs in parts (`longClips`; all three under A part of the clip, short clips and long clips below). Public: no sign-in needed. |
 | `GET` | `/v1/video-remake/advanced` | Whether the Video Remake page shows its Advanced options (see below). Public: no sign-in needed. |
 | `POST` | `/v1/video-remake/describe-style` | Put an image's visual style into words, for a run's custom style (see A custom style below). Body `{ imageUrl, note? }`; returns `{ text, medium?, tones? }`. Free: no job, nothing charged. Signed in; 10 calls a minute per account. |
 | `POST` | `/v1/video-remake/plan-roles` | Plan a run's roles from a request in the person's own words and loose reference images (see Roles planned from the prompt below). Body `{ videoUrl, prompt, images, engine?, roles?, references?, preview?, previewStart?, portionStart?, portionSec?, clipKind?, previz? }`; returns `{ prompt, roles, references, postPrompt, removed, unresolved }`. Free: no job, nothing charged. Signed in; 6 calls a minute and 60 a day per account. |
@@ -6234,7 +6236,7 @@ and optionally `references` (see below), `prePrompt` (your own
 words placed at the start of the prompt, before the role instructions; it
 mentions roles as `{role:N}`, like `postPrompt`), `postPrompt`, `preview`,
 `previewStart`, `portionStart` and `portionSec` (a part of the clip, where the
-deployment offers it: see A part of the clip, and short clips below), `engine` (see below), `style` (see below), `direction` (an art
+deployment offers it: see A part of the clip, short clips and long clips below), `engine` (see below), `style` (see below), `direction` (an art
 style from the catalog, or a custom style in your own words, see below), `resolution` (the size the video is delivered at: `"720p"` — the default —
 `"1080p"` or `"4k"`; on a Flash choice `"720p"` — the default — or `"1080p"`;
 see The size delivered below), `draft` (off by default; `true` makes a
@@ -6309,10 +6311,10 @@ makes: Nodaro Prism `"480p"` (the default), `"720p"` or `"1080p"`, Nodaro
 Pulse `"720p"` (the default) or `"1080p"`, Nodaro Prism Flash `"480p"` (the
 default) or `"720p"`, Nodaro Pulse Flash `"720p"`.
 
-**A part of the clip, and short clips.** Two choices a deployment may turn on
-for its engine. Each is off unless `GET /v1/video-remake/style-choice` answers
-it `true`; read every other answer, a missing one included, as off: the clip is
-then 4–30 s, whole, as above.
+**A part of the clip, short clips and long clips.** Three choices a deployment
+may turn on for its engine. Each is off unless `GET /v1/video-remake/style-choice`
+answers it (`true`, or for `longClips` a length); read every other answer, a
+missing one included, as off: the clip is then 4–30 s, whole, as above.
 
 - **A part of the clip** (where `style-choice` answers `portion: true`; one
   boolean, not per engine; a server from before it leaves it out, read that as
@@ -6337,6 +6339,51 @@ then 4–30 s, whole, as above.
   it). A 4 s preview of a clip shorter than 4 s is still refused
   `preview_out_of_range`. The estimate is the authority on the length a clip
   may have: a clip outside it answers `clip_out_of_range`.
+- **Long clips** (where `style-choice` answers `longClips: { maxSourceSec }`;
+  one answer for the deployment, `null` elsewhere; a server from before it
+  leaves it out, read that as `null`). A whole run, with no `preview`, no
+  part of the clip and not a trend run, on one engine (`"nodaro-prism"`, not
+  its Flash choice) with the Precise style takes a source longer than 30 s, up
+  to `maxSourceSec` seconds. It needs
+  no field of its own: the run is made in parts, which are joined into one
+  result of the source's length, and the estimate prices the run that will be
+  made. A whole clip over `maxSourceSec` is refused `400 long_clip_too_long`
+  before anything is held (and so is planning its roles); any other engine,
+  style or run keeps the 30 s limit (`clip_out_of_range`). Full Quality is
+  not offered for such a run: `409 long_clip_no_full_quality`. Such a job may
+  take longer than a run of 30 s or less, and may complete with only its first
+  parts: see A clip delivered in part below.
+
+**A clip delivered in part.** When a later part of a long clip fails after its
+retries (or its take cannot be joined whole), the job still completes, with
+the clip from its start up to that part (never with a gap), and its
+`output_data` carries `partial` beside `videoUrl`:
+
+```json
+{
+  "videoUrl": "https://…/remake.mp4",
+  "durationSec": 48.25,
+  "partial": {
+    "deliveredSec": 48.25,
+    "sourceSec": 120,
+    "parts": { "delivered": 2, "planned": 5 },
+    "reason": "part_failed",
+    "message": "We remade the first 0:48 of 2:00. The rest could not be made, and its video was not charged."
+  }
+}
+```
+
+`durationSec` is then the delivered length (`partial.deliveredSec`), not the
+source's; `reason` is `"part_failed"` (a part failed after its retries),
+`"short_take"` (a part's take came out too short for its window) or
+`"joined_length"` (the joined take did not have its parts' length), and may
+grow; `message` is one English sentence to show the person. The undelivered
+parts' renders are released, not charged; the run's own fee is the one its
+quote stated. Nothing retries the rest on its own. If the first part fails,
+the job fails as any run does, with nothing delivered. A whole result has no
+`partial`. The record reaches every read of the job (`GET /v1/jobs/:id`, the
+job lists, the status routes, webhooks) and the MCP job tools, which also say
+it in words.
 
 **Flash choices.** Where Nodaro offers it, each engine also has a Flash
 choice beside it: `"nodaro-prism-flash"` (Nodaro Prism Flash) and
@@ -6606,6 +6653,9 @@ plan_roles_not_available` (not offered here: set the roles yourself),
 `400 preview_out_of_range`, a run's own refusals of a part of the clip
 (`400 portion_unavailable`, `portion_incomplete`, `portion_with_preview`,
 `portion_out_of_range`, `source_too_long`, `long_source_unpriceable`),
+`400 long_clip_too_long` (a whole clip on Nodaro Prism over `longClips.maxSourceSec`,
+where `style-choice` answers one; a whole Nodaro Prism clip up to that length is
+planned, as its run may be made in parts),
 `400 image_unreadable` (an image could not be fetched, is too large or is not
 a picture; `error.details.index` is its position in `images`, from 0) and
 `502 plan_roles_failed` (try again, or set the roles yourself).
@@ -6914,7 +6964,8 @@ Refusals, all before anything is charged (bodies are
 | `400` | `invalid_role_mention` | `prePrompt` or `postPrompt` mentions `{role:N}` with N outside 1..`roles.length`. N counts every role in `roles`, empty ones included (`{role:1}` is `roles[0]`). Also any `{role:N}` in a reference's `line`: a line describes the thing itself. |
 | `400` | `unsafe_url` | `videoUrl`, a role image or a reference image is not a public http(s) address. |
 | `400` | `video_unreadable` | The clip's length could not be read (not a playable video). |
-| `400` | `clip_out_of_range` | The clip is shorter than 4 s or longer than 30 s (where `style-choice` answers `shortClips: true`, shorter than 2 s; with a part of the clip or a preview where it answers `portion: true`, a source over 30 s is judged by the part or the preview instead, up to `source_too_long`). |
+| `400` | `clip_out_of_range` | The clip is shorter than 4 s or longer than 30 s (where `style-choice` answers `shortClips: true`, shorter than 2 s; with a part of the clip or a preview where it answers `portion: true`, a source over 30 s is judged by the part or the preview instead, up to `source_too_long`; where it answers `longClips`, a whole run on Nodaro Prism with the Precise style takes a source up to `longClips.maxSourceSec`, see Long clips above). |
+| `400` | `long_clip_too_long` | A whole run that would be made in parts (Nodaro Prism, the Precise style, where `style-choice` answers `longClips`) whose source is longer than `longClips.maxSourceSec`. |
 | `400` | `portion_unavailable` | `portionStart` or `portionSec` where this deployment does not run a part of the clip (`style-choice` answers `portion` false or leaves it out). |
 | `400` | `portion_incomplete` | One of `portionStart` and `portionSec` without the other. |
 | `400` | `portion_with_preview` | A part of the clip with `preview: true`: a part is an ordinary run, not a preview. |
@@ -7075,6 +7126,7 @@ Refusals, all before anything is charged (bodies are
 | `409` | `not_a_draft` | The run is not a Nodaro Prism draft: a plain run (480p made without `draft: true` included; make a draft with `draft: true`), or any Nodaro Pulse run (Pulse makes no drafts: run it again at 1080p). |
 | `409` | `full_quality_pending` | **Not final — try again later** (`retryable: true`): an earlier try's 1080p render of this draft is being reviewed (try again once the review ends), or has not started yet. |
 | `409` | `full_quality_unavailable` | **Final:** the run cannot be finished at Full Quality — nothing kept to re-render, no readable completion time, or the 1080p finalize refuses this draft. On the start only, also when every try failed ("failed too many times") or no try can be started for this run. |
+| `409` | `long_clip_no_full_quality` | The run was a clip longer than 30 s made in parts (see Long clips above): it has no Full Quality yet. Run it again at the resolution you want. |
 | `410` | `draft_expired` | More than 7 days after the draft completed, or the draft can no longer be finished at Full Quality. |
 | `422` | `job_blocked` | The request was blocked by the job policy (start only). |
 | `503` | `job_read_failed` | The draft could not be read just now (`retryable: true`); try again. |

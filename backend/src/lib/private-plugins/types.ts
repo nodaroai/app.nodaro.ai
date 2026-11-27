@@ -5772,6 +5772,18 @@ export interface PluginSupports {
      */
     readonly shortClips?: boolean
     /**
+     * Long clips (decided 2026-11-25 and 2026-11-27): a whole run on one engine (Nodaro Prism, not its
+     * Flash choice) with the Precise style takes a source clip longer than 30 s, up to `maxSourceSec`
+     * seconds, and runs it in parts joined into one result of the source's length. No request field:
+     * a long source simply runs. Over `maxSourceSec`, 400 `long_clip_too_long`; Full Quality of such a
+     * run, 409 `long_clip_no_full_quality`. Such a job carries its part plan (`longClip` on the queue
+     * payload, `__longClip` hidden in its input) and may complete with only its first parts
+     * (`partial` in its output, `durationSec` the delivered length). Declared only while the
+     * deployment's engine switch is on (read at load). Absent, or a `maxSourceSec` that is not a
+     * finite number over 30: none of this (lib/video-remake-portion.ts).
+     */
+    readonly longClips?: { readonly maxSourceSec: number }
+    /**
      * Video Remake's delivered resolution (2026-11-26): a run and its estimate that carry no `upscale`
      * key read `resolution` as the size DELIVERED (`"480p" | "720p" | "1080p" | "4k"`), however the engine
      * makes it; the estimate's and the completed job's `resolution` answer the size delivered, and the

@@ -1283,3 +1283,32 @@ describe("video_remake: a part of the clip", () => {
     }
   })
 })
+
+describe("video_remake: a long clip", () => {
+  afterEach(() => _resetPluginSupportsForTests())
+  const run = { statusCode: 202, body: { jobId: "00000000-0000-4000-8000-0000000000b2" } }
+
+  it("says where a whole clip over 30 s is made in parts, and that its job may complete with only the first parts", async () => {
+    const { fastify } = stubFastify({})
+    const tool = (await listTools(serverWith(fastify))).find((t) => t.name === "video_remake")!
+    expect(tool.description).toContain("a whole clip over 30 s (nodaro-prism, precise) runs in parts")
+    expect(tool.description).toContain("outputData.partial")
+    const props = (tool.inputSchema as { properties: Record<string, { description?: string }> }).properties
+    expect(props.video_url!.description).toContain("longer whole")
+  })
+
+  it("its started text says what to look for where the engine makes long clips, and nothing more elsewhere", async () => {
+    for (const longClips of [undefined, { maxSourceSec: 120 }]) {
+      _resetPluginSupportsForTests()
+      if (longClips) setPluginSupports({ castSwap: { longClips } as never })
+      const { fastify, calls } = stubFastify({ "/v1/video-remake": run })
+      const res = await callTool(serverWith(fastify), "video_remake", { ...ARGS, confirm: true })
+      expect(res.isError).toBeFalsy()
+      // No argument of its own: the body is the run's as before.
+      expect(calls.map((c) => c.payload)).toEqual([BODY])
+      const text = res.content[0]!.text!
+      expect(text).toContain("Video Remake started (job 00000000-0000-4000-8000-0000000000b2).")
+      expect(text.includes("outputData has partial"), JSON.stringify(longClips)).toBe(longClips !== undefined)
+    }
+  })
+})

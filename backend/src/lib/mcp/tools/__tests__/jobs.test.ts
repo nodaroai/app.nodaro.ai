@@ -994,3 +994,52 @@ describe("MCP job tools — a job waiting for a slot", () => {
     expect(result.structuredContent).not.toHaveProperty("guidance")
   })
 })
+
+/**
+ * A clip delivered in part (decided 2026-11-27): a Video Remake made in parts whose later part failed completes with
+ * the first parts and `output_data.partial`. get_job and wait_for_job carry the record as stored and say it in words.
+ */
+describe("get_job and wait_for_job: a clip delivered in part", () => {
+  const PARTIAL = { deliveredSec: 48.25, sourceSec: 120, parts: { delivered: 2, planned: 5 }, reason: "part_failed", message: "We remade the first 0:48 of 2:00." }
+  const OUTPUT = { videoUrl: "https://r2/remake.mp4", durationSec: 48.25, partial: PARTIAL }
+  const ROW = { id: JOB, user_id: "u1", status: "completed", job_type: "cast-swap", progress: 100, output_data: OUTPUT, credits: 400, error_message: null }
+
+  it("get_job passes partial through intact and says it is not the whole clip", async () => {
+    mockGetJob(ROW)
+    const server = buildServer()
+    registerJobs({ server, session: jobsSession(), fastify: Fastify() })
+    const result = await callTool(server, "get_job", { job_id: JOB })
+    const sc = result.structuredContent as { outputData: Record<string, unknown>; guidance?: string }
+    expect(sc.outputData.partial).toEqual(PARTIAL)
+    expect(sc.outputData.durationSec).toBe(48.25)
+    expect(sc.guidance).toContain("only the first 48.3 s of the 120 s clip (2 of its 5 parts)")
+    expect(sc.guidance).toContain("not the whole clip")
+    const text = JSON.parse(result.content[0]!.text!) as { data: { output_data: Record<string, unknown> }; guidance?: string }
+    expect(text.data.output_data.partial).toEqual(PARTIAL)
+    expect(text.guidance).toBe(sc.guidance)
+  })
+
+  it("wait_for_job's completion sentence says it too", async () => {
+    mockJobReads([ROW, ROW])
+    const server = buildServer()
+    registerJobs({ server, session: jobsSession(), fastify: Fastify() })
+    const result = await callTool(server, "wait_for_job", { job_id: JOB, timeout_s: 30 })
+    const text = result.content[0]?.text ?? ""
+    expect(text).toContain("completed: https://r2/remake.mp4.")
+    expect(text).toContain("Partial result: this video is only the first 48.3 s of the 120 s clip")
+    expect((result.structuredContent as { outputData: Record<string, unknown> }).outputData.partial).toEqual(PARTIAL)
+  })
+
+  it("a whole result says nothing more", async () => {
+    const whole = { ...ROW, output_data: { videoUrl: "https://r2/remake.mp4", durationSec: 120 } }
+    mockGetJob(whole)
+    const server = buildServer()
+    registerJobs({ server, session: jobsSession(), fastify: Fastify() })
+    const result = await callTool(server, "get_job", { job_id: JOB })
+    expect((result.structuredContent as { guidance?: string }).guidance).toBeUndefined()
+    expect(JSON.parse(result.content[0]!.text!).guidance).toBeUndefined()
+    mockJobReads([whole, whole])
+    const waited = await callTool(server, "wait_for_job", { job_id: JOB, timeout_s: 30 })
+    expect(waited.content[0]?.text).toBe(`Job ${JOB} completed: https://r2/remake.mp4.`)
+  })
+})
