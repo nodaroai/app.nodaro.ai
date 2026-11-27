@@ -36,6 +36,8 @@ BEGIN
     END IF;
   END LOOP;
   -- The retry locks the notes it takes (FOR UPDATE needs UPDATE) and records a failed try.
+  IF has_function_privilege('anon','public.video_route_schema_state()','execute') OR has_function_privilege('authenticated','public.video_route_schema_state()','execute')
+    OR NOT has_function_privilege('service_role','public.video_route_schema_state()','execute') THEN RAISE EXCEPTION 'The schema check is open to a client role, or closed to the server'; END IF;
   IF NOT has_table_privilege('service_role','public.video_route_deferred_repayments','UPDATE')
     OR NOT has_sequence_privilege('service_role','public.video_route_deferred_repayments_id_seq','USAGE')
     OR NOT has_sequence_privilege('service_role','public.video_route_ledger_id_seq','USAGE') THEN
@@ -295,6 +297,8 @@ BEGIN
   UPDATE public.video_route_debts SET remaining=0 WHERE usage_log_id=lid;
   r := public.retry_deferred_video_repayments();
   IF r->'dropped'<>'1'::jsonb OR EXISTS(SELECT 1 FROM public.video_route_deferred_repayments WHERE workspace_id=ws) THEN RAISE EXCEPTION 'A note with nothing left to repay stayed: %',r; END IF;
+  -- The whole schema is in place, as the server asks it once per process.
+  IF public.video_route_schema_state() IS DISTINCT FROM '{"missing":[]}'::jsonb THEN RAISE EXCEPTION 'The schema check reports %',public.video_route_schema_state(); END IF;
   -- A debt whose environment could not be told is never enforced, whatever a server calls itself.
   INSERT INTO public.app_settings(key,value) VALUES('video_route_policy:unknown','{"enforceUnpaidCharges":true}');
   PERFORM set_config('request.headers','{"x-nodaro-env":"unknown"}',true);
