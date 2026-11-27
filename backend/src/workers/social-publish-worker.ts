@@ -167,6 +167,7 @@ export async function processScheduledPost(job: Job<SocialPublishJobData>, token
       connectionId: row.connection_id,
       request,
       extraMetadata,
+      jobId,
     })
 
     await updateRow(row.id, {

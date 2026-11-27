@@ -32,6 +32,7 @@ import { settledBeforeClear } from "@/lib/results-cleared"
 import { createTriggerSyncTracker, syncTriggersAfterSave, type TriggerSyncTracker } from "@/lib/trigger-sync-after-save"
 import { adoptUnsavedAccountTriggerIntents } from "@/lib/account-trigger-intent"
 import { namedRunOutputFields, reduceRunOutputFields, splitMediaRunOutputFields, sunoSeparateRunOutputFields } from "@/lib/named-run-outputs"
+import { socialPostRunFields } from "@/lib/social-post-run"
 import { videoOverlayListRowFields, videoOverlayRunOutputFields } from "@/lib/video-overlay-run-output"
 import { perHandleRunFields } from "@/lib/per-handle-batch"
 import { applyEdlRunCutFields, applyEdlTakeTranscriptField } from "@/lib/apply-edl-cut"
@@ -371,16 +372,9 @@ export async function syncNodeResultsFromDB(nodes: WorkflowNode[]): Promise<{ no
       } else if (job.output_data) {
         // Node-type-specific restoration for sync nodes without media URLs
         const outputData = job.output_data as Record<string, unknown>
+        // A social post (every one, the unified node included): its link and id (lib/social-post-run.ts).
+        Object.assign(newData, socialPostRunFields(nodeType, outputData))
         switch (nodeType) {
-          case "instagram-post":
-          case "tiktok-post":
-          case "youtube-upload":
-          case "linkedin-post":
-          case "x-post":
-          case "facebook-post":
-            newData.platformPostId = outputData.platformPostId
-            newData.platformPostUrl = outputData.platformPostUrl
-            break
           case "qa-check":
             newData.score = outputData.score
             newData.approved = outputData.approved
@@ -595,6 +589,8 @@ export function applyBackendExecutionState(
         // Voice id, stems, alignment, combined / split text — under the names
         // their readers use (#1547: this lane used to invent its own).
         Object.assign(data, namedRunOutputFields(state.output))
+        // A social post: its link ("View post") and id — the live run's mapping (lib/social-post-run.ts).
+        Object.assign(data, socialPostRunFields(nodeType, state.output.json))
         // Video Overlay: warnings / canvas / length — the live run's mapping.
         const overlayRun = nodeType === "video-overlay" ? videoOverlayRunOutputFields(state.output) : undefined
         if (overlayRun) Object.assign(data, overlayRun)
@@ -867,6 +863,8 @@ export function applyCompletedExecutionResults(
     // Voice id, stems, alignment, combined / split text — under the names
     // their readers use (#1547: this lane used to invent its own).
     Object.assign(newData, namedRunOutputFields(state.output))
+    // A social post: its link ("View post") and id — the live run's mapping (lib/social-post-run.ts).
+    Object.assign(newData, socialPostRunFields(nodeType, state.output.json))
     // Video Overlay: warnings / canvas / length — the live run's mapping.
     const overlayRun = nodeType === "video-overlay" ? videoOverlayRunOutputFields(state.output) : undefined
     if (overlayRun) Object.assign(newData, overlayRun)

@@ -3,6 +3,7 @@ import {
   instagramStandalonePublisher,
   refreshInstagramStandaloneToken,
 } from "../platforms/instagram.js"
+import { META_PHOTO_MAX_BYTES } from "../photo-limits.js"
 import type { SocialProvider } from "./types.js"
 
 /**
@@ -36,6 +37,8 @@ export const instagramStandaloneProvider: SocialProvider = {
   },
   requiredEnv: ["INSTAGRAM_APP_ID", "INSTAGRAM_APP_SECRET"],
   maxConcurrentJob: 400,
+  // Instagram refuses a JPEG over 8 MB; a bigger photo is re-encoded first.
+  photoMaxBytes: META_PHOTO_MAX_BYTES,
   setupHint: "oauth-flow#instagram-standalone",
   oauth: {
     // enable_fb_login=0 keeps the dialog on the Instagram-only flow; without it

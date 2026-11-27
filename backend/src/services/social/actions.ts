@@ -17,3 +17,13 @@ export const MEDIA_REQUIRED_ACTIONS: ReadonlySet<string> = new Set([
   "post-video", "upload-video", "upload-short",
   "send-photo", "send-video", "send-audio", "send-media-group",
 ])
+
+/**
+ * Actions whose `mediaUrl` is a photo. On a network that declares a photo byte
+ * limit (`SocialProvider.photoMaxBytes`), it is fitted under that limit before
+ * the publish call (`photo-fit.ts`).
+ */
+export const PHOTO_URL_ACTIONS: ReadonlySet<string> = new Set(["post-image", "send-photo"])
+
+/** Actions that post their `mediaItems`: each `"photo"` item is fitted the same way. */
+export const PHOTO_ITEM_ACTIONS: ReadonlySet<string> = new Set(["post-carousel", "send-media-group"])

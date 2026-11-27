@@ -1,6 +1,7 @@
 import type { MediaItem, PublishRequest, PublishResult, PlatformPublisher } from "./index.js"
 import { INSTAGRAM_CAROUSEL_MIN_ITEMS, INSTAGRAM_CAROUSEL_MAX_ITEMS } from "@nodaro/shared/social"
 import { BadBodyError, NotPublishedError } from "../providers/types.js"
+import { graphRefusal } from "./graph-error.js"
 
 /**
  * Instagram publishing — the container -> publish flow, shared by BOTH ways of
@@ -267,11 +268,12 @@ async function createContainer(
     )
   }
   if (!res.ok) {
-    const detail = `Instagram ${errorLabel}: ${await res.text()}`
+    const text = await res.text().catch(() => "")
     // 5xx is transient (retry-safe); 4xx is Meta definitively rejecting the
-    // container (bad media URL, permissions) — retrying cannot help.
-    if (res.status >= 500) throw new NotPublishedError(detail)
-    throw new BadBodyError(detail)
+    // container (bad media URL, permissions) — retrying cannot help — told in
+    // Meta's own sentence for the person.
+    if (res.status >= 500) throw new NotPublishedError(`Instagram ${errorLabel}: ${text}`)
+    throw graphRefusal(`Instagram ${errorLabel}`, res.status, text)
   }
   const data = await res.json() as { id: string }
   return data.id

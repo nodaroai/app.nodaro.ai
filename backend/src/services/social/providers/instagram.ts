@@ -1,4 +1,5 @@
 import { instagramPublisher } from "../platforms/instagram.js"
+import { META_PHOTO_MAX_BYTES } from "../photo-limits.js"
 import { listInstagramChoices, finalizeInstagramAccount, NO_IG_ACCOUNT_MSG } from "./meta-accounts.js"
 import type { SocialProvider } from "./types.js"
 
@@ -16,6 +17,8 @@ export const instagramProvider: SocialProvider = {
   },
   requiredEnv: ["META_APP_ID", "META_APP_SECRET"],
   maxConcurrentJob: 400,
+  // Instagram refuses a JPEG over 8 MB; a bigger photo is re-encoded first.
+  photoMaxBytes: META_PHOTO_MAX_BYTES,
   setupHint: "oauth-flow#meta",
   oauth: {
     authUrl: "https://www.facebook.com/v25.0/dialog/oauth",

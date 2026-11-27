@@ -54,6 +54,7 @@ import { renderOwnRunRefusal, replanEditLosses, replanLossBody } from "./render-
 import { COMPOSER_PLAN_MAP, CREDIT_BASE_USD } from "@nodaro/shared/models"
 import { clearedConnectedListRows } from "./clear-run-results"
 import { namedRunOutputFields, reduceRunOutputFields, splitMediaRunOutputFields, sunoSeparateRunOutputFields } from "@/lib/named-run-outputs"
+import { socialPostRunFields } from "@/lib/social-post-run"
 import { perHandleRunFields } from "@/lib/per-handle-batch"
 import { applyEdlRunCutFields, applyEdlTakeTranscriptField } from "@/lib/apply-edl-cut"
 import { runOutputTaskFields, usecaseResultIsText } from "@nodaro/render-rules"
@@ -2470,6 +2471,9 @@ function syncNodeStatesToStore(
         // Voice id, stems, alignment, combined / split text: ONE mapping, shared
         // with the two load-time restore lanes so they cannot drift again (#1547).
         Object.assign(updates, namedRunOutputFields(state.output));
+        // A social post: its link ("View post") and id, as the single-node Run
+        // writes them — the run carries them on `json` (lib/social-post-run.ts).
+        Object.assign(updates, socialPostRunFields(nodeType, state.output.json));
         // Video Overlay: warnings / canvas / length OVERWRITE the node's (a run
         // with none clears an earlier run's "Last run" line) and ride on the new
         // result entry — the same mapping the single-node Run writes.

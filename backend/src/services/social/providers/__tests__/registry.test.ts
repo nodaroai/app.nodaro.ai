@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest"
 import { z } from "zod"
 
 import { PROVIDERS, providerIds, getProvider, isConfigured, missingEnv, providerPublicInfo } from "../registry.js"
+import { META_PHOTO_MAX_BYTES } from "../../photo-limits.js"
 
 /**
  * Registry totality guard — the spec's Phase 0.9 test. Every rule here exists
@@ -15,6 +16,12 @@ describe("provider registry totality", () => {
   it("map keys match descriptor ids", () => {
     for (const [key, p] of Object.entries(PROVIDERS)) {
       expect(p.id).toBe(key)
+    }
+  })
+
+  it("the Meta networks fit a photo under Meta's byte limit before it is posted", () => {
+    for (const id of ["facebook", "instagram", "instagram-standalone"]) {
+      expect(getProvider(id)?.photoMaxBytes, id).toBe(META_PHOTO_MAX_BYTES)
     }
   })
 

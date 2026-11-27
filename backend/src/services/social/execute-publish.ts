@@ -1,6 +1,7 @@
 import { supabase } from "../../lib/supabase.js"
 import { decryptToken, encryptToken } from "./encryption.js"
 import { refreshAccessToken } from "./oauth.js"
+import { discardPhotoCopies, fitRequestPhotos } from "./photo-fit.js"
 import type { PublishRequest } from "./platforms/index.js"
 import { getProvider } from "./providers/registry.js"
 import { BadBodyError, NotPublishedError, RefreshTokenError } from "./providers/types.js"
@@ -22,7 +23,9 @@ import { BadBodyError, NotPublishedError, RefreshTokenError } from "./providers/
  *                          publisher threw it). No retry.
  * - NotPublishedError    — the publisher PROVED nothing was posted and the
  *                          cause is transient (Instagram's container phase +
- *                          its 9007 rejection). Definite AND retryable.
+ *                          its 9007 rejection, or a photo re-encoded to fit
+ *                          the network's limit that could not be stored).
+ *                          Definite AND retryable.
  * - UnknownOutcomeError  — the provider call was already in flight when it
  *                          failed (throw/timeout): the platform MAY have
  *                          accepted the post. NEVER blind-retry these — a
@@ -57,6 +60,17 @@ export interface ExecutePublishInput {
   request: PublishRequest
   /** Per-request metadata merged over the connection's (e.g. telegram chatId/parseMode). */
   extraMetadata?: Record<string, unknown>
+  /**
+   * The job this publish runs under: a photo re-encoded to fit the network's
+   * byte limit is stored in its scratch folder (`photo-fit.ts`).
+   */
+  jobId: string
+}
+
+/** The deadline a caller that must answer an open request set (`publishDeadlineMs`), if any. */
+function publishDeadlineOf(metadata: Record<string, unknown>): number | undefined {
+  const v = metadata.publishDeadlineMs
+  return typeof v === "number" && Number.isFinite(v) && v > 0 ? v : undefined
 }
 
 export interface ExecutePublishSuccess {
@@ -173,11 +187,17 @@ export async function executePublish(input: ExecutePublishInput): Promise<Execut
   }
   Object.assign(metadata, input.extraMetadata ?? {})
 
+  // Photos over the network's byte limit are re-encoded to fit, BEFORE the
+  // provider call: a failure here sent nothing, so it is never "unknown".
+  const fitted = await fitRequestPhotos(input.request, provider.photoMaxBytes, input.jobId, {
+    deadlineMs: publishDeadlineOf(metadata),
+  })
+
   // The provider call. From here on a failure is an UNKNOWN outcome — the
   // platform may have accepted the post before the error surfaced.
   let result
   try {
-    result = await provider.publisher.publish(accessToken, input.request, metadata)
+    result = await provider.publisher.publish(accessToken, fitted.request, metadata)
   } catch (err) {
     // A publisher that already CLASSIFIED its failure knows more than this
     // catch does — rethrow untouched. Wrapping a proven non-publish as
@@ -186,6 +206,11 @@ export async function executePublish(input: ExecutePublishInput): Promise<Execut
     if (err instanceof NotPublishedError || err instanceof BadBodyError) throw err
     const msg = err instanceof Error ? err.message : "Publish failed"
     throw new UnknownOutcomeError(`Publish outcome unknown — the post MAY have been published: ${msg}`, err)
+  } finally {
+    // The network fetched the copy during the call; nothing reads it after.
+    // Not awaited: the answer for a post that went out never waits on storage
+    // (it never throws, and the daily age sweep backs it up).
+    void discardPhotoCopies(fitted.copies, input.jobId)
   }
 
   if (!result.success) {
