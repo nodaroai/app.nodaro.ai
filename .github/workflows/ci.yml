@@ -1491,6 +1491,10 @@ jobs:
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
         run: node backend/scripts/verify-retained-image-copies-concurrency.mjs
+      - name: Verify routed credit recovery under concurrent funding
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
+        run: node backend/scripts/verify-video-route-credit-concurrency.mjs
       - name: Verify yearly-plan monthly credit grant concurrency
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres

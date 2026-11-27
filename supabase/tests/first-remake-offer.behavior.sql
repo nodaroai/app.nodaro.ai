@@ -415,7 +415,7 @@ BEGIN
     'grant_yearly_plan_monthly_credits(uuid,uuid,text,timestamp with time zone,timestamp with time zone,integer)',
     'hold_subscription_renewal_credits(uuid,text,timestamp with time zone)',
     'process_app_monetization(uuid,uuid,integer,uuid,uuid,integer,integer,integer,uuid)', 'refund_credits(uuid)',
-    'reinstate_signup_grant(uuid)',
+    'recover_video_pool_credits(uuid,integer,text,text,uuid,boolean)', 'reinstate_signup_grant(uuid)',
     'release_subscription_renewal_credits(uuid,text,text,timestamp with time zone,timestamp with time zone,integer,numeric,text)',
     'renew_subscription_credits_safety_net(uuid,uuid,timestamp with time zone,integer)',
     'reserve_credits(uuid,integer,uuid,text,numeric,numeric,boolean,integer,boolean,uuid,uuid,boolean)',
