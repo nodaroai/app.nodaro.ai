@@ -21,6 +21,22 @@ function nonEmptyText(value: unknown): string | undefined {
   return typeof value === "string" && value !== "" ? value : undefined
 }
 
+/**
+ * The post's link when it is a web address. It becomes the href of "View
+ * post", and a self-hosted network (WordPress, Mastodon, Lemmy) writes it from
+ * its own answer, so any other scheme (`javascript:`, `data:`) is never a link.
+ */
+function webLink(value: unknown): string | undefined {
+  const text = nonEmptyText(value)
+  if (text === undefined) return undefined
+  try {
+    const { protocol } = new URL(text)
+    return protocol === "https:" || protocol === "http:" ? text : undefined
+  } catch {
+    return undefined
+  }
+}
+
 /** Whether `nodeType` publishes through POST /v1/social/publish. */
 export function isSocialPostNodeType(nodeType: string | undefined): nodeType is string {
   return nodeType !== undefined && SOCIAL_POST_NODE_TYPES.has(nodeType)
@@ -36,6 +52,6 @@ export function socialPostRunFields(nodeType: string | undefined, post: unknown)
   const { platformPostId, platformPostUrl } = post as PublishedPost
   return {
     platformPostId: nonEmptyText(platformPostId),
-    platformPostUrl: nonEmptyText(platformPostUrl),
+    platformPostUrl: webLink(platformPostUrl),
   }
 }

@@ -19,6 +19,13 @@ describe("socialPostRunFields", () => {
     expect(socialPostRunFields("telegram-post", { platformPostId: "42" })).toEqual({ platformPostId: "42", platformPostUrl: undefined })
   })
 
+  it.each(["javascript:alert(1)", "data:text/html,<b>x</b>", "not a url"])("never writes %s as the link", (link) => {
+    expect(socialPostRunFields("publish-social", { platformPostId: "9", platformPostUrl: link })).toEqual({
+      platformPostId: "9",
+      platformPostUrl: undefined,
+    })
+  })
+
   it("reads no link out of what is not a string", () => {
     expect(socialPostRunFields("facebook-post", { platformPostId: 7, platformPostUrl: { href: "x" } })).toEqual({
       platformPostId: undefined,

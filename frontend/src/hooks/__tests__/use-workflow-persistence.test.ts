@@ -513,6 +513,35 @@ describe("useWorkflowPersistence — syncNodeResultsFromDB (via load)", () => {
     expect(data.generatedVideoUrl).toBe("https://cdn.example.com/vid.mp4")
   })
 
+  it("restores a published post's link on the unified publish node too", async () => {
+    const nodes = [
+      makeNode({
+        id: "n1",
+        type: "publish-social",
+        data: { label: "Publish", executionStatus: "running", currentJobId: VALID_UUID, generatedResults: [] },
+      }),
+    ]
+    mockGetBatchJobStatus.mockResolvedValue([
+      {
+        id: VALID_UUID,
+        status: "completed",
+        output_data: { platformPostId: "page-1_post-1", platformPostUrl: "https://www.facebook.com/page-1_post-1" },
+        error_message: null,
+      },
+    ])
+    setupSupabaseLoad({ id: "w1", name: "Test", nodes, edges: [], settings: {} })
+
+    const { result } = renderHook(() => useWorkflowPersistence("p1"))
+    await act(async () => {
+      await result.current.load("w1")
+    })
+
+    const data = getSyncedNodes()[0].data as Record<string, unknown>
+    expect(data.executionStatus).toBe("completed")
+    expect(data.platformPostUrl).toBe("https://www.facebook.com/page-1_post-1")
+    expect(data.platformPostId).toBe("page-1_post-1")
+  })
+
   it("updates completed job with audioUrl", async () => {
     const nodes = [
       makeNode({
