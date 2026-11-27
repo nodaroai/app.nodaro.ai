@@ -1,5 +1,13 @@
 # @nodaro/prompts
 
+## 1.62.1
+
+### Patch Changes
+
+- 5baf435: Seedance 2.5's prompt doctrine and wizard notes say it renders native 4K (the priciest and slowest tier), where they said it had no 4K tier.
+- Updated dependencies [5baf435]
+  - @nodaro/shared@3.76.0
+
 ## 1.62.0
 
 ### Minor Changes
