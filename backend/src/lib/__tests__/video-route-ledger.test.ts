@@ -74,6 +74,16 @@ describe("routed task evidence", () => {
     expect(routeBillingAtOf(row)).toBe("2026-11-26T23:59:00.000Z")
   })
 
+  it("a finish time in the future is taken as now", async () => {
+    const db = createFakeTables()
+    h.table = () => db.client.from("video_route_ledger")
+    const before = Date.now()
+    await recordRouteTask("job", 1, "t", 0.5, "", undefined, undefined, { completedAt: "2099-01-01T00:00:00Z" })
+    const kept = Date.parse(String((db.rows("video_route_ledger")[0]!.detail as Record<string, unknown>).completedAt))
+    expect(kept).toBeGreaterThanOrEqual(before)
+    expect(kept).toBeLessThanOrEqual(Date.now())
+  })
+
   it("without the route's own time, a bill counts on the day the task was first read done", () => {
     const created = "2026-11-26T10:00:00.000+00:00"
     const billedAt = "2026-11-28T09:00:00.000Z"
@@ -134,6 +144,19 @@ describe("a settlement that ends", () => {
     db.rows("video_route_ledger")[0]!.next_attempt_at = "2026-11-27T12:00:00.000Z"
     await recordRouteSettle("job", "retry", { note: "again" })
     expect(db.rows("video_route_ledger")[0]).toMatchObject({ state: "done", next_attempt_at: "2026-11-27T12:00:00.000Z" })
+  })
+})
+
+describe("a settle row written only while it holds what the writer read", () => {
+  it("is not written when its condition no longer holds on the row's current read (a watch started meanwhile keeps its next read)", async () => {
+    const at = "2026-11-27T10:00:00.000+00:00"
+    const db = createFakeTables({ video_route_ledger: [{ id: 1, job_id: "job", env: getRuntimeEnv(), kind: "settle", send: 1, key: "", state: "done", next_attempt_at: "2026-11-28T10:00:00.000Z", detail: { watchUntil: "2026-12-04T10:00:00.000Z" }, created_at: at, updated_at: at }] })
+    h.table = () => db.client.from("video_route_ledger")
+    expect(await patchRouteSettle("job", {}, { next_attempt_at: null }, { onlyStates: ["done"], onlyIf: (row) => typeof row.detail.watchUntil !== "string" })).toBe(false)
+    expect(db.rows("video_route_ledger")[0]!.next_attempt_at).toBe("2026-11-28T10:00:00.000Z")
+    db.rows("video_route_ledger")[0]!.detail = {}
+    expect(await patchRouteSettle("job", {}, { next_attempt_at: null }, { onlyStates: ["done"], onlyIf: (row) => typeof row.detail.watchUntil !== "string" })).toBe(true)
+    expect(db.rows("video_route_ledger")[0]!.next_attempt_at).toBeNull()
   })
 })
 

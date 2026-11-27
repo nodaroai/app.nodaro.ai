@@ -53,6 +53,7 @@ import { getChargedPriceTable } from "../billing/credits.js"
 import { getRuntimeEnv } from "../../lib/runtime-env.js"
 import { readVideoRouteAlerts, type VideoRouteAlert } from "../billing/video-route-alerts.js"
 import { readBalances, spendDaysOf, type SpendDay } from "../billing/video-route-watch.js"
+import { readAccountDays, type AccountDay } from "../billing/video-route-account.js"
 import { RUNTIME_ENV_NAMEABLE, supabase } from "../../lib/supabase.js"
 import { VIDEO_ROUTE_OUTCOME_KEY, type VideoRouteOutcome } from "../billing/video-route-admission.js"
 import { audit } from "./admin-trends-lifecycle.js"
@@ -121,6 +122,8 @@ export interface VideoRouteAdminView {
   /** This environment's daily reconciliations, newest first: recorded cost of routed jobs against the route's own spend. */
   alerts: VideoRouteAlert[]
   spendDays: SpendDay[]
+  /** The route's WHOLE account, checked once a day for every environment together (ee/billing/video-route-account.ts), newest first. */
+  accountDays: AccountDay[]
   /**
    * Settlements waiting for an admin, oldest first (`heldAt`: when it started waiting): a bill far above its quote
    * (confirm or reject), or a run the route never billed (settle at its quote or release). Each carries what a decision
@@ -201,7 +204,7 @@ function legacyRoutingOf(services: ReadonlySet<string>): { recognised: VideoRout
 }
 
 async function view(): Promise<VideoRouteAdminView> {
-  const [{ policy, updatedAt }, { factors, updatedAt: factorsUpdatedAt }, settings, outcomes, balances, spendRaw, alerts, holds] = await Promise.all([
+  const [{ policy, updatedAt }, { factors, updatedAt: factorsUpdatedAt }, settings, outcomes, balances, spendRaw, alerts, holds, accountDays] = await Promise.all([
     readVideoRoutePolicy(),
     readVideoRoutePriceFactors(),
     getAppSettings(),
@@ -210,6 +213,8 @@ async function view(): Promise<VideoRouteAdminView> {
     readSettingsRowValue(videoRouteSpendDaysKey()),
     readVideoRouteAlerts(),
     readHeldRouteSettles(),
+    // The account's days are context: a read that fails shows none rather than failing the page.
+    readAccountDays().catch(() => [] as AccountDay[]),
   ])
   const routeView = currentRouteView(modelOfPriceId)
   const legacy = legacyRoutingOf(new Set<string>([...ALTERNATE_ROUTE_JOB_TYPES, ...getPluginJobTypes()]))
@@ -242,6 +247,7 @@ async function view(): Promise<VideoRouteAdminView> {
     balances,
     alerts,
     spendDays: spendDaysOf(spendRaw),
+    accountDays,
     holds: await Promise.all(holds.map(async (hold) => {
       // What each action would do now, from the same computation the settlement uses. Never fails the page.
       const preview = await previewRoutedSettlement(hold.jobId).catch(() => null)

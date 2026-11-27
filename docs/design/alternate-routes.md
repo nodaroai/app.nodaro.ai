@@ -191,13 +191,23 @@ selection suppresses legacy routing for that model or service.
   day against every environment's bills, sends still to be billed at their
   estimate, and those jobs' recorded cost by the day they completed. Past
   the policy's `spendDriftAlertPercent` (never less than the midnight
-  allowance), spend above everything recorded is alerted as possible paid
-  tasks nothing recorded, and recorded bills above the spend as bills that
-  may be wrong. The last nine days are recomputed each pass, so a late bill
-  corrects its own day. The pass claims its day in a settings row no
-  environment owns: the first environment with a routing policy saved takes
-  it, the other skips, and a claim not finished in two hours may be taken
-  over. Its alerts appear in the Admin of the environment that ran it.
+  allowance), spend above everything recorded (less the policy's known other
+  spend on the account, `accountOtherSpendUsdPerDay`, default 0) is alerted
+  as possible paid tasks nothing recorded, and recorded bills above the spend
+  as bills that may be wrong, each only when a later pass day still sees it.
+  A difference the neighbouring day offsets within one run's worth is a
+  midnight straddle (`offsetMidnightStraddles`), not an alert. The last nine
+  days are recomputed each pass, so a late bill corrects its own day; each
+  environment's own days are recomputed the same way. The route is asked for
+  a day's spend only for the day just ended and the one before: a day it
+  could not be read for stays pending and is asked again, and one still
+  unread after that is unmeasured, alerted once and never compared. The pass
+  runs hourly and claims its day in a settings row no environment owns: the
+  first environment with a routing policy saved takes it, the other skips; a
+  day is marked done only once its spend was read, a pass that fails is
+  alerted and gives its claim back, and a claim not finished in two hours may
+  be taken over. Its alerts appear in the Admin of the environment that ran
+  it. The jobs it reads are found through a partial index (migration 738).
 - **Routed records carry no default request.** A routed run never falls
   back, so a host that does not know routed runs never sends one to the
   default upstream: that half is closed. It can still FINALIZE a routed task

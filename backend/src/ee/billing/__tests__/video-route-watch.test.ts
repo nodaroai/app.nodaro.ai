@@ -20,6 +20,7 @@ const h = vi.hoisted(() => ({
   stuckRepayments: 0,
   otherEnvs: [] as Array<{ env: string; open: number }>,
   aliveEnvs: [] as string[],
+  keptDays: null as unknown,
 }))
 vi.mock("@/lib/video-route-ledger.js", async (orig) => ({
   ...(await orig<typeof import("@/lib/video-route-ledger.js")>()),
@@ -37,6 +38,7 @@ vi.mock("@/lib/app-settings.js", () => ({ getAppSettings: async () => h.settings
 vi.mock("../../routes/admin-kie-credits.js", () => ({ fetchKieCreditSnapshotsSince: async () => h.snapshots }))
 vi.mock("@/lib/video-route-policy-store.js", () => ({
   videoRouteSpendDaysKey: () => "video_route_spend_days:local",
+  readSettingsRowValue: async () => h.keptDays,
   updateSettingsRow: async (key: string, change: (raw: unknown, at: string | null) => unknown) => {
     if (key.startsWith("video_route_alerts:")) h.adminAlerts = change(h.adminAlerts, null) as unknown[]
     else h.kept.push(change(null, null))
@@ -97,6 +99,7 @@ beforeEach(() => {
   h.stuckRepayments = 0
   h.otherEnvs = []
   h.aliveEnvs = []
+  h.keptDays = null
   err = vi.spyOn(console, "error").mockImplementation(() => {})
   ;(err as unknown as { mockClear(): void }).mockClear()
 })
@@ -184,6 +187,22 @@ describe("reconcileRouteSpend", () => {
     const day = await reconcileRouteSpend(NOW)
     expect(day).toMatchObject({ recordedUsd: 3.5, jobs: 3 })
     expect((h.adminAlerts as Array<{ key: string }>).some((a) => a.key.startsWith("missing-receipts:"))).toBe(false)
+  })
+
+  it("recomputes the trailing days, so a bill that reached the ledger after its day was reconciled lands on its own day (only the newest day alerts)", async () => {
+    route()
+    h.settings = { video_route_policy: policy() }
+    // The 22nd was reconciled with no bill; its account figure was kept then.
+    h.keptDays = [{ day: "2026-11-22", recordedUsd: 0, lossesUsd: 0, actualUsd: 4, videoSeconds: 30, unexplainedUsd: 4, jobs: 0, failedJobs: 0, at: "x" }]
+    // First read done on the 22nd; its bill reached the ledger on the 24th.
+    h.tasks = [{ job_id: "old", billed_usd: "4.000000", created_at: "2026-11-22T10:00:00.000Z", detail: { billedAt: "2026-11-24T08:00:00.000Z" } }] as never
+    const day = await reconcileRouteSpend(NOW)
+    expect(day).toMatchObject({ day: "2026-11-24", recordedUsd: 0 })
+    const kept = h.kept[0] as Array<Record<string, unknown>>
+    expect(kept).toHaveLength(9)
+    expect(kept.find((d) => d.day === "2026-11-22")).toMatchObject({ recordedUsd: 4, actualUsd: 4, videoSeconds: 30, unexplainedUsd: 0, jobs: 1 })
+    expect(kept.find((d) => d.day === "2026-11-23")).toMatchObject({ recordedUsd: 0, actualUsd: null })
+    expect(h.adminAlerts).toEqual([])
   })
 
   it("a send given up on whose bill arrived is a known loss, never a charged job's cost", async () => {

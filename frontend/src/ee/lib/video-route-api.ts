@@ -13,6 +13,51 @@ export interface VideoRoutePolicy {
   billAnomalyMultiple: number
   /** Whether an unpaid part of a routed charge blocks new paid runs and is repaid from later funding. Off: recorded and alerted only. */
   enforceUnpaidCharges: boolean
+  /**
+   * What the route's shared account is known to spend per UTC day on work this platform never records
+   * (another user of the same account), in USD (0 to 1,000,000; 0: nothing allowed for). The daily account
+   * check takes it off the account's spend before it alerts that the account spent more than everything
+   * recorded. An allowance the owner sets from what they know.
+   */
+  accountOtherSpendUsdPerDay: number
+}
+
+/** One UTC day of the daily account check: the route's whole account against everything every environment recorded. */
+export interface VideoRouteAccountDay {
+  /** YYYY-MM-DD (UTC). */
+  day: string
+  /** `pending`: the account's spend for the day could not be read yet (it is retried). `unmeasured`: it could not be read while the route still reported that day. */
+  status: "measured" | "pending" | "unmeasured"
+  /** What the route's account spent that whole UTC day. */
+  actualUsd: number | null
+  /** Every environment's verified bills the route billed that day. */
+  ledgerUsd: number
+  /** The same, per environment. */
+  byEnv: Record<string, number>
+  /** Delivered sends with no bill yet, at the route's estimate. */
+  pendingUsd: number
+  /** Delivered sends with no bill and no estimate. */
+  unpricedSends: number
+  /** Alternate-route jobs with no routing decision: their recorded cost. */
+  unroutedUsd: number
+  unroutedJobs: number
+  /** The other-spend allowance applied that day (`accountOtherSpendUsdPerDay`). */
+  otherSpendUsd: number
+  /** The part of the day's difference offset by the neighbouring day (runs that straddle midnight). */
+  straddleUsd: number
+  /** What the account spent beyond everything recorded (after the allowance and the straddle); null without an account figure. */
+  unrecordedUsd: number | null
+  /** What was recorded beyond the account's spend (after the straddle); null without an account figure. */
+  overRecordedUsd: number | null
+  toleranceUsd: number
+  /** The pass day this day's gap was first seen past the tolerance (alerts wait for a later pass). */
+  unrecordedSince?: string
+  overRecordedSince?: string
+  alerted?: { unrecordedUsd?: number; overRecordedUsd?: number }
+  /** The environment that ran the check. */
+  env: string
+  /** When the check ran (ISO time). */
+  at: string
 }
 
 /** A settlement held because its verified bill is far above its quote. */
@@ -75,12 +120,14 @@ export interface VideoRouteView {
     videoSeconds: number | null
     /** What the route's SHARED account spent beyond this environment's ledger: context only, never attributed here. */
     unexplainedUsd: number | null
-    /** What this environment's ledger recorded beyond the whole account's spend: the drift that is alerted. */
+    /** What this environment's ledger recorded beyond the whole account's spend: context only (the account check alerts it, against every environment's bills). */
     overRecordedUsd?: number | null
     jobs: number
     failedJobs: number
     at: string
   }>
+  /** Newest first (up to 30): the route's whole account, checked once a day for every environment together. */
+  accountDays: VideoRouteAccountDay[]
 }
 
 const PATH = "/v1/admin/video-route"

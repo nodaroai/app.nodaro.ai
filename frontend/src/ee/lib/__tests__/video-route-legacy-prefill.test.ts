@@ -4,6 +4,7 @@ import { withLegacyRouting, type VideoRoutePolicy } from "../video-route-api"
 const policy = (models: VideoRoutePolicy["models"] = {}): VideoRoutePolicy => ({
   models, routeBalanceAlertUsd: null, defaultProviderBalanceAlertCredits: null, spendDriftAlertPercent: 3,
   failureAlert: { failures: 5, windowMinutes: 30 }, billAnomalyMultiple: 5, enforceUnpaidCharges: false,
+  accountOtherSpendUsdPerDay: 0,
 })
 
 describe("withLegacyRouting — a first save starts from what runs on the alternate route today", () => {

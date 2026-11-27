@@ -63,7 +63,8 @@ export async function readLateBills(now: number, previewRoutedSettlement: Previe
       // watch ever started on it (a short balance's record is written by the database, which keeps
       // that time). Its time is cleared so no pass reads it again; nothing is recorded or counted.
       if (watch.state !== "unbilled" && !Number.isFinite(until)) {
-        await patchRouteSettle(watch.jobId, {}, { next_attempt_at: null }, { onlyStates: [watch.state] })
+        // Only while it still carries no watch: one started since the list was read keeps its next read.
+        await patchRouteSettle(watch.jobId, {}, { next_attempt_at: null }, { onlyStates: [watch.state], onlyIf: (row) => typeof row.detail.watchUntil !== "string" })
         continue
       }
       out.read++
@@ -73,9 +74,19 @@ export async function readLateBills(now: number, previewRoutedSettlement: Previe
       const cadence = watch.state === "unbilled" ? LATE_BILL_READ_MS.unbilled : LATE_BILL_READ_MS.closed
       const later = new Date(now + cadence).toISOString()
       const billedNow = after.ledgerBilledUsd ?? null
-      // The ledger could not be read just now (a settings or job read that failed): nothing is decided on a guess; read again (while the watch lasts).
+      const watching = Number.isFinite(until) && now < until
+      // Figures that cannot be read just now are never decided on a guess: read again while the watch
+      // lasts; a watch that ends with them still unread says so, once.
+      const unreadUntilEnd = async (next: string): Promise<void> => {
+        await patchSettleOrAlert(watch.jobId, "The next late-bill read", {}, { next_attempt_at: watching ? next : null })
+        if (watching) return
+        const message = `The late-bill watch of a routed run ended while its figures could not be read: a bill that arrived for it after it was settled may not be recorded. Check its settlement in Admin.`
+        console.error(`[ALERT] video route: job ${watch.jobId}: ${message}`)
+        await recordVideoRouteAlert({ key: `late-bill-unread:${watch.jobId}`, kind: "settlement", jobId: watch.jobId, message }).catch(() => {})
+      }
+      // The ledger could not be read just now (a settings or job read that failed).
       if (billedNow === null) {
-        await patchSettleOrAlert(watch.jobId, "The next late-bill read", {}, { next_attempt_at: Number.isFinite(until) && now < until ? new Date(now + LATE_BILL_READ_MS.unbilled).toISOString() : null })
+        await unreadUntilEnd(new Date(now + LATE_BILL_READ_MS.unbilled).toISOString())
         continue
       }
       // Read again while any send may still be billed and the watch has time left. Otherwise stop.
@@ -107,7 +118,7 @@ export async function readLateBills(now: number, previewRoutedSettlement: Previe
       // A reservation that cannot be read, or a charged run whose total cannot be computed just now:
       // not recorded on a guess; the next pass finds the same change.
       if (taken === null || loss === null || (!nothingCharged && known === null)) {
-        await patchSettleOrAlert(watch.jobId, "The next late-bill read", {}, { next_attempt_at: later })
+        await unreadUntilEnd(later)
         continue
       }
       const difference = known === null ? 0 : Math.max(0, known - taken.credits)
@@ -117,15 +128,19 @@ export async function readLateBills(now: number, previewRoutedSettlement: Previe
       const uncollected = nothingCharged ? loss.credits : difference
       const lateBillBefore = watch.detail.lateBill as Record<string, unknown> | undefined
       const priorUncollected = watch.state === "shortfall" ? (numberOf(lateBillBefore?.differenceCredits) ?? 0) : watch.uncollected
-      const priorLoss = numberOf(lateBillBefore?.lossCredits) ?? numberOf((watch.detail.loss as Record<string, unknown> | undefined)?.credits) ?? (nothingCharged ? watch.uncollected : 0)
+      // The loss last RECORDED for it (a released run's is its uncollected column, written with the release).
+      const recordedLoss = numberOf(lateBillBefore?.lossCredits) ?? numberOf((watch.detail.loss as Record<string, unknown> | undefined)?.credits) ?? (watch.state === "waived" ? watch.uncollected : null)
+      const priorLoss = recordedLoss ?? (nothingCharged ? null : 0)
       const columns = { next_attempt_at: nextAt, ...(watch.state === "shortfall" ? {} : { uncollected }) }
       // No starting figure was kept (the ledger could not be read when the watch started): this read
-      // only records it — no late bill, nothing counted — unless what it costs against what was taken
-      // moved, which is a late bill whatever the starting point.
-      if (recordedUsd === null && (nothingCharged ? priorUncollected === null || priorUncollected === uncollected : (priorUncollected ?? 0) === difference)) {
+      // only records it — no late bill, nothing counted. A charged run is the exception: a charge that
+      // no longer matches what it now costs, or a loss that moved, is a late bill whatever the starting
+      // point. A run not charged (its hold went back — after the watch started, too, as a short
+      // balance's refund does) has its loss recorded, and alerted once when it moved.
+      if (recordedUsd === null && (nothingCharged || ((priorUncollected ?? 0) === difference && priorLoss === loss.credits))) {
         if (!(await patchSettleOrAlert(watch.jobId, "The starting figures of a late-bill watch", { knownUsd: billedNow, loss: { credits: loss.credits, usd: loss.usd } }, columns))) continue
-        // A run that was not charged whose loss was not known when it ended: the loss, once, now that it is.
-        if (nothingCharged && priorUncollected === null && loss.credits > 0) {
+        // A run that was not charged whose loss was not known (or not this) when the watch started: the loss, once, now that it is.
+        if (nothingCharged && loss.credits > 0 && priorLoss !== loss.credits) {
           const message = `The loss of a routed run that was not charged is now known: the route's bills for it come to ${loss.credits} credits (${loss.usd.toFixed(4)} USD), recorded as the loss.`
           console.error(`[ALERT] video route: job ${watch.jobId}: ${message}`)
           await recordVideoRouteAlert({ key: `loss-known:${watch.jobId}`, kind: "settlement", jobId: watch.jobId, message }).catch(() => {})

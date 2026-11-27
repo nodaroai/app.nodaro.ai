@@ -169,6 +169,41 @@ describe("a late bill, through the real ledger", () => {
     expect(await countLateBills(new Date(NOW - 86_400_000).toISOString())).toBe(0)
   })
 
+  it("with no starting figure, a charged run whose not-charged send's bill arrived is a late bill even though its charge still matches", async () => {
+    // Send 1 was replaced (our loss) and billed 40 before the first read; send 2, the clip delivered, was charged at its bill of 100.
+    settledAtQuote([{ send: 1, ref: "t1", billed_usd: CREDIT_BASE_USD * 40, detail: { ownLoss: true } }, { send: 2, ref: "t2", billed_usd: CREDIT_BASE_USD * 100 }])
+    settleRow().detail = { watchUntil: new Date(NOW + 5 * 86_400_000).toISOString() }
+    expect(await readLateBills(NOW)).toEqual({ read: 1, arrived: 1 })
+    expect(settleRow()).toMatchObject({ uncollected: 0, detail: expect.objectContaining({ lateBill: expect.objectContaining({ differenceCredits: 0, lossCredits: 40 }) }) })
+    expect(h.alerts.find((a) => a.key === `late-bill:${JOB}`)!.message).toContain("40 credits of sends not charged")
+  })
+
+  it("a short balance refunded after its watch started is not a late bill: its loss is recorded and alerted once", async () => {
+    // Its watch started with no figure (a short balance's record is finished by the sweep); then its charge was refunded.
+    settledAtQuote([{ send: 1, ref: "t1", billed_usd: CREDIT_BASE_USD * 130 }])
+    Object.assign(settleRow(), { state: "done", credits: 0, uncollected: 0, note: "refunded", detail: { watchUntil: new Date(NOW + 5 * 86_400_000).toISOString() } })
+    Object.assign(h.db!.rows("usage_logs")[0]!, { status: "refunded" })
+    expect(await readLateBills(NOW)).toEqual({ read: 1, arrived: 0 })
+    expect(settleRow()).toMatchObject({ uncollected: 130, detail: expect.objectContaining({ knownUsd: CREDIT_BASE_USD * 130, loss: { credits: 130, usd: CREDIT_BASE_USD * 130 } }) })
+    expect(h.alerts.filter((a) => a.key === `loss-known:${JOB}`)).toHaveLength(1)
+    expect(h.alerts.some((a) => a.key === `late-bill:${JOB}`)).toBe(false)
+    expect(await countLateBills(new Date(NOW - 86_400_000).toISOString())).toBe(0)
+  })
+
+  it("a reservation that says neither refunded nor charged is read again only while the watch lasts, and its end is alerted", async () => {
+    settledAtQuote([{ send: 1, ref: "t1", billed_usd: CREDIT_BASE_USD * 260 }])
+    Object.assign(h.db!.rows("usage_logs")[0]!, { status: "reserved", receipt: null })
+    expect(await readLateBills(NOW)).toEqual({ read: 1, arrived: 0 })
+    expect(settleRow().next_attempt_at).toEqual(new Date(NOW + 24 * 3_600_000).toISOString())
+    expect(h.alerts.some((a) => a.key === `late-bill-unread:${JOB}`)).toBe(false)
+    // Past its watch: no further read, and one alert says the watch ended unread.
+    settleRow().detail = { ...(settleRow().detail as Record<string, unknown>), watchUntil: new Date(NOW - 60_000).toISOString() }
+    settleRow().next_attempt_at = new Date(NOW).toISOString()
+    await readLateBills(NOW + 60_000)
+    expect(settleRow().next_attempt_at).toBeNull()
+    expect(h.alerts.filter((a) => a.key === `late-bill-unread:${JOB}`)).toHaveLength(1)
+  })
+
   it("a finished settlement with a retry time left over and no watch is taken off the list, with nothing recorded", async () => {
     settledAtQuote([{ send: 1, ref: "t1", billed_usd: null }])
     settleRow().detail = { firstAttemptAt: new Date(NOW - 86_400_000).toISOString() }

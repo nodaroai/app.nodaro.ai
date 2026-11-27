@@ -32,10 +32,10 @@ import { getAppSettings } from "../../lib/app-settings.js"
 import { getRuntimeEnv } from "../../lib/runtime-env.js"
 import { getPluginServices } from "../../lib/private-plugins/services-registry.js"
 import { unpaidChargesEnforced } from "../../lib/video-route-policy.js"
-import { updateSettingsRow, videoRouteSpendDaysKey } from "../../lib/video-route-policy-store.js"
+import { readSettingsRowValue, updateSettingsRow, videoRouteSpendDaysKey } from "../../lib/video-route-policy-store.js"
 import { countHeldRouteSettles, countLateBills, countStuckDeferredRepayments, envWroteLedgerSince, readOtherEnvOpenSettles } from "../../lib/video-route-ledger.js"
 import { fetchKieCreditSnapshotsSince } from "../routes/admin-kie-credits.js"
-import { MIDNIGHT_STRADDLE_ALLOWANCE_USD, ledgerTasksBilledBetween, reconcileRouteAccount } from "./video-route-account.js"
+import { ACCOUNT_DAYS_TRAILING, MIDNIGHT_STRADDLE_ALLOWANCE_USD, ledgerTasksBilledBetween, reconcileRouteAccount } from "./video-route-account.js"
 export { MIDNIGHT_STRADDLE_ALLOWANCE_USD } from "./video-route-account.js"
 
 /** One balance alert per account at most this often. */
@@ -132,7 +132,7 @@ export function spendDrifted(recordedUsd: number, unexplainedUsd: number, percen
  * run's segments (rows of their parent) are each there: the ledger, not
  * `jobs.provider_cost`.
  */
-async function ledgerTasksBetween(start: Date, end: Date): Promise<Array<{ jobId: string; billedUsd: number | null; outcome: string | null; ownLoss: boolean; status: string | null }>> {
+async function ledgerTasksBetween(start: Date, end: Date): Promise<Array<{ jobId: string; billedUsd: number | null; outcome: string | null; ownLoss: boolean; status: string | null; at: string }>> {
   const tasks = await ledgerTasksBilledBetween(start, end, getRuntimeEnv())
   const ids = [...new Set(tasks.map((t) => t.jobId))]
   const status = new Map<string, string>()
@@ -142,13 +142,18 @@ async function ledgerTasksBetween(start: Date, end: Date): Promise<Array<{ jobId
     if (error) throw new Error(error.message)
     for (const r of (data ?? []) as Array<{ id: string; status: string }>) status.set(r.id, r.status)
   }
-  return tasks.map((t) => ({ jobId: t.jobId, billedUsd: t.billedUsd, outcome: t.outcome, ownLoss: t.ownLoss, status: status.get(t.jobId) ?? null }))
+  return tasks.map((t) => ({ jobId: t.jobId, billedUsd: t.billedUsd, outcome: t.outcome, ownLoss: t.ownLoss, status: status.get(t.jobId) ?? null, at: t.at }))
 }
 
 /**
- * Reconciles the UTC day before `now` for this environment and keeps the
- * result. Never throws; null when there is no route service here or no
- * routing was ever saved.
+ * Reconciles this environment's days and keeps them: the UTC day before `now`,
+ * and the {@link ACCOUNT_DAYS_TRAILING} days before it recomputed (a bill that
+ * reached the ledger after its day was first reconciled counts on its own day,
+ * the day the route billed it). The day before `now` is alerted on (unreported
+ * bills, unresolved sends, known losses); an earlier day's figures are only
+ * corrected (a late bill on it is alerted by its settlement's watch). The
+ * account's figure for an earlier day is the one kept when it was read. Never
+ * throws; null when there is no route service here or no routing was ever saved.
  */
 export async function reconcileRouteSpend(now = new Date()): Promise<SpendDay | null> {
   try {
@@ -157,74 +162,101 @@ export async function reconcileRouteSpend(now = new Date()): Promise<SpendDay | 
     const settings = await getAppSettings()
     if (!settings.video_route_policy) return null
     const { day, start, end } = previousUtcDay(now)
+    const windowStart = new Date(end.getTime() - ACCOUNT_DAYS_TRAILING * 86_400_000)
+    const tasks = await ledgerTasksBetween(windowStart, end)
+    const kept = new Map(spendDaysOf(await readSettingsRowValue(videoRouteSpendDaysKey()).catch(() => null)).map((d) => [d.day, d]))
+    const at = new Date().toISOString()
 
-    let recordedUsd = 0
-    let lossesUsd = 0
-    let unreported = 0
-    const delivered = new Set<string>()
-    const lost = new Set<string>()
-    let unresolved = 0
-    const unresolvedJobs = new Set<string>()
-    for (const task of await ledgerTasksBetween(start, end)) {
-      // A send the route ended with no result was not billed: nothing to report.
-      if (task.outcome === "failed" || task.outcome === "expired") continue
-      // A send that started and could never be read to an end, with no bill: a possible charge nothing here accounts for.
-      if (task.outcome === "unresolved" && task.billedUsd === null) {
-        unresolved++
-        unresolvedJobs.add(task.jobId)
-        continue
-      }
-      if (task.billedUsd === null) {
-        unreported++
-        continue
-      }
-      // A task of a job that failed or was cancelled was refunded to its owner, a delivered send that
-      // was replaced after a step of ours failed was never charged, and a send given up on whose bill
-      // arrived is never charged: known losses.
-      if (task.status === "failed" || task.status === "cancelled" || task.ownLoss || task.outcome === "unresolved") {
-        lost.add(task.jobId)
-        lossesUsd += task.billedUsd
-      } else {
-        delivered.add(task.jobId)
-        recordedUsd += task.billedUsd
-      }
-    }
-    const jobs = delivered.size
-    const failedJobs = lost.size
-    if (unresolved > 0) {
-      const message = `${unresolved} routed send(s) on ${day} started and could not be read to an end (${unresolvedJobs.size} job(s): ${[...unresolvedJobs].slice(0, 10).join(", ")}${unresolvedJobs.size > 10 ? ", …" : ""}). They were not charged; the route may have billed them.`
-      console.error(`[ALERT] video route: ${message}`)
-      await recordVideoRouteAlert({ key: `unresolved-sends:${day}`, kind: "reconciliation", message })
-    }
-    if (unreported > 0) await recordVideoRouteAlert({ key: `missing-receipts:${day}`, kind: "reconciliation", message: `${unreported} routed tasks on ${day} reported no verified bill. Their settlement is pending.` })
-
-    // The route's own figures for the whole UTC day: since its start, less since its end.
+    // The day before `now`: the route's own figures for the whole UTC day (since its start, less since its end).
     const [sinceStart, sinceEnd] = await Promise.all([service.spend(start.toISOString()), service.spend(end.toISOString())])
-    const actualUsd = sinceStart && sinceEnd ? Math.max(0, sinceStart.actualUsd - sinceEnd.actualUsd) : null
-    const videoSeconds = sinceStart?.videoSeconds != null && sinceEnd?.videoSeconds != null ? Math.max(0, sinceStart.videoSeconds - sinceEnd.videoSeconds) : null
-    // The account is shared (other environments, traffic that never reaches this ledger): both
-    // differences are context here. The account's own pass compares it with everything recorded.
-    const unexplainedUsd = actualUsd === null ? null : actualUsd - recordedUsd - lossesUsd
-    const overRecordedUsd = actualUsd === null ? null : Math.max(0, recordedUsd + lossesUsd - actualUsd)
-    const result: SpendDay = { day, recordedUsd, lossesUsd, actualUsd, videoSeconds, unexplainedUsd, overRecordedUsd, jobs, failedJobs, at: new Date().toISOString() }
+    const latest = { actualUsd: sinceStart && sinceEnd ? Math.max(0, sinceStart.actualUsd - sinceEnd.actualUsd) : null, videoSeconds: sinceStart?.videoSeconds != null && sinceEnd?.videoSeconds != null ? Math.max(0, sinceStart.videoSeconds - sinceEnd.videoSeconds) : null }
 
-    if (lossesUsd > 0) {
-      const message = `On ${day} the route billed ${lossesUsd.toFixed(2)} USD for routed sends of ${failedJobs} job(s) that were not charged (a run that failed or was cancelled, a send replaced after a step of ours failed, or a send given up on whose bill arrived): known losses.`
-      await recordVideoRouteAlert({ key: `losses:${day}`, kind: "reconciliation", message })
-      console.error(`[ALERT] video route: ${message}`)
+    const results: SpendDay[] = []
+    for (let i = 0; i < ACCOUNT_DAYS_TRAILING; i++) {
+      const dayStart = end.getTime() - (i + 1) * 86_400_000
+      const thisDay = new Date(dayStart).toISOString().slice(0, 10)
+      const own = tasks.filter((t) => {
+        const ms = Date.parse(t.at)
+        return ms >= dayStart && ms < dayStart + 86_400_000
+      })
+      const figures = i === 0 ? latest : { actualUsd: kept.get(thisDay)?.actualUsd ?? null, videoSeconds: kept.get(thisDay)?.videoSeconds ?? null }
+      const summary = summarizeSpendDay(thisDay, own, figures, at)
+      results.push(summary.day)
+      if (i > 0) continue
+      if (summary.unresolved > 0) {
+        const message = `${summary.unresolved} routed send(s) on ${day} started and could not be read to an end (${summary.unresolvedJobs.length} job(s): ${summary.unresolvedJobs.slice(0, 10).join(", ")}${summary.unresolvedJobs.length > 10 ? ", …" : ""}). They were not charged; the route may have billed them.`
+        console.error(`[ALERT] video route: ${message}`)
+        await recordVideoRouteAlert({ key: `unresolved-sends:${day}`, kind: "reconciliation", message })
+      }
+      if (summary.unreported > 0) await recordVideoRouteAlert({ key: `missing-receipts:${day}`, kind: "reconciliation", message: `${summary.unreported} routed tasks on ${day} reported no verified bill. Their settlement is pending.` })
+      if (summary.day.lossesUsd > 0) {
+        const message = `On ${day} the route billed ${summary.day.lossesUsd.toFixed(2)} USD for routed sends of ${summary.day.failedJobs} job(s) that were not charged (a run that failed or was cancelled, a send replaced after a step of ours failed, or a send given up on whose bill arrived): known losses.`
+        await recordVideoRouteAlert({ key: `losses:${day}`, kind: "reconciliation", message })
+        console.error(`[ALERT] video route: ${message}`)
+      }
     }
-    await keepSpendDay(result)
-    return result
+    await keepSpendDays(results)
+    return results[0] ?? null
   } catch (err) {
     console.error(`[video-route] the daily spend reconciliation failed: ${err instanceof Error ? err.message : String(err)}`)
     return null
   }
 }
 
-async function keepSpendDay(day: SpendDay): Promise<void> {
+/** One day of this environment's ledger, summed (the day's tasks only). Pure. */
+function summarizeSpendDay(
+  day: string,
+  tasks: ReadonlyArray<{ jobId: string; billedUsd: number | null; outcome: string | null; ownLoss: boolean; status: string | null }>,
+  figures: { actualUsd: number | null; videoSeconds: number | null },
+  at: string,
+): { day: SpendDay; unresolved: number; unresolvedJobs: string[]; unreported: number } {
+  let recordedUsd = 0
+  let lossesUsd = 0
+  let unreported = 0
+  let unresolved = 0
+  const delivered = new Set<string>()
+  const lost = new Set<string>()
+  const unresolvedJobs = new Set<string>()
+  for (const task of tasks) {
+    // A send the route ended with no result was not billed: nothing to report.
+    if (task.outcome === "failed" || task.outcome === "expired") continue
+    // A send that started and could never be read to an end, with no bill: a possible charge nothing here accounts for.
+    if (task.outcome === "unresolved" && task.billedUsd === null) {
+      unresolved++
+      unresolvedJobs.add(task.jobId)
+      continue
+    }
+    if (task.billedUsd === null) {
+      unreported++
+      continue
+    }
+    // A task of a job that failed or was cancelled was refunded to its owner, a delivered send that
+    // was replaced after a step of ours failed was never charged, and a send given up on whose bill
+    // arrived is never charged: known losses.
+    if (task.status === "failed" || task.status === "cancelled" || task.ownLoss || task.outcome === "unresolved") {
+      lost.add(task.jobId)
+      lossesUsd += task.billedUsd
+    } else {
+      delivered.add(task.jobId)
+      recordedUsd += task.billedUsd
+    }
+  }
+  // The account is shared (other environments, traffic that never reaches this ledger): both
+  // differences are context here. The account's own pass compares it with everything recorded.
+  const { actualUsd, videoSeconds } = figures
+  const unexplainedUsd = actualUsd === null ? null : actualUsd - recordedUsd - lossesUsd
+  const overRecordedUsd = actualUsd === null ? null : Math.max(0, recordedUsd + lossesUsd - actualUsd)
+  return {
+    day: { day, recordedUsd, lossesUsd, actualUsd, videoSeconds, unexplainedUsd, overRecordedUsd, jobs: delivered.size, failedJobs: lost.size, at },
+    unresolved, unresolvedJobs: [...unresolvedJobs], unreported,
+  }
+}
+
+async function keepSpendDays(days: readonly SpendDay[]): Promise<void> {
+  const fresh = new Set(days.map((d) => d.day))
   await updateSettingsRow(videoRouteSpendDaysKey(), (raw) => {
-    const mine = (Array.isArray(raw) ? (raw as SpendDay[]) : []).filter((d) => d.day !== day.day)
-    return [day, ...mine].sort((a, b) => b.day.localeCompare(a.day)).slice(0, SPEND_DAYS_KEPT)
+    const mine = (Array.isArray(raw) ? (raw as SpendDay[]) : []).filter((d) => !fresh.has(d.day))
+    return [...days, ...mine].sort((a, b) => b.day.localeCompare(a.day)).slice(0, SPEND_DAYS_KEPT)
   })
 }
 
@@ -417,14 +449,23 @@ export async function reportLateBillsAndOrphans(now = new Date()): Promise<void>
 /** How long an environment may write nothing to the ledger before its open settlements are reported as orphaned. */
 export const ORPHAN_ENV_QUIET_DAYS = 3
 
-/** The daily reconciliation (this environment's day, then the account's, once per account), the held-settlement reminder and the late-bill / orphan report, once per environment. */
+/** The daily reconciliation of this environment's days, the held-settlement reminder and the late-bill / orphan report, once per environment. */
 export function runReconciliationOnce(): Promise<boolean> {
   return runOncePerEnvironment("reconcile", 86_400_000, async () => {
     await reconcileRouteSpend()
-    await reconcileRouteAccount()
     await remindHeldSettlements()
     await reportLateBillsAndOrphans()
   })
+}
+
+/**
+ * The account's daily check (video-route-account.ts), tried every hour by each
+ * environment's servers once per environment: the first pass of a day that can
+ * claims it for the whole account, and a pass that failed or could not read the
+ * account's spend gives its claim back for a later hour.
+ */
+export function runAccountReconciliationOnce(): Promise<boolean> {
+  return runOncePerEnvironment("account-reconcile", 3_600_000, () => reconcileRouteAccount())
 }
 
 /** Test seam. */

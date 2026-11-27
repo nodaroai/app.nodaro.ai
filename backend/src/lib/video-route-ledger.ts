@@ -232,7 +232,8 @@ export function routeBillingAtOf(row: { detail?: unknown; outcome?: unknown; cre
 export async function recordRouteTask(jobId: string, send: number, ref: string | null, billedUsd: number | null | undefined, key = "", estimatedUsd?: number | null, basis?: RouteCostBasis, opts: { completedAt?: string } = {}): Promise<boolean> {
   const billed = billUsd(billedUsd)
   const estimated = finiteUsd(estimatedUsd)
-  const completedAt = typeof opts.completedAt === "string" && Number.isFinite(Date.parse(opts.completedAt)) ? new Date(opts.completedAt).toISOString() : undefined
+  // A time in the future is no finish time yet: it is taken as now (a bill is never moved past every day checked).
+  const completedAt = typeof opts.completedAt === "string" && Number.isFinite(Date.parse(opts.completedAt)) ? new Date(Math.min(Date.parse(opts.completedAt), Date.now())).toISOString() : undefined
   const write = async (): Promise<boolean> => {
     const at = new Date().toISOString()
     // With no bill: the row is written once and never over another (a bill already there is kept).
@@ -324,12 +325,13 @@ export function nextLedgerStamp(previous: unknown, now = Date.now()): string {
  * A compare-and-set on the detail it read, tried a few times: a concurrent
  * writer's keys (the first attempt's time, the watch, a late bill) are never
  * lost to a stale read. With `onlyStates`, only a row still in one of those
- * states is written (a row that moved on meanwhile is left as it is). False
+ * states is written (a row that moved on meanwhile is left as it is), and with
+ * `onlyIf`, only a row its read satisfies (a compare-and-set on those fields). False
  * when nothing was written (no row, a row in another state, a write that
  * failed): a caller that needs the write says so (ee/billing/video-route-receipt.ts
  * `patchSettleOrAlert`). Never throws.
  */
-export async function patchRouteSettle(jobId: string, patch: Record<string, unknown>, columns: Record<string, unknown> = {}, opts: { onlyStates?: readonly LedgerSettleState[] } = {}): Promise<boolean> {
+export async function patchRouteSettle(jobId: string, patch: Record<string, unknown>, columns: Record<string, unknown> = {}, opts: { onlyStates?: readonly LedgerSettleState[]; onlyIf?: (row: { readonly state: unknown; readonly detail: Readonly<Record<string, unknown>> }) => boolean } = {}): Promise<boolean> {
   try {
     for (let attempt = 0; attempt < 4; attempt++) {
       const { data, error: readError } = await ledger().select("id, detail, state, updated_at").eq("job_id", jobId).eq("kind", "settle").limit(1)
@@ -337,6 +339,8 @@ export async function patchRouteSettle(jobId: string, patch: Record<string, unkn
       if (readError || !row) return false
       if (opts.onlyStates && !opts.onlyStates.includes(row.state as LedgerSettleState)) return false
       const current = detailOf(row.detail) ?? {}
+      // A condition on what the row holds, checked on the read this compare-and-set writes over.
+      if (opts.onlyIf && !opts.onlyIf({ state: row.state, detail: current })) return false
       let write = ledger().update({ ...columns, detail: { ...current, ...patch }, updated_at: nextLedgerStamp(row.updated_at) })
         .eq("id", row.id).eq("updated_at", row.updated_at)
       if (opts.onlyStates) write = write.in("state", [...opts.onlyStates])

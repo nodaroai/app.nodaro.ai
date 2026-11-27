@@ -137,23 +137,45 @@ switched automatically.
 
 A daily check lists the verified bills this environment recorded on routed
 jobs for each day, each counted on the day the route billed it (even when the
-bill reached the platform days later), with known losses on a line of their
-own, beside what the route's account reports it spent that day. It alerts on
-bills that were never reported and on sends that were never read to an end.
+bill reached the platform days later: the last nine days are checked again
+each time), with known losses on a line of their own, beside what the route's
+account reports it spent that day. It alerts, for the day just ended, on bills
+that were never reported and on sends that were never read to an end.
 
 The route's account can be shared by more than one environment, and by
 alternate-route runs made while no routing choice is saved, so the account
 itself is checked once a day for all of them together: what it spent each day
 against every environment's bills, the parts still to be billed at the route's
-estimate, and the recorded cost of those other runs. The check alerts when the
-account spent more than all of that (paid work nothing recorded may exist), and
-when what was recorded comes to more than the account spent (the recorded bills
-may be wrong), past the drift percentage set on this page and never for less
-than a small allowance for runs that straddle midnight. The last nine days are
-checked again each time, so a bill that arrives late corrects its own day. One
-environment with a routing choice saved runs it for the account; its alerts
-appear on that environment's page. These checks only alert; they change no
-charge.
+estimate, and the recorded cost of those other runs. The page lists each day
+checked under **Account check (all environments)**.
+
+- **What it alerts.** The account spent more than all of that (paid work
+  nothing recorded may exist), or what was recorded comes to more than the
+  account spent (the recorded bills may be wrong), past the drift percentage
+  set on this page and never for less than a small allowance. A day is alerted
+  only when the next day's check still finds the difference, so a bill that
+  arrives late, or the next day's figure, can explain it first; it is alerted
+  again only when the difference grows.
+- **Runs that straddle midnight.** A difference on one day that the next (or
+  previous) day's opposite difference offsets, within one run's worth, is
+  counted as a run billed on one side of midnight and recorded on the other,
+  and is not alerted. The page shows it as **Straddle**.
+- **Known other spend.** When something else this platform never records also
+  spends from the same account, set **Known other spend on the route's account
+  (USD per day)** to what you know it spends. It is taken off the account's
+  spend before the check alerts. It is 0 by default: the check never guesses
+  at other spending.
+- **When the account cannot be read.** The check runs every hour. A day whose
+  spend could not be read stays **Pending** and is read again on the next
+  checks while the route still reports it (the day just ended and the one
+  before). A day still unread after that is **Not measured**, alerted once, and
+  not compared. A check that fails is alerted and runs again the next hour.
+- **Late bills.** The last nine days are checked again each time, so a bill
+  that arrives late corrects its own day.
+- **Who runs it.** One environment with a routing choice saved runs it for the
+  whole account; its alerts appear on that environment's page.
+
+These checks only alert; they change no charge.
 
 A choice that adds a route (puts a model, or one of its services, on the
 alternate route where it was not before), or that turns on **Enforce unpaid

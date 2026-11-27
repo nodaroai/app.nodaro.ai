@@ -11,7 +11,7 @@ import {
   useSaveVideoRoutePolicy,
   useVideoRoute,
 } from "@/ee/hooks/queries/use-video-route"
-import { type VideoRouteChoice, type VideoRoutePolicy, type VideoRouteView } from "@/ee/lib/video-route-api"
+import { type VideoRouteAccountDay, type VideoRouteChoice, type VideoRoutePolicy, type VideoRouteView } from "@/ee/lib/video-route-api"
 
 /**
  * Admin → Video route: which route each Seedance 2.x model takes, per
@@ -37,6 +37,82 @@ function routeBalanceText(route: VideoRouteView["balances"]["route"]): string {
 function numberOrNull(raw: string): number | null {
   const n = Number(raw)
   return raw.trim() === "" || !Number.isFinite(n) ? null : n
+}
+
+// Account days are kept for 30 days, so a row written before a field existed can lack it: "-" then, never a crash.
+function money(n: number | null | undefined): string {
+  return typeof n === "number" ? usd(n) : "-"
+}
+
+const ACCOUNT_STATUS: Record<VideoRouteAccountDay["status"], { label: string; title: string }> = {
+  measured: { label: "Measured", title: "The account's spend for this day was read." },
+  pending: { label: "Pending", title: "The account's spend for this day could not be read yet. It is read again." },
+  unmeasured: { label: "Not measured", title: "The account's spend could not be read while the route still reported this day." },
+}
+
+function gapTitle(d: VideoRouteAccountDay, since: string | undefined, alertedUsd: number | undefined): string {
+  return [`Tolerance ${money(d.toleranceUsd)}`, since ? `past it since the check of ${since}` : "", alertedUsd !== undefined ? `alerted at ${usd(alertedUsd)}` : ""].filter(Boolean).join(", ")
+}
+
+/** Unrecorded / over-recorded: highlighted past the day's tolerance; its title says since when and what was alerted. */
+function GapCell({ d, value, since, alertedUsd }: { d: VideoRouteAccountDay; value: number | null | undefined; since: string | undefined; alertedUsd: number | undefined }) {
+  const past = typeof value === "number" && typeof d.toleranceUsd === "number" && value > d.toleranceUsd
+  return (
+    <td className={past ? "pe-4 tabular-nums text-amber-600 dark:text-amber-400" : "pe-4 tabular-nums"} title={typeof value === "number" ? gapTitle(d, since, alertedUsd) : undefined}>
+      {money(value)}
+    </td>
+  )
+}
+
+function AccountDaysTable({ days }: { days: VideoRouteAccountDay[] }) {
+  if (days.length === 0) return <p className="text-sm text-muted-foreground">No day checked yet.</p>
+  return (
+    <div className="overflow-x-auto">
+      <table className="text-xs">
+        <thead>
+          <tr className="text-muted-foreground">
+            <th className="pe-4 text-start">Day</th>
+            <th className="pe-4 text-start">Status</th>
+            <th className="pe-4 text-start">Account spend</th>
+            <th className="pe-4 text-start">Bills (all environments)</th>
+            <th className="pe-4 text-start">Still to be billed</th>
+            <th className="pe-4 text-start">Unrouted</th>
+            <th className="pe-4 text-start">Other spend allowance</th>
+            <th className="pe-4 text-start">Straddle</th>
+            <th className="pe-4 text-start">Unrecorded</th>
+            <th className="pe-4 text-start">Over-recorded</th>
+            <th className="text-start">Checked by</th>
+          </tr>
+        </thead>
+        <tbody>
+          {days.map((d) => {
+            const status = ACCOUNT_STATUS[d.status] ?? null
+            const split = Object.entries(d.byEnv ?? {}).sort(([a], [b]) => a.localeCompare(b)).map(([env, n]) => `${env} ${money(n)}`).join(" · ")
+            return (
+              <tr key={d.day}>
+                <td className="pe-4 font-mono">{d.day}</td>
+                <td className="pe-4" title={status?.title}>{status?.label ?? "-"}</td>
+                <td className="pe-4 tabular-nums">{money(d.actualUsd)}</td>
+                <td className="pe-4 tabular-nums">
+                  {money(d.ledgerUsd)}
+                  {split && <span className="block text-muted-foreground">{split}</span>}
+                </td>
+                <td className="pe-4 tabular-nums">
+                  {d.pendingUsd > 0 || d.unpricedSends > 0 ? `${money(d.pendingUsd)}${d.unpricedSends > 0 ? ` +${d.unpricedSends} unpriced` : ""}` : "-"}
+                </td>
+                <td className="pe-4 tabular-nums">{d.unroutedJobs > 0 || d.unroutedUsd > 0 ? `${money(d.unroutedUsd)} (${d.unroutedJobs ?? 0})` : "-"}</td>
+                <td className="pe-4 tabular-nums">{money(d.otherSpendUsd)}</td>
+                <td className="pe-4 tabular-nums">{money(d.straddleUsd)}</td>
+                <GapCell d={d} value={d.unrecordedUsd} since={d.unrecordedSince} alertedUsd={d.alerted?.unrecordedUsd} />
+                <GapCell d={d} value={d.overRecordedUsd} since={d.overRecordedSince} alertedUsd={d.alerted?.overRecordedUsd} />
+                <td className="font-mono" title={d.at ? new Date(d.at).toLocaleString() : undefined}>{d.env ?? "-"}</td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
 }
 
 function ModelRow({
@@ -220,12 +296,25 @@ export default function AdminVideoRoutePage() {
           />
         </label>
         <label className="flex flex-col gap-1 text-sm">
-          Alert when this environment's recorded bills exceed the route's whole account spend by more than (%)
+          Daily account check: alert when the account's spend and everything recorded (all environments) differ by more than (% of what was recorded)
           <Input
             inputMode="decimal"
             value={draft.spendDriftAlertPercent}
             onChange={(e) => setDraft({ ...draft, spendDriftAlertPercent: numberOrNull(e.target.value) ?? 0 })}
           />
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          Known other spend on the route's account (USD per day)
+          <Input
+            inputMode="decimal"
+            aria-label="Known other spend on the route's account (USD per day)"
+            // A setting saved before this field existed comes back without it.
+            value={draft.accountOtherSpendUsdPerDay ?? 0}
+            onChange={(e) => setDraft({ ...draft, accountOtherSpendUsdPerDay: Math.max(0, numberOrNull(e.target.value) ?? 0) })}
+          />
+          <span className="block text-xs text-muted-foreground">
+            Spend on the shared account that this platform never records. Taken off the account's spend before the daily check alerts. Leave 0 unless you know it.
+          </span>
         </label>
         <label className="flex flex-col gap-1 text-sm">
           Alert after this many route failures of one model within {draft.failureAlert.windowMinutes} minutes
@@ -412,10 +501,10 @@ export default function AdminVideoRoutePage() {
       <section className="flex flex-col gap-2">
         <h2 className="font-medium">Daily spend check</h2>
         <p className="text-sm text-muted-foreground">
-          Each day, the bills this environment recorded (counted on the day each was recorded), on charged runs and as known losses
+          Each day, the bills this environment recorded (counted on the day the route billed each, and corrected for nine days as late bills arrive), on charged runs and as known losses
           (runs that failed, replaced sends, sends given up on and billed later), beside what the route's account reports it spent.
           That account is shared with other environments, so what it spent beyond this ledger is shown for context and raises no
-          alert. An alert is raised when this ledger records more than the whole account spent: the recorded bills may be wrong.
+          alert. What this ledger records beyond the whole account's spend is context here too: the account check below compares the account with every environment's bills and alerts.
         </p>
         {data.spendDays.length === 0 ? (
           <p className="text-sm text-muted-foreground">No day checked yet.</p>
@@ -445,6 +534,18 @@ export default function AdminVideoRoutePage() {
             </tbody>
           </table>
         )}
+      </section>
+
+      <section className="flex flex-col gap-2">
+        <h2 className="font-medium">Account check (all environments)</h2>
+        <p className="text-sm text-muted-foreground">
+          Once a day, for every environment together: what the route's whole account spent each UTC day, beside every environment's
+          verified bills the route billed that day, the sends delivered with no bill yet, and alternate-route jobs with no routing
+          decision. The known other spend is taken off the account's spend, and a run that straddles midnight is offset by the
+          neighbouring day. Unrecorded is what the account spent beyond everything recorded; over-recorded is what was recorded beyond
+          the account's spend. Either one past the day's tolerance is alerted once a later check still sees it.
+        </p>
+        <AccountDaysTable days={data.accountDays ?? []} />
       </section>
 
       <section className="flex flex-col gap-2">

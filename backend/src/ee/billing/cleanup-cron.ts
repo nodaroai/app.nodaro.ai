@@ -16,7 +16,7 @@ import { grantYearlyPlanMonthlyCredits } from "./yearly-plan-monthly-credits.js"
 import { recordKieCreditSnapshot, fetchKieCreditSnapshotsSince } from "../routes/admin-kie-credits.js"
 import { kieRunwayAlert } from "./kie-low-balance-alert.js"
 import { retryRoutedSettlements } from "./video-route-settlement.js"
-import { runBalanceCheckOnce, runOncePerEnvironment, runReconciliationOnce } from "./video-route-watch.js"
+import { runAccountReconciliationOnce, runBalanceCheckOnce, runOncePerEnvironment, runReconciliationOnce } from "./video-route-watch.js"
 import { videoRouteSchemaState } from "../../lib/video-route-schema.js"
 import { sweepStaleDcrRegistrations } from "../../lib/oauth-dcr-sweep.js"
 import { sweepAbandonedCopilotWorkflows } from "../copilot/abandoned-sweep.js"
@@ -204,6 +204,10 @@ export function startCleanupCron(): void {
   // routed jobs against the route's own spend — at 00:20 (the servers run on UTC). Best effort,
   // never throws; a no-op with no route here or no routing ever saved.
   cron.schedule("20 0 * * *", () => { void runReconciliationOnce() })
+  // The route's whole account, once per account (ee/billing/video-route-account.ts): tried every hour,
+  // so a pass that failed, or could not read the account's spend, is retried the same day. A day
+  // already done costs one settings read. Never throws; a no-op with no route or no routing saved.
+  cron.schedule("40 * * * *", () => { void runAccountReconciliationOnce() })
   // The routed-video schema check (lib/video-route-schema.ts) -- every minute, on
   // EVERY server and outside any once-per-environment lease: each process keeps
   // its own answer, for at most VIDEO_ROUTE_SCHEMA_RECHECK_MS, and asks the

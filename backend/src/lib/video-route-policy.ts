@@ -100,6 +100,14 @@ export const videoRoutePolicySchema = z.strictObject({
    * recorded and alerted, and nothing else changes.
    */
   enforceUnpaidCharges: z.boolean().default(false),
+  /**
+   * What the route's shared account is known to spend per UTC day on work this
+   * platform never records (another user of the same account), in USD. The
+   * daily account check takes it off the account's spend before it alerts that
+   * the account spent more than everything recorded. 0 (the default): nothing
+   * is allowed for. An allowance the owner sets from what they know; never guessed.
+   */
+  accountOtherSpendUsdPerDay: z.number().nonnegative().max(1_000_000).default(0),
 })
 
 export type VideoRoutePolicy = z.infer<typeof videoRoutePolicySchema>
@@ -114,6 +122,7 @@ export function defaultVideoRoutePolicy(): VideoRoutePolicy {
     failureAlert: { ...VIDEO_ROUTE_POLICY_DEFAULTS.failureAlert },
     billAnomalyMultiple: ROUTE_BILL_ANOMALY_MULTIPLE_DEFAULT,
     enforceUnpaidCharges: false,
+    accountOtherSpendUsdPerDay: 0,
   }
 }
 
@@ -165,6 +174,7 @@ export function parseVideoRoutePolicy(value: unknown): VideoRoutePolicy | null {
   field("failureAlert")
   field("billAnomalyMultiple")
   field("enforceUnpaidCharges")
+  field("accountOtherSpendUsdPerDay")
   return out
 }
 
