@@ -15,6 +15,7 @@
  * rounds every video rect through `evenVideoOverlayRect`). An image layer's
  * geometry is not touched here.
  */
+import { downloadEditingSource } from "./editing-source.js"
 import {
   VIDEO_OVERLAY_MAX_LAYER_VIDEO_BYTES,
   clampVideoOverlayAspect,
@@ -22,7 +23,7 @@ import {
   type VideoOverlayCanvas,
 } from "@nodaro/shared/video"
 import { DeterministicJobError, isDeterministicJobError } from "../../lib/deterministic-job-error.js"
-import { downloadFile, probeVideoOverlayBase, type VideoOverlayBaseProbe } from "./ffmpeg-utils.js"
+import { probeVideoOverlayBase, type VideoOverlayBaseProbe } from "./ffmpeg-utils.js"
 import { cameraMegapixelsOf, canvasPeakMemoryMiB } from "./ffmpeg-memory-model.js"
 import { ffmpegEffectiveThreads } from "./ffmpeg-threads.js"
 import type { VideoOverlayLayerRef } from "./video-overlay-images.js"
@@ -64,7 +65,7 @@ export async function fetchVideoOverlayVideoLayer(
 ): Promise<{ probe: VideoOverlayBaseProbe; aspect: number }> {
   const label = videoOverlayLayerLabel(ref)
   try {
-    await downloadFile(url, dest, { maxBytes: VIDEO_OVERLAY_MAX_LAYER_VIDEO_BYTES })
+    await downloadEditingSource(url, dest, { download: { maxBytes: VIDEO_OVERLAY_MAX_LAYER_VIDEO_BYTES } })
   } catch (err) {
     const raw = err instanceof Error ? err.message : String(err)
     console.warn(`[video-overlay] ${label} video fetch failed: ${raw}`)

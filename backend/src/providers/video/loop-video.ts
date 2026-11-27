@@ -1,3 +1,4 @@
+import { downloadEditingSource } from "./editing-source.js"
 import { join } from "node:path"
 import { promises as fs } from "node:fs"
 import { downloadFile, runFfmpeg, runFfprobe, createWorkDir, cleanupWorkDir } from "./ffmpeg-utils.js"
@@ -36,13 +37,18 @@ export async function loopVideo(options: LoopVideoOptions): Promise<LoopVideoRes
     let smartLoopCutMeta: LoopVideoResult["smartLoopCutMeta"]
 
     console.log(`[loopVideo] Downloading video from ${videoUrl}`)
-    await downloadFile(videoUrl, inputPath)
+    // A plain repeat stream-copies the picture it was given: read as given.
+    // Every other loop re-encodes it (the duration mode, the smart cut before a
+    // repeat) at its usual settings: read as an editing step's source.
+    if (mode === "repeat" && !smartLoopCutBeforeRepeat) await downloadFile(videoUrl, inputPath)
+    else await downloadEditingSource(videoUrl, inputPath)
     await options.chargeCheck?.([inputPath])
 
     if (smartLoopCutBeforeRepeat) {
       console.log(`[loopVideo] Applying smart loop cut before repeat (lookback=${smartLoopCutLookback ?? 16})`)
       // Its own download is what the loop repeats: checked against the charge too.
-      const slc = await smartLoopCut({ videoUrl, lookbackFrames: smartLoopCutLookback, chargeCheck: options.chargeCheck })
+      // Cut from the file downloaded above (its editing source), never a second download.
+      const slc = await smartLoopCut({ videoUrl, inputPath, lookbackFrames: smartLoopCutLookback, chargeCheck: options.chargeCheck })
       // Replace the input with the smart-cut output for the concat step.
       inputPath = slc.videoPath
       smartLoopCutMeta = {

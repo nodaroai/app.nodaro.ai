@@ -30,6 +30,7 @@ import {
   pictureSize,
   sourcePicture,
   stitchEncodesAtBitRate,
+  stitchKeepsTenBit,
   stitchProxyArgs,
   stitchRate,
   type ExtendStitchEncode,
@@ -37,6 +38,7 @@ import {
   type StitchRate,
 } from "./extend-stitch-args.js"
 import { getSmartCutMatcher, type SmartCutBoundary } from "./smart-cut.js"
+import { hevc10TimeoutMs } from "./hevc10-encode.js"
 import { measureLeadingRepeats, type LeadingRepeats } from "./extend-stitch-repeats.js"
 import { cameraMegapixelsOf, canvasPeakMemoryMiB, toneMapPeakMemoryMiB, UHD_CANVAS } from "./ffmpeg-memory-model.js"
 import { defaultLaunchPeakMiB } from "./ffmpeg-admission-instance.js"
@@ -61,6 +63,12 @@ export interface ExtendStitchArgs {
    * dropped.
    */
   dropLeadingRepeats?: boolean
+  /**
+   * The run keeps a 10-bit picture (an unwatermarked run, decided
+   * 2026-11-22): two 10-bit clips of one dynamic range are joined into 10-bit
+   * HEVC (`stitchKeepsTenBit`). Absent: the delivery, as before.
+   */
+  keepTenBit?: boolean
 }
 
 export interface ExtendStitchResult {
@@ -183,9 +191,11 @@ function boundaryOf(
 /**
  * An encode at the source's size (`canvas`) of the `decoded` pictures, one
  * input each, predicted from the largest of them; with the tone-map's buffers
- * when it takes an HDR source to SDR (`toneMap`).
+ * when it takes an HDR source to SDR (`toneMap`). The stitch's own launch
+ * prediction, and the one a 10-bit join's kept original is checked against
+ * before it is used (`tenBitJoinSource`).
  */
-function extendPeakMemoryMiB(canvas: PictureShape, decoded: readonly PictureShape[], toneMap: boolean): number {
+export function extendPeakMemoryMiB(canvas: PictureShape, decoded: readonly PictureShape[], toneMap: boolean): number {
   return canvasPeakMemoryMiB(canvas, decoded.length, ffmpegEffectiveThreads(), {
     inputs: decoded.length,
     cameraMegapixels: Math.max(...decoded.map(cameraMegapixelsOf)),
@@ -341,6 +351,9 @@ export async function stitchExtension(args: ExtendStitchArgs): Promise<ExtendSti
       `${delivered === shape ? "" : ` (from ${shape.width}x${shape.height})`}${shape.sarRatio ? ` SAR ${shape.sarRatio}` : ""} @ ${rate.spelling}`,
   )
 
+  // Two 10-bit clips of one dynamic range on a run that keeps them: joined in 10-bit HEVC.
+  const tenBit = stitchKeepsTenBit(source, extension, args.keepTenBit === true)
+  if (tenBit) console.log(`[extendStitch] both clips are 10-bit (${source.pixFmt}, ${extension.pixFmt}${isHdr(source) ? `, HDR ${source.colorTransfer}` : ""}): joining in 10-bit HEVC`)
   const sourceHasAudio = Boolean(source.audioCodec)
   const sampleRate = sourceHasAudio ? await probeAudioSampleRate(sourcePath).catch(() => undefined) : undefined
   // Always an MP4: the delivery (`deliveryPicture`), whatever the source's container.
@@ -361,13 +374,16 @@ export async function stitchExtension(args: ExtendStitchArgs): Promise<ExtendSti
     extensionHasAudio: Boolean(extension.audioCodec),
     soundOffsetSec: { source: soundOffsetOf(source), extension: soundOffsetOf(extension) },
     ...(sampleRate ? { audioSampleRate: sampleRate } : {}),
+    ...(tenBit ? { tenBit: true } : {}),
   }
-  if (stitchEncodesAtBitRate(source)) {
+  if (stitchEncodesAtBitRate(source, tenBit)) {
     const log = join(workDir, "stitch-pass")
     await runFfmpeg(extendStitchArgs({ ...encode, pass: { n: 1, log } }), undefined, launch)
     await runFfmpeg(extendStitchArgs({ ...encode, pass: { n: 2, log } }), undefined, launch)
   } else {
-    await runFfmpeg(extendStitchArgs(encode), undefined, launch)
+    // The 10-bit join's x265 encode is given its own time (`hevc10TimeoutMs`), over the joined length.
+    const joinedSec = (sourceFrames - applied.trimEndFrames + extensionFrames - boundary.trimStartFrames) / rate.fps
+    await runFfmpeg(extendStitchArgs(encode), tenBit ? hevc10TimeoutMs(joinedSec, delivered) : undefined, launch)
   }
   return { outputPath, boundary }
 }

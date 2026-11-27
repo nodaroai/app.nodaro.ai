@@ -129,6 +129,7 @@ import { uploadJobScratchFile } from "../../lib/job-scratch.js"
 import { PostProcessingError, runPostProcessing } from "../../lib/post-processing-error.js"
 import { rewriteForContentPolicy } from "../../lib/content-policy-rewrite.js"
 import { extractAudioTrack } from "../../providers/video/extract-audio-track.js"
+import { tenBitJoinSource } from "../../providers/video/editing-source.js"
 import { probeVideoSource } from "../../providers/video/ffmpeg-utils.js"
 import { directVoiceChanger } from "../../providers/elevenlabs/voice-changer.js"
 import { directElevenLabsTTS, stripAudioTags } from "../../providers/elevenlabs/direct-tts.js"
@@ -718,9 +719,10 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
     const mergedPath = await mergeVideoAudio({
       ...draftAudioMuxMergeArgs(drivingAudioLaid?.videoUrl ?? providerOutputUrl, audioMerge),
       ...(localOutput && !drivingAudioLaid ? { videoPath: localOutput.path } : {}),
-      // An HDR picture (Kling 4.0) is copied as it is, so the merged file keeps
-      // its HDR as the stored original (decided 2026-11-25).
-      keepHdrPicture: true,
+      // The provider's picture is copied as it is (10-bit, HDR, HEVC: Kling
+      // 4.0), so the merged file keeps it as the stored original beside its
+      // preview (decided 2026-11-22: the steps that finish a generation keep 10-bit).
+      keepPicture: true,
     })
     await setJobProgress(job, ctx.jobId, 95)
     try {
@@ -1984,6 +1986,9 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
     let rawCopyUrl: string | undefined
     try {
       const srcLocal = join(prepDir, "source.mp4")
+      // The url the run named, as it always was: the tail sent to the model and
+      // every check read it. Only a 10-bit join reads the source's kept original
+      // (`tenBitJoinSource`, below).
       await downloadFile(sourceUrl, srcLocal)
       // A source whose picture is shorter than the provider floor
       // (`recipe.minSourceSec`, the floor the route refuses at) yields a tail
@@ -2330,10 +2335,13 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
           throw new DeterministicJobError(extensionTooShortMessage(extensionSec, extSeconds))
         }
         const stitched = await stitchExtension({
-          sourcePath: srcLocal,
+          // The preview as before, or its kept original when both clips are 10-bit (decided 2026-11-22).
+          sourcePath: await tenBitJoinSource({ sourceUrl, givenPath: srcLocal, extensionPath, dir: stitchDir, keep: !ctx.shouldWatermark }),
           extensionPath,
           workDir: stitchDir,
           ...recipe.stitch,
+          // Two 10-bit clips are joined in 10-bit HEVC on an unwatermarked run (decided 2026-11-22).
+          keepTenBit: !ctx.shouldWatermark,
         })
         stitchBoundary = stitched.boundary
         await setJobProgress(job, ctx.jobId, 85)
@@ -2466,6 +2474,8 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
     const prepDir = await createWorkDir("extend-prep")
     try {
       const srcLocal = join(prepDir, "source.mp4")
+      // The url the run named, as it always was; only a 10-bit join reads its
+      // kept original (`tenBitJoinSource`, below).
       await downloadFile(sourceUrl, srcLocal)
       // Measured as the stitch measures a picture (`pictureSecondsOf`). A
       // probe that FAILED (timed out, could not start) says nothing about the
@@ -2537,13 +2547,16 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
         // blend at the join. The billed seconds and the short-extension rule
         // above are what PixVerse returned, before any of this.
         const stitched = await stitchExtension({
-          sourcePath: srcLocal,
+          // The preview as before, or its kept original when both clips are 10-bit (decided 2026-11-22).
+          sourcePath: await tenBitJoinSource({ sourceUrl, givenPath: srcLocal, extensionPath: newPartPath, dir: stitchDir, keep: !ctx.shouldWatermark }),
           extensionPath: newPartPath,
           workDir: stitchDir,
           smartCut: { framesFromPrev: 8, framesFromNext: 8 },
           fallbackTrims: { trimEndFrames: 0, trimStartFrames: 0 },
           audioFadeSec: SEEDANCE_2_EXTEND_STITCH.audioFadeSec,
           dropLeadingRepeats: true,
+          // Two 10-bit clips are joined in 10-bit HEVC on an unwatermarked run (decided 2026-11-22).
+          keepTenBit: !ctx.shouldWatermark,
         })
         stitchBoundary = stitched.boundary
         await setJobProgress(job, ctx.jobId, 85)
@@ -2939,6 +2952,8 @@ async function revoiceClipToR2(
     videoUrl,
     audioTracks: [{ url: revoicedR2, startTime: 0, volume: 100, sourceType: "audio" }],
     keepOriginalAudio: false,
+    // The provider's picture as it is: kept as the original beside its preview.
+    keepPicture: true,
   })
   const out = await watermarkLocalVideoAndUpload(mergedPath, `${ctx.jobId}-revoiced`, ctx.jobUserId, ctx.shouldWatermark)
   await cleanupWorkDir(dirname(mergedPath))
@@ -2957,7 +2972,8 @@ async function mergeVoiceTrackToR2(
   videoUrl: string,
   audioUrl: string,
 ): Promise<StoredVideo> {
-  const mergedPath = await mergeVideoAudio(draftAudioMuxMergeArgs(videoUrl, voiceTrackMuxRecipe(audioUrl)))
+  // The provider's picture as it is: kept as the original beside its preview.
+  const mergedPath = await mergeVideoAudio({ ...draftAudioMuxMergeArgs(videoUrl, voiceTrackMuxRecipe(audioUrl)), keepPicture: true })
   const out = await watermarkLocalVideoAndUpload(mergedPath, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
   await cleanupWorkDir(dirname(mergedPath))
   return out

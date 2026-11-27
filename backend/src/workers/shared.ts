@@ -1,4 +1,5 @@
 import type { Job } from "bullmq"
+import { withVideoSourceNotice } from "../lib/video-source-context.js"
 import { promises as fs } from "node:fs"
 import { randomUUID } from "node:crypto"
 import { dirname, join } from "node:path"
@@ -306,6 +307,18 @@ export async function markJobCompleted(
  */
 export type MarkJobCompletedOutcome = "completed" | "lost_race" | "blocked" | "held"
 
+/**
+ * The completion's `output_data` with what the job's video steps have to say
+ * about its result (an HDR source tone-mapped to SDR:
+ * `lib/video-source-context.ts`), as `warningCode` / `warningMessage`. The
+ * same fields object when there is nothing to say.
+ */
+function withSourceNotice(fields: Record<string, unknown>): Record<string, unknown> {
+  const output = fields.output_data
+  const noticed = withVideoSourceNotice(output)
+  return noticed === output ? fields : { ...fields, output_data: noticed }
+}
+
 export async function markJobCompletedDetailed(
   jobId: string,
   fields: Record<string, unknown>,
@@ -319,7 +332,7 @@ export async function markJobCompletedDetailed(
 ): Promise<MarkJobCompletedOutcome> {
   // `display_cost` is derived here from the row's own `provider_cost`, before
   // the gate, so a held row parks the pair and approve writes it as it is.
-  const stamped = await withPairedDisplayCost(await withOutputImageDimensions(fields))
+  const stamped = withSourceNotice(await withPairedDisplayCost(await withOutputImageDimensions(fields)))
 
   if (hasJobPolicyFor("result")) {
     const { applyResultGate } = await import("../lib/job-policy-gate.js")

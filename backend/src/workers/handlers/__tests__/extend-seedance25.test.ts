@@ -636,6 +636,8 @@ describe("the extend stitch, on every Seedance provider", () => {
       smartCut: { framesFromPrev: 8, framesFromNext: 8 },
       fallbackTrims: { trimEndFrames: 4, trimStartFrames: 3 },
       audioFadeSec: 0.15,
+      // An unwatermarked run joins two 10-bit clips in 10-bit HEVC (decided 2026-11-22).
+      keepTenBit: true,
     })
   })
 
@@ -649,6 +651,8 @@ describe("the extend stitch, on every Seedance provider", () => {
       workDir: STITCH_DIR,
       fallbackTrims: { trimEndFrames: 0, trimStartFrames: 0 },
       audioFadeSec: 0.15,
+      // An unwatermarked run joins two 10-bit clips in 10-bit HEVC (decided 2026-11-22).
+      keepTenBit: true,
     })
   })
 

@@ -360,6 +360,8 @@ describe("extend-video / seedance-2-0-extend", () => {
       // hits the source's tail, trimStartFrames the extension's head.
       fallbackTrims: { trimEndFrames: 4, trimStartFrames: 3 },
       audioFadeSec: 0.15,
+      // An unwatermarked run joins two 10-bit clips in 10-bit HEVC (decided 2026-11-22).
+      keepTenBit: true,
     })
   })
 

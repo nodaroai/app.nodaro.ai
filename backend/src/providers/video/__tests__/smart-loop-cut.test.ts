@@ -10,6 +10,8 @@ vi.mock("../ffmpeg-utils.js", () => ({
   cleanupWorkDir: vi.fn().mockResolvedValue(undefined),
 }))
 
+vi.mock("../editing-source.js", async () => (await import("./editing-source-passthrough.js")).editingSourcePassthrough())
+
 vi.mock("sharp", () => ({
   default: vi.fn(() => ({
     raw: () => ({
@@ -21,7 +23,8 @@ vi.mock("sharp", () => ({
   })),
 }))
 
-import { runFfprobe, runFfmpeg } from "../ffmpeg-utils.js"
+import { downloadFile, runFfprobe, runFfmpeg } from "../ffmpeg-utils.js"
+import { downloadEditingSource } from "../editing-source.js"
 import { smartLoopCut } from "../smart-loop-cut.js"
 
 const mockedRunFfprobe = vi.mocked(runFfprobe)
@@ -29,6 +32,18 @@ const mockedRunFfmpeg = vi.mocked(runFfmpeg)
 
 beforeEach(() => {
   vi.clearAllMocks()
+})
+
+describe("an editing node's cut reads its source by how it delivers (decided 2026-11-22)", () => {
+  it("a lossless cut, which stream-copies, reads the clip as given; a precise one reads the door; a generation's own cut reads it as given", async () => {
+    await smartLoopCut({ videoUrl: "https://x.mp4", quality: "lossless", source: "editing" }).catch(() => {})
+    expect(downloadEditingSource).not.toHaveBeenCalled()
+    expect(downloadFile).toHaveBeenCalledTimes(1)
+    await smartLoopCut({ videoUrl: "https://x.mp4", source: "editing" }).catch(() => {})
+    expect(downloadEditingSource).toHaveBeenCalledTimes(1)
+    await smartLoopCut({ videoUrl: "https://x.mp4" }).catch(() => {})
+    expect(downloadEditingSource).toHaveBeenCalledTimes(1)
+  })
 })
 
 describe("smartLoopCut — quality: 'lossless'", () => {

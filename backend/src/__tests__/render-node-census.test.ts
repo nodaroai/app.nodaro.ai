@@ -49,6 +49,8 @@ type Entry = readonly [file: string, key: string, why: string]
 // reads the registry's `creditId` since C4), and the few places where the
 // literal names the node to itself. Nothing here decides what a render MEANS.
 const ALLOWLIST: readonly Entry[] = [
+  // ── Registration tables ───────────────────────────────────────────────────
+  ["backend/src/lib/video-source-context.ts", `"apply-edl"`, "registration: Apply EDL's job reads its sources' kept originals (VIDEO_SOURCE_JOB_NAMES, one row per editing node)"],
   // ── Price rows (the sites read the registry's creditId, C4) ───────────────
   ["backend/src/ee/billing/credits.ts", `"apply-edl"`, "pricing row (STATIC_CREDIT_COSTS)"],
   ["backend/src/ee/billing/credits.ts", `"apply-edl:proxy"`, "pricing row (STATIC_CREDIT_COSTS)"],

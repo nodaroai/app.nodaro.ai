@@ -63,6 +63,8 @@ const mocks = vi.hoisted(() => {
   }
 })
 
+// The source doors read the url as given here (their own behaviour: editing-source.test.ts).
+vi.mock("../editing-source.js", async () => (await import("./editing-source-passthrough.js")).editingSourcePassthrough())
 vi.mock("../ffmpeg-utils.js", () => ({
   downloadFile: mocks.downloadFile,
   runFfmpeg: mocks.runFfmpeg,

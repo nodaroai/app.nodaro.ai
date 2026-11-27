@@ -30,6 +30,7 @@
  * ADTS cannot signal — so the "aac" format writes AAC in MP4 (`.m4a`) instead.
  */
 // @reads-none lists only the parts ffmpeg writes into its work dir
+import { downloadEditingSource } from "./editing-source.js"
 import { promises as fs } from "node:fs"
 import { join } from "node:path"
 import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
@@ -617,7 +618,7 @@ export async function splitMedia(options: SplitMediaOptions): Promise<SplitMedia
     if (videoUrl) {
       const inputPath = join(workDir, "input-video")
       console.log("[splitMedia] Downloading video")
-      await downloadFile(videoUrl, inputPath, { limits: BIG_MEDIA_DOWNLOAD_LIMITS })
+      await downloadEditingSource(videoUrl, inputPath, { download: { limits: BIG_MEDIA_DOWNLOAD_LIMITS } })
       video = await splitVideo(inputPath, workDir, chunkSec, minPartSec)
       await fs.rm(inputPath, { force: true })
     }
@@ -650,7 +651,7 @@ async function splitMediaAtShots(options: SplitMediaOptions): Promise<SplitMedia
   try {
     const inputPath = join(workDir, "input-video")
     console.log("[splitMedia] Downloading video (shots)")
-    await downloadFile(videoUrl, inputPath, { limits: BIG_MEDIA_DOWNLOAD_LIMITS })
+    await downloadEditingSource(videoUrl, inputPath, { download: { limits: BIG_MEDIA_DOWNLOAD_LIMITS } })
     const video = await splitVideoAtShots(inputPath, workDir)
     await fs.rm(inputPath, { force: true })
     return { workDir, videoPaths: video.paths, videoPartDurationsSec: video.durationsSec, shots: video.shots }

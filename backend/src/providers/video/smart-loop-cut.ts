@@ -36,11 +36,10 @@ import {
   createWorkDir,
   cleanupWorkDir,
 } from "./ffmpeg-utils.js"
-import { colourTagArgs, probeMatched, type MatchedProbe } from "./matched-encode.js"
+import { probeMatched, type MatchedProbe } from "./matched-encode.js"
+import { HEVC10_MAX_TIMEOUT_MS, HEVC10_SEC_PER_4K_SEC, hevc10PictureArgs, hevc10TimeoutMs } from "./hevc10-encode.js"
+import { downloadEditingSource } from "./editing-source.js"
 import { isHdr } from "./extend-stitch-args.js"
-import { PREVIEW_SEC_PER_4K_SEC } from "./browser-safe-preview.js"
-import { UHD_CANVAS } from "./ffmpeg-memory-model.js"
-import { DEFAULT_FFMPEG_TIMEOUT_MS } from "./ffmpeg-timeouts.js"
 
 /**
  * The precise cut's picture encode. An SDR source: 8-bit H.264, exactly as it
@@ -53,48 +52,23 @@ import { DEFAULT_FFMPEG_TIMEOUT_MS } from "./ffmpeg-timeouts.js"
  */
 export function loopCutPictureArgs(probe: MatchedProbe): string[] {
   if (!isHdr(probe)) return ["-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "fast", "-crf", "20"]
-  return [
-    "-c:v", "libx265", "-pix_fmt", "yuv420p10le", "-tag:v", "hvc1", "-preset", "fast", "-crf", "20",
-    ...colourTagArgs(probe),
-    // The same signalling in the HEVC stream itself (its VUI), where players read it.
-    ...x265ColourParams(probe),
-  ]
+  return hevc10PictureArgs(probe)
 }
 
-/** x265's VUI colour fields from the probed tags; a tag the probe did not read is left out. */
-function x265ColourParams(probe: MatchedProbe): string[] {
-  const read = (v: string | undefined) => (v && v !== "unknown" && v !== "reserved" ? v : undefined)
-  const params = [
-    ["colorprim", read(probe.colorPrimaries)],
-    ["transfer", read(probe.colorTransfer)],
-    ["colormatrix", read(probe.colorSpace)],
-  ].flatMap(([k, v]) => (v ? [`${k}=${v}`] : []))
-  return params.length > 0 ? ["-x265-params", params.join(":")] : []
-}
-
-/** Wall seconds the HDR cut's 10-bit HEVC encode is given per second of 4K picture (twice the preview's `PREVIEW_SEC_PER_4K_SEC`: x265 is slower than x264). */
-export const LOOP_CUT_HDR_SEC_PER_4K_SEC = 2 * PREVIEW_SEC_PER_4K_SEC
+/** Wall seconds the HDR cut's 10-bit HEVC encode is given per second of 4K picture (`HEVC10_SEC_PER_4K_SEC`). */
+export const LOOP_CUT_HDR_SEC_PER_4K_SEC = HEVC10_SEC_PER_4K_SEC
 /** The longest the HDR cut's encode is given: 15 minutes, which keeps a 30 s 4K run inside its recovery kind's 75 minutes. */
-export const LOOP_CUT_HDR_MAX_TIMEOUT_MS = 15 * 60 * 1000
+export const LOOP_CUT_HDR_MAX_TIMEOUT_MS = HEVC10_MAX_TIMEOUT_MS
 
 /**
  * How long the precise cut's encode may run. An SDR source: the default ffmpeg
- * limit, as always (`undefined`). An HDR source (the 10-bit HEVC encode):
- * {@link LOOP_CUT_HDR_SEC_PER_4K_SEC} per second of picture, scaled by its size
- * against 4K, never below the default limit and never above
- * {@link LOOP_CUT_HDR_MAX_TIMEOUT_MS} — the preview encode's rule
- * (`previewTimeoutMs`). A cut that runs out of time keeps the untrimmed clip
- * and refunds the trim, as any failed cut does.
+ * limit, as always (`undefined`). An HDR source (the 10-bit HEVC encode): the
+ * 10-bit encode's own rule (`hevc10TimeoutMs`). A cut that runs out of time
+ * keeps the untrimmed clip and refunds the trim, as any failed cut does.
  */
 export function loopCutTimeoutMs(probe: MatchedProbe): number | undefined {
   if (!isHdr(probe)) return undefined
-  const seconds = probe.videoDurationSec ?? probe.durationSec
-  if (seconds === undefined || !(seconds > 0)) return LOOP_CUT_HDR_MAX_TIMEOUT_MS
-  const w = probe.width ?? UHD_CANVAS.width
-  const h = probe.height ?? UHD_CANVAS.height
-  const scale = (w * h) / (UHD_CANVAS.width * UHD_CANVAS.height)
-  const wanted = Math.ceil(seconds * LOOP_CUT_HDR_SEC_PER_4K_SEC * scale * 1000)
-  return Math.min(LOOP_CUT_HDR_MAX_TIMEOUT_MS, Math.max(DEFAULT_FFMPEG_TIMEOUT_MS, wanted))
+  return hevc10TimeoutMs(probe.videoDurationSec ?? probe.durationSec, probe)
 }
 
 export interface SmartLoopCutOptions {
@@ -116,6 +90,19 @@ export interface SmartLoopCutOptions {
    *  probed or encoded: a Trim / Loop job's charge check (the render refuses a
    *  file longer than its run was priced for). Absent for every other caller. */
   readonly chargeCheck?: (localPaths: readonly string[]) => Promise<void>
+  /**
+   * The clip is already on local disk (a Loop Video's download): read there,
+   * never downloaded again; the caller removes it.
+   */
+  readonly inputPath?: string
+  /**
+   * `"editing"`: an editing node's cut (Trim Video, Loop Video) — a precise
+   * cut reads the clip as an editing step's source (`editing-source.ts`: its
+   * kept original conformed to 8-bit SDR); a lossless cut, which stream-copies,
+   * reads it as given. Absent: the file at `videoUrl` as it is (a
+   * generation's own loop trim, which keeps its HDR).
+   */
+  readonly source?: "editing"
 }
 
 export interface SmartLoopCutResult {
@@ -146,11 +133,21 @@ export async function smartLoopCut(
   const workDir = await createWorkDir("smart-loop-cut")
 
   try {
-    const inputPath = join(workDir, "input.mp4")
+    // A clip already on local disk (a Loop Video's download) is read in place.
+    const inputPath = options.inputPath ?? join(workDir, "input.mp4")
     const outputPath = join(workDir, "output.mp4")
 
-    console.log(`[smartLoopCut] Downloading video from ${options.videoUrl}`)
-    await downloadFile(options.videoUrl, inputPath)
+    if (options.inputPath) {
+      // Read where it is: its owner removes it.
+    } else if (options.source === "editing" && options.quality !== "lossless") {
+      // An editing node's precise cut re-encodes at its usual settings; a
+      // lossless (keyframe) cut stream-copies, so it reads as given (below).
+      console.log(`[smartLoopCut] Downloading video from ${options.videoUrl}`)
+      await downloadEditingSource(options.videoUrl, inputPath)
+    } else {
+      console.log(`[smartLoopCut] Downloading video from ${options.videoUrl}`)
+      await downloadFile(options.videoUrl, inputPath)
+    }
     await options.chargeCheck?.([inputPath])
 
     const { fps, frameCount } = await probeFpsAndFrameCount(inputPath)

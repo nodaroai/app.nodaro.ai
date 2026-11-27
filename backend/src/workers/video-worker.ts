@@ -78,6 +78,8 @@ import { registerLaneParking } from "../lib/concurrency-lanes/park.js"
 import { serverShare } from "../lib/concurrency-lanes/server-share.js"
 import { claimWithBullEntry, dropRequeuePayload } from "../lib/concurrency-lanes/columns.js"
 import { runHolding } from "../lib/concurrency-lanes/hold.js"
+// Whose run a job's video steps read their sources for (lib/video-source.ts).
+import { runWithVideoSourceContext, VIDEO_SOURCE_JOB_NAMES } from "../lib/video-source-context.js"
 import { VIDEO_WORKER_LOCK_DURATION_MS, VIDEO_WORKER_MAX_STALLED_COUNT, VIDEO_WORKER_STALLED_INTERVAL_MS } from "@nodaro/render-rules"
 import { runWithinCapacity } from "./worker-capacity.js"
 import { savedProviderTaskOf, videoHandlerFlags } from "./video-handler-flags.js"
@@ -515,7 +517,7 @@ export function createVideoWorker() {
       // Bind a cancellation context so provider poll loops abort the moment
       // the user cancels — instead of polling the upstream job to completion.
       try {
-        await runHolding(admission.hold, () => runWithJobCancellation(jobId, jobUserId, () => handler(job, ctx), { finalAttempt: () => isFinalJobAttempt(job) }))
+        await runHolding(admission.hold, () => runWithJobCancellation(jobId, jobUserId, () => runWithVideoSourceContext(jobUserId, () => handler(job, ctx), { readsOriginals: VIDEO_SOURCE_JOB_NAMES.has(job.name) }), { finalAttempt: () => isFinalJobAttempt(job) }))
       } catch (firstErr) {
         const firstBlock = safetyBlockOf(firstErr, modelId)
         if (!firstBlock || firstBlock.maxAttempts < 2) throw firstErr
@@ -529,7 +531,7 @@ export function createVideoWorker() {
         console.warn(
           `[worker] Job ${jobId} safety-blocked on ${modelId ?? "unknown model"} — retrying the same request once inline`,
         )
-        await runHolding(admission.hold, () => runWithJobCancellation(jobId, jobUserId, () => handler(job, ctx), { finalAttempt: () => isFinalJobAttempt(job) }))
+        await runHolding(admission.hold, () => runWithJobCancellation(jobId, jobUserId, () => runWithVideoSourceContext(jobUserId, () => handler(job, ctx), { readsOriginals: VIDEO_SOURCE_JOB_NAMES.has(job.name) }), { finalAttempt: () => isFinalJobAttempt(job) }))
       }
 
       // Record execution duration for progress bar estimation

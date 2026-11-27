@@ -286,12 +286,76 @@ it is on the deployment's published storage origin (`R2_PUBLIC_URL`'s, which
 and its path is a stored video's, headed by a job id; any other video keeps
 its surface's own download.
 
-## Editing nodes
+## Steps that read the original
 
-Editing nodes (Combine, Trim, Loop, Add Captions, renders) still read
-`videoUrl` and write 8-bit H.264 as before. Because the preview of an HDR
-original is already tone-mapped, they now get SDR input with correct colour
-instead of HLG or PQ squeezed into 8 bits.
+A node is handed the preview, the url its job's output names. Since
+2026-11-22 a step of ours that reads the picture itself reads the original
+instead, when the run may read it (`backend/src/lib/video-source.ts`). The
+original is found only through the live job row the preview's key names: it
+must be completed and not in the Trash, its `videoUrl` must name that very
+object, and its `originalVideoUrl` must be the preview's own original key
+(`videos/<id>-master.<ext>`). The run's owner must be able to read that job
+by today's rule: their own, or a public completed one. A copied
+`originalVideoUrl` (a saved node, a run's node states, an app's snapshot)
+proves nothing, so a node run again after its source job was deleted for good
+reads the preview, as before. A run's `input_data` is never rewritten.
+
+The new path only ever upgrades: any failure along it (the original gone or
+over the step's download limit, a probe, an encode that fails or runs out of
+time) reads the preview, as before, and is logged. The price never depends on
+which file was read.
+
+- **Editing nodes** (Combine, Trim, Loop, Add Captions, Apply EDL, Video
+  Overlay, the renders and the rest) read the original and make from it the
+  step's source (`backend/src/providers/video/editing-source.ts`): the
+  preview's own chain (the same frames, timing and sound, an HDR picture
+  tone-mapped by the preview's own tone map) at the working copy's
+  near-lossless quality instead of the preview's CRF 23. So the step runs
+  exactly as it did on the preview (the source is the preview's own class:
+  H.264 4:2:0, its size, rate, colour tags and AAC 128k sound) and still
+  writes 8-bit H.264 at its own settings, one generation of loss fewer, and
+  its result looks like the preview. An HDR
+  file given as it is (an HDR upload, a kept original whose preview could
+  not be made) is tone-mapped the same way, keyed on its probed transfer
+  (HLG or PQ). A tone-mapped source is said in the job's output:
+  `warningCode: "hdr_tone_mapped"` with an English `warningMessage`. The
+  conform's memory and time are the preview's (the canvas model at the
+  picture's size, its time model), a conform the box's ffmpeg memory cannot
+  hold is not attempted, and all of a job's conforms together are held to 15
+  minutes: each takes its allowance before it starts (parallel conforms
+  included) and runs at most that long once admitted; one that does not fit
+  reads the preview.
+- **Merge Video & Audio** reads the original and copies its picture untouched
+  (only the sound is encoded), so a 10-bit or HDR picture stays so; the
+  result is stored through the store function above, so it keeps its own
+  original beside a preview. Any other input is merged as before.
+- **Generate Video's audio track, driving clip and voiced lines, and Lip
+  Sync's voice line** copy the provider's picture as it was delivered,
+  whatever it is, so the merged result keeps its original.
+- **Extend** reads the preview as before for the tail it sends the model, its
+  checks and every 8-bit join. Only when both the source's original and the
+  new footage are 10-bit pictures of one dynamic range (both SDR, or both HDR
+  on the same transfer) on an unwatermarked run is the join made onto the
+  original, in 10-bit HEVC at the source's colour, kept as the original
+  beside its preview.
+- **A step that stream-copies the picture it was given** (Loop Video's plain
+  repeat, Trim's keyframe cut, a lossless loop cut, Adjust Volume's and Pitch
+  & Tempo's video lanes, the scene-graph fast path) reads its input as given:
+  a copy of the conformed source would hand a user the working copy. Every
+  step that reads the conformed source re-encodes it at the very settings it
+  used on the preview: the encode settings are unchanged.
+
+Only the jobs of those nodes read originals
+(`VIDEO_SOURCE_JOB_NAMES` in `backend/src/lib/video-source-context.ts`, and
+every node render in the render worker): a plugin's, a pipeline's or a
+generation's own call of the same provider functions downloads its input
+exactly as before. Sound-only steps (extract audio, transcription, silence
+detection, the audio mixes), steps that hand a video on to a provider model
+as it is, analyses (shot cuts), masks and mattes, and the products' own flows
+read the url as given. A preview read through the fallback host or a
+transform is not matched and reads as given. `backend/src/providers/video/__tests__/editing-source-census.test.ts`
+lists every download of an input with why it reads as given, and fails a new
+one until it is decided.
 
 ## Watermarked runs
 
@@ -313,15 +377,9 @@ owner.
 
 ## Not covered yet
 
-- Reading the original when editing: an Extend join writing 10-bit HEVC, and
-  editing nodes reading the original and tone-mapping HDR input themselves.
-  Today the shared audio merge (Merge Video & Audio, Generate Video's audio
-  track, Lip Sync's voice line) re-encodes any picture that is not H.264
-  `yuv420p`, so its result is 8-bit H.264 and keeps no original. It does not
-  tone-map: an HDR source that goes through it is re-encoded with no tone
-  map, and comes out as HDR pictures did before this change. A step that
-  copies the picture untouched (Face Swap laying the source's sound back)
-  passes a 10-bit file on, and that result does keep its original.
+- Steps that hand a video on to a provider model (video-to-video, upscale,
+  Face Swap, Video Mask and the rest) still send the preview. Whether a
+  provider should get the original is not decided.
 - Plugin outputs. A plugin keeps an original only if it calls the toolkit's
   new `media.storeVideoResult`. The older `uploadVideoMaybeWatermark` returns
   a single URL, so it keeps no original.

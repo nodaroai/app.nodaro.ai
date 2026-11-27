@@ -1,5 +1,6 @@
+import { downloadEditingSource } from "./editing-source.js"
 import { join } from "node:path"
-import { downloadFile, runFfmpeg, createWorkDir, cleanupWorkDir } from "./ffmpeg-utils.js"
+import { runFfmpeg, createWorkDir, cleanupWorkDir } from "./ffmpeg-utils.js"
 
 interface SocialMediaFormatOptions {
   readonly mediaUrl: string
@@ -21,7 +22,7 @@ export async function socialMediaFormat(options: SocialMediaFormatOptions): Prom
     const inputPath = join(workDir, inputExt)
     const outputPath = join(workDir, outputExt)
 
-    await downloadFile(mediaUrl, inputPath)
+    await downloadEditingSource(mediaUrl, inputPath)
 
     const color = padColor.replace("#", "0x")
     let vf: string

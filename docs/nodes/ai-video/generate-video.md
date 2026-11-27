@@ -139,7 +139,7 @@ Kling 4.0 is two model ids over two provider endpoints. Both run **3–30 s** (a
 - Turning HDR on at 720p moves the node to **1080p** and shows the new price. With HDR on, the resolution menu offers 1080p and 4K only.
 - A request asking for HDR at 720p — or with no resolution, which renders 720p — is refused with a `400` (`hdr_resolution_unsupported`) before any credits are reserved, on the API, in a workflow run and in the editor's Run.
 - HDR is priced as its **own add-on line on the output seconds**, beside the clip's own price; a reference video's seconds never move it (see [Credit pricing](#credit-pricing)).
-- **HDR is kept in the downloaded clip; editing nodes produce SDR.** The stored original keeps the HDR file and Download gives it to you. The copy the browser plays, and every editing node that takes the clip (Trim, Combine, Captions and the rest), converts it to SDR first. A Generate Video audio track and the seamless-loop trim keep the HDR picture. A watermarked result is SDR.
+- **HDR is kept in the downloaded clip; editing nodes produce SDR.** The stored original keeps the HDR file and Download gives it to you. The copy the browser plays is converted to SDR. Every editing node that takes the clip (Trim, Combine, Captions and the rest) reads the HDR original and converts it to SDR the same way (see [Output files](#output-files)). A Generate Video audio track and the seamless-loop trim keep the HDR picture, and so do [Merge Video & Audio](../processing-audio/merge-video-audio.md) and an [Extend](./extend-video.md) whose new seconds are HDR on the same transfer. A watermarked result is SDR.
 - A task the provider cannot deliver at 4K or in HDR fails, and its credits are refunded like any failed generation; it never falls back to 1080p SDR. 4K and HDR renders are waited on longer than other runs (about 45 minutes for a 30-second clip).
 - Kling 4.0 Flash has no 4K and no HDR, and Generate Video Pro never renders HDR.
 
@@ -612,6 +612,8 @@ Some models deliver video a browser cannot show correctly, such as HEVC in 10-bi
 **Download gives the original**, everywhere the app offers it (the node, the editor's Library browser, job history, app results and the agent widgets): the file as the model made it, with its own extension (`.mp4`, `.mov`, `.webm` or `.mkv`). For some models that is HEVC 10-bit or HDR, which not every player can open; the app itself plays the browser-friendly copy.
 
 A file that is already H.264 8-bit is kept as it is, and a watermarked run keeps only the watermarked file. If the copy cannot be made, the result is the original alone, and the player offers Download if your browser cannot play it. See [Video originals and previews](../../design/video-original-and-preview.md).
+
+The steps that finish a run keep that file too: an audio track laid on the clip (an `audioUrl`, a driving clip, a voiced video's line) copies the picture as the model delivered it, so a 10-bit or HDR picture stays 10-bit or HDR and the merged result keeps it as its original. A node downstream that edits the clip (Trim, Combine, Captions, a render and the rest) works from the original rather than the playable copy, converting an HDR picture to SDR by the same conversion as the copy (its job's output then carries `warningCode: "hdr_tone_mapped"`), and outputs an 8-bit H.264 MP4. [Merge Video & Audio](../processing-audio/merge-video-audio.md) copies the original's picture untouched, and an [Extend](./extend-video.md) whose new footage is 10-bit too joins onto the original.
 
 ## Credit pricing
 

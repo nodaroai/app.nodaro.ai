@@ -409,6 +409,8 @@ describe("voiced-video handler — audio_driven (Seedance 2)", () => {
       videoUrl: VIDEO_RESULT.url,
       audioTracks: [{ url: "https://r2.example.com/tts.mp3", startTime: 0, volume: 100, sourceType: "audio" }],
       keepOriginalAudio: false,
+      // The provider's picture as it is (decided 2026-11-22: the steps that finish a generation keep 10-bit).
+      keepPicture: true,
     }]])
     expect(mocks.mockWatermarkLocalVideoAndUpload).toHaveBeenCalled()
     expect(mocks.mockUploadVideoMaybeWatermark).not.toHaveBeenCalled()

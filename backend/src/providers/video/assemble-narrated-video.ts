@@ -1,3 +1,4 @@
+import { downloadEditingSource } from "./editing-source.js"
 import { join } from "node:path"
 import { promises as fs } from "node:fs"
 import {
@@ -85,7 +86,7 @@ export async function assembleNarratedVideo(params: AssembleNarratedVideoParams)
     for (let i = 0; i < blocks.length; i++) {
       try {
         const cp = join(workDir, `clip-${i}.in.mp4`)
-        await downloadFile(blocks[i].videoUrl, cp)
+        await downloadEditingSource(blocks[i].videoUrl, cp)
         let voicePath: string | null = null
         if (blocks[i].audioUrl) {
           voicePath = join(workDir, `voice-${i}.in`)

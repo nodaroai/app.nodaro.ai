@@ -27,6 +27,7 @@ import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
 import { uploadFileToR2 } from "../../lib/storage.js"
 import { runPostProcessing } from "../../lib/post-processing-error.js"
 import { cleanupWorkDir, createWorkDir, downloadFile } from "../../providers/video/ffmpeg-utils.js"
+import { downloadEditingSource } from "../../providers/video/editing-source.js"
 import { drawFaceMeshVideo, faceMeshOutputPath } from "../../services/face-mesh/draw-face-mesh.js"
 import {
   commitJobCredits,
@@ -87,9 +88,10 @@ const handleVideoFaceMesh: HandlerFn = async function handleVideoFaceMesh(job, c
   const workDir = await createWorkDir("video-face-mesh")
   try {
     const videoPath = join(workDir, "video.mp4")
-    await downloadFile(d.videoUrl, videoPath)
+    // The pictures: their kept originals when the run may read them, conformed (editing-source.ts).
+    await downloadEditingSource(d.videoUrl, videoPath)
     const drawOnPath = drawOn ? join(workDir, "draw-on.mp4") : videoPath
-    if (drawOn) await downloadFile(drawOn, drawOnPath)
+    if (drawOn) await downloadEditingSource(drawOn, drawOnPath)
     const maskPath = mask ? join(workDir, "mask.mp4") : undefined
     if (mask && maskPath) await downloadFile(mask, maskPath)
     const depthPath = depthUrl ? join(workDir, "depth.mp4") : undefined

@@ -20,7 +20,9 @@ import { isDrainAbortError } from "./worker-drain.js"
  * laid on it; a clip that already has one is left exactly as it is.
  *
  * The mux is `mergeVideoAudio` with the voiced lane's own recipe
- * (`voiceTrackMuxRecipe`): the picture is stream-copied, the voice starts at 0
+ * (`voiceTrackMuxRecipe`): the picture is stream-copied as the provider
+ * delivered it, whatever it is (`keepPicture`: a 10-bit or HDR picture too, so
+ * the store keeps it as the original beside a preview), the voice starts at 0
  * and is fitted to the picture's length (cut when longer, silence when
  * shorter, never stretched).
  */
@@ -147,6 +149,9 @@ export async function addVoiceLineIfSilent(args: {
     const mergedPath = await mergeVideoAudio({
       ...draftAudioMuxMergeArgs(args.videoUrl, voiceTrackMuxRecipe(voiceUrl)),
       fitAudioToVideo: true,
+      // The provider's picture as it is (10-bit, HDR, HEVC), kept as the
+      // original beside its preview (decided 2026-11-22).
+      keepPicture: true,
     })
     try {
       return { kind: "muxed", stored: await watermarkLocalVideoAndUpload(mergedPath, args.jobId, args.userId, args.watermark) }

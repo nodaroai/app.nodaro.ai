@@ -10,6 +10,7 @@
  * (@nodaro/shared, the one the canvas preview draws with). The caller (the worker
  * handler) owns `workDir` and removes it on every path.
  */
+import { downloadEditingSource } from "./editing-source.js"
 import { join } from "node:path"
 import {
   VIDEO_OVERLAY_DEFAULT_BACKGROUND,
@@ -35,7 +36,7 @@ import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
 import { videoOverlayRefusalAtLength, videoOverlayRefusalForCharge } from "../../lib/video-overlay-refusal.js"
 import { videoOverlayChargedSec } from "../../lib/video-track-length.js"
 import { throwIfJobCancelled } from "../../lib/job-cancellation.js"
-import { downloadFile, probeVideoOverlayBase, runFfmpeg, withFfmpegSlot, type VideoOverlayBaseProbe } from "./ffmpeg-utils.js"
+import { probeVideoOverlayBase, runFfmpeg, withFfmpegSlot, type VideoOverlayBaseProbe } from "./ffmpeg-utils.js"
 import { DEFAULT_FFMPEG_TIMEOUT_MS } from "./ffmpeg-timeouts.js"
 import { buildVideoOverlayGraph, type VideoOverlayGraphLayer } from "./video-overlay-graph.js"
 import { fetchVideoOverlayImage, gateVideoOverlayImage, inspectVideoOverlayImage, type VideoOverlayImageTotals } from "./video-overlay-images.js"
@@ -151,7 +152,7 @@ async function prefitVideoOverlayLayerOrRefuse(
 export async function renderVideoOverlay(payload: VideoOverlayJobPayload, workDir: string): Promise<VideoOverlayRenderResult> {
   // 2. The base first. A failed download is an ordinary error: BullMQ retries.
   const inputPath = join(workDir, "input.mp4")
-  await downloadFile(payload.videoUrl, inputPath)
+  await downloadEditingSource(payload.videoUrl, inputPath)
   // 3. Probe BEFORE any image is fetched — a base that is not a video fails once, here.
   const probe = await probeVideoOverlayBase(inputPath)
   // 4. Validate (the last net: a queue payload can come from either engine),

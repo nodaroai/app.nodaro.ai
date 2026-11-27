@@ -12,6 +12,8 @@ import { uploadFileToR2 } from "../lib/storage.js"
 import { resolveIsPublicOutput, mcpClientForcesPrivate } from "./output-visibility.js"
 import { createWorkDir, cleanupWorkDir, downloadFile, runFfmpeg, needsTranscode, transcodeToBrowserSafe, BROWSER_SAFE_VIDEO_ARGS, REMOTION_INPUT_VIDEO_ARGS , restoreVideoAudioFromSource } from "../providers/video/ffmpeg-utils.js"
 import { applyVideoWatermark } from "../utils/watermark.js"
+import { runWithVideoSourceContext } from "../lib/video-source-context.js"
+import { downloadEditingSource } from "../providers/video/editing-source.js"
 import { commitJobCredits, refundJobCredits, shouldSaveJobResult, markJobCompletedDetailed, generateAndUploadThumbnail, createAssetFromJob, isFinalJobAttempt, type MarkJobCompletedOutcome } from "./shared.js"
 import { markJobFailed } from "../lib/job-failure.js"
 import { addCaptionsRenderChargeId, addCaptionsRenderChargeOf, commitAddCaptionsRender } from "../lib/add-captions-nemotron-run.js"
@@ -455,7 +457,8 @@ async function renderSceneGraphViaFfmpeg(
   const videoPath = join(workDir, "input-video.mp4")
   const outputPath = join(workDir, "output.mp4")
 
-  // Download video
+  // Download video as given: this path stream-copies the picture whenever a
+  // browser plays it, so a conformed source would be delivered as it is.
   console.log(`[render-worker] FFmpeg fast path: downloading video`)
   await downloadFile(videoSrc, videoPath)
   await bullJob.updateProgress(50)
@@ -797,7 +800,9 @@ async function normalizeInputVideos(
     if (fileMap.has(url)) continue
     const inputName = `input-${randomUUID()}.mp4`
     const localPath = join(workDir, inputName)
-    await downloadFile(url, localPath)
+    // Its kept original when the run may read one, conformed as an editing
+    // step's source; an HDR picture tone-mapped to SDR (editing-source.ts).
+    await downloadEditingSource(url, localPath)
     audioByUrl.set(url, localPath)
 
     // Always transcode with all-intra keyframes (-g 1) so Remotion's
@@ -982,7 +987,8 @@ export function createRenderWorker() {
 
   return new Worker(
     "video-render",
-    withRenderAdmission(async (bullJob, token, jobRecord, lane) => {
+    // Whose run its input videos are read for, and whether it reads kept originals (lib/video-source.ts).
+    withRenderAdmission((bullJob, token, jobRecord, lane) => runWithVideoSourceContext((jobRecord?.user_id as string | undefined) ?? undefined, async () => {
       if (bullJob.name === "scene-render-child") {
         const { processSceneRenderChild } = await import("./scene3d-render-child.js")
         return processSceneRenderChild(bullJob, () => getBundlePath(SCENE3D_PLAN_TYPE), chromiumOptionsFor(SCENE3D_PLAN_TYPE))
@@ -1392,7 +1398,8 @@ export function createRenderWorker() {
       } finally {
         await cleanupWorkDir(workDir)
       }
-    }),
+    // Every render of a node's plan reads originals; a 3D scene's child render reads its own assets as before.
+    }, { readsOriginals: bullJob.name !== "scene-render-child" })),
     {
       connection: connection as unknown as ConnectionOptions,
       concurrency: config.RENDER_WORKER_CONCURRENCY,

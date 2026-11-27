@@ -1,3 +1,4 @@
+import { downloadEditingSource } from "./editing-source.js"
 import { join } from "node:path"
 import { downloadFile, runFfmpeg, runFfprobe, createWorkDir, cleanupWorkDir } from "./ffmpeg-utils.js"
 import { parseFrameRate } from "./frame-rate.js"
@@ -68,7 +69,10 @@ export async function trimVideo(options: TrimVideoOptions): Promise<{ videoPath:
     const outputPath = join(workDir, "output.mp4")
 
     console.log(`[trimVideo] Downloading video from ${videoUrl}`)
-    await downloadFile(videoUrl, inputPath)
+    // A keyframe cut stream-copies the picture it was given: read as given.
+    // Every other cut re-encodes it at its usual settings: an editing step's source.
+    if (losslessKeyframe) await downloadFile(videoUrl, inputPath)
+    else await downloadEditingSource(videoUrl, inputPath)
     await options.chargeCheck?.([inputPath])
 
     // Frame-based trim overrides time-based when set. Worker probes

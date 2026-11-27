@@ -36,6 +36,17 @@
  *   extension's own: its picture is tone-mapped in the graph (`toSdr`). The
  *   extension's picture is left as it is.
  *
+ * - Two 10-bit pictures of one dynamic range on a run that keeps them
+ *   (`stitchKeepsTenBit`: decided 2026-11-22, the steps that finish a
+ *   generation keep 10-bit) are joined into 10-bit HEVC instead
+ *   (`hevc10PictureArgs`, one pass at constant quality), at the source's
+ *   colour, an HDR pair kept HDR: the store keeps that file as the original
+ *   beside its browser-safe preview. Given the same two files, the picture
+ *   graph and the sound graph are built the same way for both encodes; a join
+ *   made onto a kept original instead of its preview (`tenBitJoinSource`)
+ *   derives its boundary search, its sound bitrate and its sound offset from
+ *   that original.
+ *
  * Both pictures are held to the frame count their length gives at the output
  * rate: the last frame is cloned for as long as `fps` comes up short, so each
  * picture always reaches the count its sound is cut to, without decoding it
@@ -44,6 +55,7 @@
 import { resolveAudioCrossfadeCurve } from "@nodaro/shared/edl"
 import { COMBINE_DELIVERY_CRF } from "./ffmpeg-utils.js"
 import { matchedHasBitRate, matchedPictureArgs, type MatchedProbe } from "./matched-encode.js"
+import { hevc10PictureArgs, isTenBitOrMore } from "./hevc10-encode.js"
 import { parseFrameRate } from "./frame-rate.js"
 
 /** What one stitch encode is built from (`extendStitchArgs`). */
@@ -85,6 +97,13 @@ export interface ExtendStitchEncode {
   audioSampleRate?: number
   /** One of the two passes, which share `log` (pass 1 measures the picture and writes nothing). */
   pass?: { n: 1 | 2; log: string }
+  /**
+   * Both clips are 10-bit pictures of one dynamic range and the run keeps
+   * them (`stitchKeepsTenBit`): the result is 10-bit HEVC at the source's
+   * colour (`tenBitPicture`), one pass, never taken to 8-bit or SDR. Absent:
+   * the delivery as the module header sets out.
+   */
+  tenBit?: boolean
 }
 
 /** The sound's sample rate when the source's is unreadable. */
@@ -270,6 +289,40 @@ export function deliveredPictureFilter(source: MatchedProbe): string | undefined
   return chain.length > 0 ? chain.join(",") : undefined
 }
 
+/** The 10-bit join's pixel format. */
+const TEN_BIT_PIX_FMT = "yuv420p10le"
+
+/**
+ * Whether a stitch keeps 10-bit (decided 2026-11-22: the Extend join writes
+ * 10-bit HEVC when its inputs are 10-bit): `keep` (an unwatermarked run: a
+ * watermarked one is stored 8-bit whatever is joined), and both pictures
+ * 10-bit or deeper, of one dynamic range — both SDR, or both HDR on the same
+ * transfer — so neither is converted to match the other. Pure.
+ */
+export function stitchKeepsTenBit(source: MatchedProbe, extension: MatchedProbe, keep: boolean): boolean {
+  if (!keep || !isTenBitOrMore(source) || !isTenBitOrMore(extension)) return false
+  if (isHdr(source) !== isHdr(extension)) return false
+  return !isHdr(source) || source.colorTransfer === extension.colorTransfer
+}
+
+/**
+ * A 10-bit join's source picture: a full-range one taken to limited range in
+ * 10 bits (the extension's own), any other as it is, held in `TEN_BIT_PIX_FMT`.
+ */
+function tenBitChain(source: MatchedProbe): string[] {
+  return [...(isFullRange(source) ? ["setparams=range=pc", "scale=out_range=tv"] : []), `format=${TEN_BIT_PIX_FMT}`]
+}
+
+/**
+ * The 10-bit join's encode (`hevc10PictureArgs`): every frame as the graph
+ * gives it (`-fps_mode passthrough`, as the delivery's matched encode), at the
+ * source's colour tags, limited range when its full-range picture was
+ * converted.
+ */
+function tenBitPicture(source: MatchedProbe): string[] {
+  return ["-fps_mode", "passthrough", ...hevc10PictureArgs(isFullRange(source) ? { ...source, colorRange: "tv" } : source)]
+}
+
 /**
  * The source's picture over frames [start, end), conformed to the output rate
  * (its own), at the delivered size (`evenCrop` of `shape`, the picture as the
@@ -277,8 +330,8 @@ export function deliveredPictureFilter(source: MatchedProbe): string | undefined
  * and the boundary proxy read it alike. The crop comes before the colour
  * conversion, whose 4:2:0 then sees even sides.
  */
-export function sourcePicture(source: MatchedProbe, shape: PictureShape, rate: StitchRate, start: number, end: number): string {
-  return [conformTo(rate), frameSpan(start, end), ...evenCrop(shape), ...deliveredChain(source)].join(",")
+export function sourcePicture(source: MatchedProbe, shape: PictureShape, rate: StitchRate, start: number, end: number, tenBit = false): string {
+  return [conformTo(rate), frameSpan(start, end), ...evenCrop(shape), ...(tenBit ? tenBitChain(source) : deliveredChain(source))].join(",")
 }
 
 /**
@@ -447,7 +500,8 @@ function deliveryPicture(source: MatchedProbe, delivered: Size): MatchedProbe {
  * rather than at the constant quality (one pass): the rule `extendStitchArgs`
  * follows (`deliveryPicture`).
  */
-export function stitchEncodesAtBitRate(source: MatchedProbe): boolean {
+export function stitchEncodesAtBitRate(source: MatchedProbe, tenBit = false): boolean {
+  if (tenBit) return false
   return matchedHasBitRate(deliveryPicture(source, deliveredShape({ width: source.width ?? 0, height: source.height ?? 0 })))
 }
 
@@ -460,13 +514,14 @@ export function extendStitchArgs(p: ExtendStitchEncode): string[] {
   const rate = stitchRate(p.source)
   const shape = p.picture ?? pictureSize(p.source, "source")
   const kept = { source: p.sourceFrames - p.trimEndFrames, extension: p.extensionFrames - extensionDropped(p) }
+  const tenBit = p.tenBit === true
   const picture = [
-    `[0:v:0]${sourcePicture(p.source, shape, rate, 0, kept.source)}[sv]`,
-    `[1:v:0]${encodedExtensionPicture(p, rate, shape)}[ev]`,
+    `[0:v:0]${sourcePicture(p.source, shape, rate, 0, kept.source, tenBit)}[sv]`,
+    `[1:v:0]${encodedExtensionPicture(p, rate, shape)}${tenBit ? `,format=${TEN_BIT_PIX_FMT}` : ""}[ev]`,
     "[sv][ev]concat=n=2:v=1:a=0[v]",
   ].join(";")
   const inputs = ["-y", "-i", p.sourcePath, "-i", p.extensionPath]
-  const encode = matchedPictureArgs(deliveryPicture(p.source, deliveredShape(shape)), { pass: p.pass })
+  const encode = tenBit ? tenBitPicture(p.source) : matchedPictureArgs(deliveryPicture(p.source, deliveredShape(shape)), { pass: p.pass })
   if (p.pass?.n === 1) return [...inputs, "-filter_complex", picture, "-map", "[v]", "-an", ...encode, "-f", "null", "-"]
   const sound = p.sourceHasAudio || p.extensionHasAudio
   return [

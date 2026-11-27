@@ -30,6 +30,7 @@
  * its colour tags. Without it every argv is the one before it existed.
  */
 
+import { downloadEditingSource } from "./editing-source.js"
 import { join } from "node:path"
 import {
   MASK_COMPOSITE_BOUNDS,
@@ -411,8 +412,8 @@ export async function maskComposite(params: MaskCompositeParams): Promise<MaskCo
     const maskPath = join(workDir, "mask.mp4")
     const outputPath = join(workDir, "output.mp4")
     await Promise.all([
-      downloadFile(foregroundUrl, foregroundPath),
-      downloadFile(params.backgroundUrl, backgroundPath),
+      downloadEditingSource(foregroundUrl, foregroundPath),
+      downloadEditingSource(params.backgroundUrl, backgroundPath),
       downloadFile(params.maskUrl, maskPath),
     ])
     const [fg, foregroundHasAudio, backgroundHasAudio] = await Promise.all([
@@ -464,7 +465,7 @@ async function maskCompositeFill(params: MaskCompositeParams): Promise<MaskCompo
     const backgroundPath = join(workDir, "background.mp4")
     const maskPath = join(workDir, "mask.mp4")
     const outputPath = join(workDir, "output.mp4")
-    await Promise.all([downloadFile(params.backgroundUrl, backgroundPath), downloadFile(params.maskUrl, maskPath)])
+    await Promise.all([downloadEditingSource(params.backgroundUrl, backgroundPath), downloadFile(params.maskUrl, maskPath)])
     const [bg, backgroundHasAudio] = await Promise.all([probeVideoOverlayBase(backgroundPath), hasAudioStream(backgroundPath)])
     if (bg.streamDurationSec > MASK_COMPOSITE_BOUNDS.MAX_DURATION_SEC) {
       throw new DeterministicJobError(

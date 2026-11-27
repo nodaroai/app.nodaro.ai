@@ -680,6 +680,10 @@ export interface FfmpegLaunchOptions {
   /** The child's environment: the probe guard's, for a run that reads a link through its proxy
    *  (`ffmpeg-reading-links.ts`). Omitted: this process's own. */
   readonly env?: NodeJS.ProcessEnv
+  /** Told when the launch is admitted and about to start (again, for a launch the box's shortage
+   *  made run again): a caller that accounts for the time ffmpeg runs starts its clock here, never
+   *  while the launch waited for its slot. `runFfmpeg` only. */
+  readonly onAdmitted?: () => void
 }
 
 export { ffmpegMemoryBudgetNow }
@@ -962,6 +966,7 @@ export async function runFfmpeg(
 ): Promise<string> {
   // A launch that failed for the box's passing shortage runs again, its slot released while it waits.
   return retryOnBoxShortage((limitMs, evidence) => holdSlot(() => new Promise<string>((resolve, reject) => {
+    launch?.onAdmitted?.()
     // Declared first: the callback may run before execFile returns.
     let stopEscalation = () => {}
     let stopWatch = () => {}
