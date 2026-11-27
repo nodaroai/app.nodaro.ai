@@ -152,6 +152,8 @@ const storageMocks = vi.hoisted(() => ({
   // The delete lane's reads (lib/discard-job-copies.ts): our public URL → key, and a key's size.
   r2KeyFromOurUrl: (url: string) => (url.startsWith("https://r2.example/") ? url.slice("https://r2.example/".length) : null),
   getR2ObjectSize: vi.fn<(key: string) => Promise<number>>().mockResolvedValue(0),
+  // What the delete lane gives back by: the size the mock above answers, every object charged.
+  storageChargeOf: async (key: string) => ({ bytes: await storageMocks.getR2ObjectSize(key), uncounted: false }),
 }))
 
 vi.mock("@/lib/storage.js", () => storageMocks)

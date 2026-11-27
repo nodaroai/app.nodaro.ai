@@ -23,7 +23,7 @@
  * through `ownedCopyKeys` + `discardOwnedKeys`.
  */
 import { supabase } from "./supabase.js"
-import { getR2ObjectSize, r2KeyFromOurUrl } from "./storage.js"
+import { storageChargeOf, r2KeyFromOurUrl } from "./storage.js"
 import { isOwnedObjectKey } from "./job-policy-outputs.js"
 import { deleteKeysRecordingFailures } from "./storage-delete.js"
 import { updateStorageUsage } from "../utils/file-validation.js"
@@ -82,7 +82,8 @@ export async function discardOwnedKeys(
     return
   }
   try {
-    const sizes = new Map(await Promise.all(keys.map(async (key) => [key, await getR2ObjectSize(key)] as const)))
+    // What each was charged (an uncounted object was not: `storageChargeOf`).
+    const sizes = new Map(await Promise.all(keys.map(async (key) => [key, (await storageChargeOf(key)).bytes] as const)))
     const result = await deleteKeysRecordingFailures(keys, "job-output", { jobIdOf: () => jobId })
     const kept = new Set(result.notDeleted ?? [])
     const freed = keys.filter((key) => !kept.has(key)).reduce((sum, key) => sum + (sizes.get(key) ?? 0), 0)

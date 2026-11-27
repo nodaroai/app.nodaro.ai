@@ -9,7 +9,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 const h = vi.hoisted(() => ({
   status: { data: { status: "processing" } as unknown, error: null as unknown },
   deleteKeysRecordingFailures: vi.fn(),
-  getR2ObjectSize: vi.fn(),
+  storageChargeOf: vi.fn(),
   updateStorageUsage: vi.fn(),
   selectCalls: 0,
 }))
@@ -29,7 +29,7 @@ vi.mock("../supabase.js", () => ({
   },
 }))
 vi.mock("../storage.js", () => ({
-  getR2ObjectSize: h.getR2ObjectSize,
+  storageChargeOf: h.storageChargeOf,
   r2KeyFromOurUrl: (url: string) => (url.startsWith("https://cdn.test/") ? url.slice("https://cdn.test/".length) : null),
 }))
 vi.mock("../storage-delete.js", () => ({ deleteKeysRecordingFailures: h.deleteKeysRecordingFailures }))
@@ -45,7 +45,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   h.status = { data: { status: "processing" }, error: null }
   h.selectCalls = 0
-  h.getR2ObjectSize.mockResolvedValue(100)
+  h.storageChargeOf.mockResolvedValue({ bytes: 100, uncounted: false })
   h.deleteKeysRecordingFailures.mockImplementation(async (keys: string[]) => ({ deleted: keys.length, errors: 0, notDeleted: [], failed: [] }))
   h.updateStorageUsage.mockResolvedValue(undefined)
 })
@@ -60,6 +60,13 @@ describe("discardFailedRunCopies", () => {
       expect.objectContaining({ jobIdOf: expect.any(Function) }),
     )
     expect(h.updateStorageUsage).toHaveBeenCalledWith("user-1", -200)
+  })
+
+  it("deletes a copy stored uncounted and gives nothing back for it: it was never charged", async () => {
+    h.storageChargeOf.mockImplementation(async (key: string) => (key.endsWith("-raw.mov") ? { bytes: 0, uncounted: true } : { bytes: 100, uncounted: false }))
+    await discardFailedRunCopies(JOB, "user-1", [REF, RAW])
+    expect(h.deleteKeysRecordingFailures).toHaveBeenCalledWith([`videos/${JOB}-raw-ref.mov`, `videos/${JOB}-raw.mov`], "job-output", expect.anything())
+    expect(h.updateStorageUsage).toHaveBeenCalledWith("user-1", -100)
   })
 
   it("gives back only the bytes of what storage confirmed gone (a failure is recorded for the retry)", async () => {

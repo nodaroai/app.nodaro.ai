@@ -158,7 +158,7 @@ vi.mock("@/lib/storage.js", () => ({
   uploadBufferToR2: mocks.mockUploadBufferToR2,
   uploadFileToR2: mocks.mockUploadFileToR2,
   uploadFileWithKeyToR2: vi.fn(),
-  getR2ObjectSize: vi.fn().mockResolvedValue(0),
+  storageChargeOf: vi.fn().mockResolvedValue({ bytes: 0, uncounted: false }),
 }))
 
 // uploadImageMaybeWatermark now uses safeFetch (DNS-aware SSRF gate) instead
@@ -1442,8 +1442,8 @@ describe("createAssetFromJob", () => {
   // delete (job_id NULLed) would leave a sized, job-less row that reads like
   // the worker's own output — and a refund of bytes never charged.
   it("records the size of its own job's output", async () => {
-    const { getR2ObjectSize } = await import("@/lib/storage.js")
-    vi.mocked(getR2ObjectSize).mockResolvedValueOnce(4096)
+    const { storageChargeOf } = await import("@/lib/storage.js")
+    vi.mocked(storageChargeOf).mockResolvedValueOnce({ bytes: 4096, uncounted: false })
     mocks.mockSingle.mockResolvedValueOnce({
       data: { status: "completed", output_data: { imageUrl: "https://r2.example.com/images/job-1.png" } },
       error: null,
@@ -1460,9 +1460,9 @@ describe("createAssetFromJob", () => {
     ["a UUID-named key outside the output folders", "uploads/44444444-4444-4444-8444-444444444444.png"],
     ["another job's output", "images/22222222-2222-4222-8222-222222222222.png"],
   ])("records no size for a url its output repeated (%s)", async (_name, key) => {
-    const { getR2ObjectSize } = await import("@/lib/storage.js")
-    vi.mocked(getR2ObjectSize).mockClear()
-    vi.mocked(getR2ObjectSize).mockResolvedValue(9000)
+    const { storageChargeOf } = await import("@/lib/storage.js")
+    vi.mocked(storageChargeOf).mockClear()
+    vi.mocked(storageChargeOf).mockResolvedValue({ bytes: 9000, uncounted: false })
     mocks.mockSingle.mockResolvedValueOnce({
       data: { status: "completed", output_data: { imageUrl: `https://r2.example.com/${key}` } },
       error: null,
@@ -1472,8 +1472,23 @@ describe("createAssetFromJob", () => {
     await createAssetFromJob("11111111-1111-4111-8111-111111111111", "user-1")
 
     expect(mocks.mockInsert).toHaveBeenCalledWith(expect.objectContaining({ r2_key: key, size_bytes: 0 }))
-    expect(getR2ObjectSize).not.toHaveBeenCalled()
-    vi.mocked(getR2ObjectSize).mockResolvedValue(0)
+    expect(storageChargeOf).not.toHaveBeenCalled()
+    vi.mocked(storageChargeOf).mockResolvedValue({ bytes: 0, uncounted: false })
+  })
+
+  // An object stored uncounted (lib/storage.ts) was never charged: its row records 0.
+  it("records 0 for its own output stored uncounted", async () => {
+    const { storageChargeOf } = await import("@/lib/storage.js")
+    vi.mocked(storageChargeOf).mockResolvedValueOnce({ bytes: 0, uncounted: true })
+    mocks.mockSingle.mockResolvedValueOnce({
+      data: { status: "completed", output_data: { imageUrl: "https://r2.example.com/images/job-1.png" } },
+      error: null,
+    })
+    mocks.mockMaybeSingle.mockResolvedValueOnce({ data: null, error: null })
+
+    await createAssetFromJob("job-1", "user-1")
+
+    expect(mocks.mockInsert).toHaveBeenCalledWith(expect.objectContaining({ r2_key: "images/job-1.png", size_bytes: 0 }))
   })
 
   // A job's own secondary file that goes with its result's row
@@ -1484,14 +1499,15 @@ describe("createAssetFromJob", () => {
     const JOB = "11111111-1111-4111-8111-111111111111"
     const videoUrl = `https://r2.example.com/videos/${JOB}.mp4`
 
-    async function fileWith(output: Record<string, unknown>) {
-      const { getR2ObjectSize } = await import("@/lib/storage.js")
-      vi.mocked(getR2ObjectSize).mockImplementation(async (key: string) => (key.endsWith("-engine.mp4") ? 7000 : 5000))
+    async function fileWith(output: Record<string, unknown>, engineUncounted = false) {
+      const { storageChargeOf } = await import("@/lib/storage.js")
+      vi.mocked(storageChargeOf).mockImplementation(async (key: string) =>
+        key.endsWith("-engine.mp4") ? (engineUncounted ? { bytes: 0, uncounted: true } : { bytes: 7000, uncounted: false }) : { bytes: 5000, uncounted: false })
       mocks.mockSingle.mockResolvedValueOnce({ data: { status: "completed", output_data: output }, error: null })
       mocks.mockMaybeSingle.mockResolvedValueOnce({ data: null, error: null })
       await createAssetFromJob(JOB, "user-1")
-      vi.mocked(getR2ObjectSize).mockReset()
-      vi.mocked(getR2ObjectSize).mockResolvedValue(0)
+      vi.mocked(storageChargeOf).mockReset()
+      vi.mocked(storageChargeOf).mockResolvedValue({ bytes: 0, uncounted: false })
       return mocks.mockInsert.mock.calls.map((c) => c[0] as Record<string, unknown>)
     }
 
@@ -1502,6 +1518,14 @@ describe("createAssetFromJob", () => {
         r2_key: `videos/${JOB}.mp4`,
         size_bytes: 5000,
         metadata: { companions: [{ key: `videos/${JOB}-engine.mp4`, sizeBytes: 7000 }] },
+      }))
+    })
+
+    it("records an engine version stored uncounted as never charged (0 bytes, marked)", async () => {
+      const rows = await fileWith({ videoUrl, __castSwapEngineVideoUrl: `https://r2.example.com/videos/${JOB}-engine.mp4` }, true)
+      expect(rows[0]).toEqual(expect.objectContaining({
+        size_bytes: 5000,
+        metadata: { companions: [{ key: `videos/${JOB}-engine.mp4`, sizeBytes: 0, uncounted: true }] },
       }))
     })
 

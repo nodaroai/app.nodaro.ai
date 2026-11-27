@@ -31,6 +31,23 @@ describe("companionsOf", () => {
     ])
   })
 
+  it("reads an uncounted entry as 0 bytes whatever size it names; one with no mark is charged as recorded", () => {
+    expect(
+      companionsOf(
+        {
+          companions: [
+            { key: `videos/${JOB}-engine.mp4`, sizeBytes: 7000, uncounted: true },
+            { key: `videos/${JOB}-other.mp4`, sizeBytes: 5000, uncounted: "yes" },
+          ],
+        },
+        PRIMARY,
+      ),
+    ).toEqual([
+      { key: `videos/${JOB}-engine.mp4`, sizeBytes: 0, uncounted: true },
+      { key: `videos/${JOB}-other.mp4`, sizeBytes: 5000 },
+    ])
+  })
+
   it("is empty without a key, without metadata, or without the list", () => {
     expect(companionsOf({ companions: [{ key: `videos/${JOB}-engine.mp4` }] }, null)).toEqual([])
     expect(companionsOf(null, PRIMARY)).toEqual([])
@@ -46,7 +63,7 @@ describe("withoutCompanions", () => {
 })
 
 describe("companionsForRow", () => {
-  const sizeOf = async () => 7000
+  const sizeOf = async () => ({ bytes: 7000, uncounted: false })
   it("records the job's own canonical key with its size", async () => {
     await expect(
       companionsForRow(JOB, { engineVideoUrl: `https://r2.test.com/videos/${JOB}-engine.mp4` }, "video", PRIMARY, sizeOf),
@@ -62,6 +79,13 @@ describe("companionsForRow", () => {
     await expect(companionsForRow(JOB, { engineVideoUrl: url, __castSwapEngineVideoUrl: url }, "video", PRIMARY, sizeOf)).resolves.toEqual([
       { key: `videos/${JOB}-engine.mp4`, sizeBytes: 7000 },
     ])
+  })
+
+  it("records an uncounted file as never charged: size 0, marked, still a companion to delete", async () => {
+    const uncounted = async () => ({ bytes: 0, uncounted: true })
+    await expect(
+      companionsForRow(JOB, { __castSwapEngineVideoUrl: `https://r2.test.com/videos/${JOB}-engine.mp4` }, "video", PRIMARY, uncounted),
+    ).resolves.toEqual([{ key: `videos/${JOB}-engine.mp4`, sizeBytes: 0, uncounted: true }])
   })
 
   it.each([

@@ -93,6 +93,7 @@ const storage = vi.hoisted(() => ({
   batchDeleteFromR2: vi.fn(async (keys: string[]) => ({ deleted: keys.length, errors: 0 })),
   deleteFromR2: vi.fn(async () => undefined),
   getR2ObjectSize: vi.fn(async () => 2048),
+  storageChargeOf: vi.fn(async () => ({ bytes: 2048, uncounted: false })),
 }))
 vi.mock("../storage.js", () => storage)
 const fileValidation = vi.hoisted(() => ({ updateStorageUsage: vi.fn(async () => {}) }))
