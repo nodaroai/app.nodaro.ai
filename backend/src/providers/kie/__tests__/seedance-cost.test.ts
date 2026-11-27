@@ -20,6 +20,7 @@ describe("SEEDANCE_25_KIE_CREDITS_PER_SEC", () => {
       "480p": { plain: 28, ref: 17 },
       "720p": { plain: 63, ref: 38 },
       "1080p": { plain: 158, ref: 95 },
+      "4k": { plain: 251, ref: 155 },
     })
   })
 })
@@ -55,7 +56,7 @@ describe("seedance25CostUsd", () => {
   it("an unknown resolution renders at the model's default, 720p", () => {
     expect(seedance25CostUsd({ resolution: undefined, draft: false, hasVideoRef: false, outputSec: 8, inputSec: 0 }))
       .toBeCloseTo(63 * 8 * KIE_CREDIT_USD, 12)
-    expect(seedance25CostUsd({ resolution: "4k", draft: false, hasVideoRef: true, outputSec: 5, inputSec: 5 }))
+    expect(seedance25CostUsd({ resolution: "2k", draft: false, hasVideoRef: true, outputSec: 5, inputSec: 5 }))
       .toBeCloseTo(38 * 10 * KIE_CREDIT_USD, 12)
   })
 

@@ -554,8 +554,8 @@ describe("extend_video verb", () => {
     expect(tool.description).toContain("seedance-2-5-extend")
     expect(tool.description).toContain("seedance-2-0-extend")
     expect(tool.description).toContain("seedance-2-5-flash-extend")
-    // The resolutions the route takes, ascending: 4k (Gemini Omni Flash 1.2's) last.
-    expect(properties.resolution.enum).toEqual(["360p", "480p", "540p", "720p", "1080p", "4k"])
+    // The resolutions the route takes, ascending: 4k last, then Seedance 2.5 Extend's other 4K spellings (decided 2026-11-27).
+    expect(properties.resolution.enum).toEqual(["360p", "480p", "540p", "720p", "1080p", "4k", "2160p", "uhd"])
     // Gemini Omni Flash 1.2 (decided 2026-11-17): named, with the two shapes it takes.
     expect(tool.description).toContain("gemini-omni-flash-1-2-extend continues only a 16:9 or 9:16 video")
 
@@ -589,7 +589,9 @@ describe("extend_video verb", () => {
     expect(properties.reference_image_urls.description).not.toContain("kling-4-extend")
     expect(properties.generate_audio.description).toContain(`(${seedance} / pixverse-v6-extend only`)
     expect(properties.generate_audio.description).not.toContain("kling-4-extend")
-    expect(properties.resolution.description).toContain("seedance-2-5-extend / seedance-2-0-extend: 480p, 720p or 1080p")
+    // Seedance 2.5 Extend also renders 4k on a 4K source (decided 2026-11-25).
+    expect(properties.resolution.description).toContain("seedance-2-5-extend: 480p, 720p, 1080p or 4k")
+    expect(properties.resolution.description).toContain("seedance-2-0-extend: 480p, 720p or 1080p")
     expect(properties.resolution.description).toContain("seedance-2-5-flash-extend: 480p or 720p")
     expect(properties.duration.description).toContain("seedance-2-5-flash-extend 4–30 seconds (default 8)")
     expect(properties.resolution.description).toContain("kling-4-extend: 720p or 1080p")

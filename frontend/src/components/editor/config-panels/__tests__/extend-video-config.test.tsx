@@ -87,11 +87,34 @@ describe("ExtendVideoConfig — Seedance 2.5 and Seedance 2.0", () => {
   it("offers 4–30 s on Seedance 2.5 and 4–15 s on Seedance 2.0", () => {
     const on25 = render(<ExtendVideoConfig data={data()} onUpdate={vi.fn()} {...EXTRA} />)
     expect(menuValues(on25.container, "Seconds to add")).toEqual(seconds(4, 30))
-    expect(menuValues(on25.container, "Resolution")).toEqual(["480p", "720p", "1080p"])
+    // 4K is offered while the source's size is not known (decided 2026-11-25).
+    expect(menuValues(on25.container, "Resolution")).toEqual(["480p", "720p", "1080p", "4k"])
     on25.unmount()
     const on20 = render(<ExtendVideoConfig data={data({ provider: "seedance-2-0-extend" })} onUpdate={vi.fn()} {...EXTRA} />)
     expect(menuValues(on20.container, "Seconds to add")).toEqual(seconds(4, 15))
     expect(menuValues(on20.container, "Resolution")).toEqual(["480p", "720p", "1080p"])
+  })
+
+  // Decided 2026-11-25: Seedance 2.5 Extend at 4K only for a source that is already 4K.
+  it("offers 4K only for a source that is already 4K, and clears a 4K set on a smaller one", () => {
+    const graph = (width: number, height: number) => ({
+      ...EXTRA,
+      nodes: [
+        { id: "up", type: "upload-video", position: { x: 0, y: 0 }, data: { label: "Clip", url: "https://cdn/clip.mp4", metadata: { width, height } } },
+        { id: "ext", type: "extend-video", position: { x: 0, y: 0 }, data: data() },
+      ],
+      edges: [{ id: "e", source: "up", target: "ext", targetHandle: "video" }],
+      nodeId: "ext",
+    }) as unknown as Omit<ConfigProps<ExtendVideoData>, "data" | "onUpdate">
+    const small = render(<ExtendVideoConfig data={data()} onUpdate={vi.fn()} {...graph(1920, 1080)} />)
+    expect(menuValues(small.container, "Resolution")).toEqual(["480p", "720p", "1080p"])
+    small.unmount()
+    const big = render(<ExtendVideoConfig data={data()} onUpdate={vi.fn()} {...graph(3840, 2160)} />)
+    expect(menuValues(big.container, "Resolution")).toEqual(["480p", "720p", "1080p", "4k"])
+    big.unmount()
+    const onUpdate = vi.fn()
+    render(<ExtendVideoConfig data={data({ resolution: "4k" })} onUpdate={onUpdate} {...graph(1920, 1080)} />)
+    expect(onUpdate).toHaveBeenCalledWith({ resolution: undefined })
   })
 
   it("labels each resolution with its own provider's price id", () => {
@@ -100,12 +123,13 @@ describe("ExtendVideoConfig — Seedance 2.5 and Seedance 2.0", () => {
     // Seedance 2.5: each resolution's run — its two-second row × the run's units
     // (no source known here: the whole 10 s window + the 8 s default, 9 units).
     const on25 = render(<ExtendVideoConfig data={data()} onUpdate={vi.fn()} {...EXTRA} />)
-    const ids25 = ["seedance-2-5-extend:480p:per-2s:9u", "seedance-2-5-extend:720p:per-2s:9u", "seedance-2-5-extend:1080p:per-2s:9u"]
+    const ids25 = ["seedance-2-5-extend:480p:per-2s:9u", "seedance-2-5-extend:720p:per-2s:9u", "seedance-2-5-extend:1080p:per-2s:9u", "seedance-2-5-extend:4k:per-2s:9u"]
     expect(asked()).toEqual(expect.arrayContaining(ids25))
     expect(prefetched()).toEqual([
       "seedance-2-5-extend:480p:per-2s", "seedance-2-5-extend:480p:per-2s:9u",
       "seedance-2-5-extend:720p:per-2s", "seedance-2-5-extend:720p:per-2s:9u",
       "seedance-2-5-extend:1080p:per-2s", "seedance-2-5-extend:1080p:per-2s:9u",
+      "seedance-2-5-extend:4k:per-2s", "seedance-2-5-extend:4k:per-2s:9u",
     ])
     on25.unmount()
     credits.getCachedCredits.mockClear()

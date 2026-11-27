@@ -2768,7 +2768,7 @@ export type VideoToVideoData = PromptAffixFields & {
   v2vDuration?: "5" | "10"
   /** The node's ONE resolution field, shared by every provider. `480p` is
    *  Seedance-only (the Wan/VideoEdit lanes offer 720p/1080p). */
-  v2vResolution?: "480p" | "720p" | "1080p"
+  v2vResolution?: "480p" | "720p" | "1080p" | "4k"
   /** Seedance Draft (`isSeedanceDraftCapable` models only): render a 480p
    *  draft whose same take Video Upscale → "Seedance 2.5 HD (from draft)"
    *  re-renders at 1080p. Forces `v2vResolution` 480p; ignored by every other model. */

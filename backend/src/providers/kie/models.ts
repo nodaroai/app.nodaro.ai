@@ -1410,16 +1410,19 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
 
   // Seedance 2.5 — docs.kie.ai/market/bytedance/seedance-2-5
   // Next generation, NOT a tier of the 2.0 ladder. Per-second pricing:
-  // 480p no-ref 28 cr/s, 480p ref 17 cr/s; 720p 63 / 38; 1080p 158 / 95.
-  // Per-second composites in credits.ts are authoritative.
+  // 480p no-ref 28 cr/s, 480p ref 17 cr/s; 720p 63 / 38; 1080p 158 / 95;
+  // 4k 251 / 155. Per-second composites in credits.ts are authoritative.
   //
   // Live-probe findings vs. the published schema (api.kie.ai, 2026-08-08;
-  // re-probed 2026-08-17 for the "Seedance 2.5 now supports 1080P" release):
-  //  - resolution is 480p/720p/1080p (1080p accepted since 2026-08-17; it was
-  //    rejected on 2026-08-08). 4k / 2k / 1440p are still rejected with the
-  //    same "not within the range of allowed options" as a nonsense value, so
-  //    ByteDance's native 4K is NOT exposed through KIE. Do not add tiers
-  //    here without re-probing.
+  // re-probed 2026-08-17 for the 1080P release and 2026-11-22 for 4K):
+  //  - resolution is 480p/720p/1080p/4k. 1080p is accepted since 2026-08-17
+  //    and native 4K (`resolution: "4k"`) since KIE's 2026-11-19 release: a
+  //    4 s text-to-video probe rendered 3840x2160 HEVC Main 10 (yuv420p10le,
+  //    BT.709 SDR) in 222 s; the August probes had refused it. A Seedance
+  //    extension (`reference_video_urls` declared as extending) took a 4K
+  //    HEVC source as it is, at `aspect_ratio: "adaptive"` — any other ratio
+  //    is refused after about five minutes. 2k / 1440p were refused in August
+  //    and are not offered; do not add tiers here without re-probing.
   //  - duration accepts 1-30; 31+ is rejected (re-confirmed 2026-08-17), so
   //    the "ultra-long 180s" mode is likewise not exposed. We expose 4-30
   //    (the documented floor is 4).

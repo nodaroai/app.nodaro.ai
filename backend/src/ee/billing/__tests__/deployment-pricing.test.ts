@@ -42,6 +42,7 @@ describe("deployment pricing identifiers", () => {
       "seedance-2-5-extend:720p:per-2s:9u",
       "seedance-2-5-extend:480p:per-2s:9u",
       "seedance-2-5-extend:1080p:per-2s:9u",
+      "seedance-2-5-extend:4k:per-2s:9u",
     ])
     const rates = ["seedance-2-5-extend:720p:per-2s", "seedance-2-5-extend:480p:per-2s", "seedance-2-5-extend:1080p:per-2s"]
     expect(pricingRowsOf(definition)).toEqual(expect.arrayContaining(rates))

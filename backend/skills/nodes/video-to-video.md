@@ -1,7 +1,7 @@
 ---
 node_type: video-to-video
-generated_at: 2026-10-24T23:37:38.074Z
-generated_from: db68a9ee4
+generated_at: 2026-11-25T14:26:59.424Z
+generated_from: 9b2406d57f
 ---
 
 # Video to Video
@@ -25,7 +25,7 @@ generated_from: db68a9ee4
 - `promptSuffix?: string`
 - `negativePrompt?: string`
 - `v2vDuration?: "5" | "10"`
-- `v2vResolution?: "480p" | "720p" | "1080p"`
+- `v2vResolution?: "480p" | "720p" | "1080p" | "4k"`
 - `draft?: boolean`
 - `audio?: boolean`
 - `multiShots?: boolean`

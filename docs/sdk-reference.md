@@ -3770,7 +3770,7 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > **Seedance 2 video** (`run("text-to-video" | "generate-video", …)`):
 > `seedance-2` (full) accepts `resolution: "4k"` and `aspectRatio: "adaptive"`
 > (plus `"21:9"`); `seedance-2-fast` / `seedance-2-mini` are 480p / 720p only,
-> and `seedance-2-5` spans 480p / 720p / 1080p (no 4K). `seedance-2-5` runs to **30s** in a single call (the rest
+> and `seedance-2-5` spans 480p / 720p / 1080p / 4K. `seedance-2-5` runs to **30s** in a single call (the rest
 > stop at 15s) and takes 30 image / 10 video / 10 audio references; when a start
 > frame is wired it renders at that frame's aspect and rejects an explicit
 > `aspectRatio`.

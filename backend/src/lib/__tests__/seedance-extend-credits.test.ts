@@ -90,6 +90,21 @@ describe("the workflow run's measurement of the source", () => {
     expect(await stampSeedanceExtendSource("extend-video", payload("seedance-2-5-extend"))).toEqual({ ok: true, patch: { sourcePictureSec: 1.7 } })
   })
 
+  // Decided 2026-11-25: Seedance 2.5 Extend at 4K only on a source that is already 4K.
+  it("refuses a Seedance 2.5 4K extend of a source under 4K before the hold; a 4K source is stamped", async () => {
+    const fourK = { ...payload("seedance-2-5-extend"), resolution: "4k" }
+    vi.mocked(probeVideoSource).mockResolvedValue({ width: 1920, height: 1080, durationSeconds: 10, videoDurationSeconds: 10 })
+    expect(await stampSeedanceExtendSource("extend-video", fourK)).toMatchObject({
+      ok: false,
+      code: "extend_source_below_4k",
+      message: expect.stringContaining("already 4K"),
+    })
+    // The same source at 1080p runs.
+    expect(await stampSeedanceExtendSource("extend-video", payload("seedance-2-5-extend"))).toEqual({ ok: true, patch: { sourcePictureSec: 10 } })
+    vi.mocked(probeVideoSource).mockResolvedValue({ width: 2160, height: 3840, durationSeconds: 6, videoDurationSeconds: 6 })
+    expect(await stampSeedanceExtendSource("extend-video", fourK)).toEqual({ ok: true, patch: { sourcePictureSec: 6 } })
+  })
+
   it("a probe that fails stamps nothing and refuses nothing", async () => {
     vi.mocked(probeVideoSource).mockRejectedValue(new Error("unreachable"))
     expect(await stampSeedanceExtendSource("extend-video", payload("seedance-2-5-flash-extend"))).toEqual({ ok: true, patch: { sourcePictureSec: undefined } })

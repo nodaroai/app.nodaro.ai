@@ -971,6 +971,14 @@ export {
   geminiOmniExtendEstimateSource,
   type GeminiOmniExtendEstimateSource,
 } from "./gemini-omni-extend-pricing"
+// Seedance 2.5 Extend at 4K: only a source that is already 4K (decided 2026-11-25).
+export {
+  SEEDANCE_EXTEND_4K_MIN_SHORT_SIDE,
+  SEEDANCE_EXTEND_4K_SOURCE_CODE,
+  isFourKSource,
+  seedanceExtend4kSourceProblem,
+  seedanceExtendOfferedResolutions,
+} from "./seedance-extend-4k"
 // Topaz upscale pricing: the video hold (output gigapixels) and the image size units.
 export {
   TOPAZ_VIDEO_UNIT_CREDIT_ID,

@@ -66,7 +66,7 @@ function rateRowId(provider: SentPricedSeedanceExtendProvider, resolution: strin
 
 /**
  * Each sent-priced provider's rate rows, by resolution: one per resolution its
- * catalog entry offers (Seedance 2.5 Extend 480p / 720p / 1080p; Seedance 2.5
+ * catalog entry offers (Seedance 2.5 Extend 480p / 720p / 1080p / 4K; Seedance 2.5
  * Flash Extend 480p / 720p), each the price of
  * {@link SEEDANCE_EXTEND_RATE_SECONDS} seconds. Read from the catalog, so a
  * provider's rows and the resolutions it renders cannot differ.
@@ -80,10 +80,11 @@ export const SEEDANCE_EXTEND_RATE_CREDIT_IDS_BY_PROVIDER: Readonly<Record<SentPr
   ) as Record<SentPricedSeedanceExtendProvider, Record<string, string>>
 
 /** Seedance 2.5 Extend's rate row of each resolution: the price of {@link SEEDANCE_EXTEND_RATE_SECONDS} seconds. */
-export const SEEDANCE_EXTEND_RATE_CREDIT_IDS: Readonly<Record<"480p" | "720p" | "1080p", string>> = {
+export const SEEDANCE_EXTEND_RATE_CREDIT_IDS: Readonly<Record<"480p" | "720p" | "1080p" | "4k", string>> = {
   "480p": "seedance-2-5-extend:480p:per-2s",
   "720p": "seedance-2-5-extend:720p:per-2s",
   "1080p": "seedance-2-5-extend:1080p:per-2s",
+  "4k": "seedance-2-5-extend:4k:per-2s",
 }
 
 /** Is `provider` an Extend Video provider priced by the seconds it sends? A retired id answers false: pass it through `canonicalVideoProvider` first. */

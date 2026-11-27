@@ -158,6 +158,7 @@ import type { ResolvedInputs, SimpleNode } from "../services/workflow-engine/typ
 import { videoAIHandlers } from "../workers/handlers/video-ai.js"
 import { finalizeJobWithMedia } from "../lib/job-finalize.js"
 import { LIP_SYNC_REQUESTS_BEFORE_CATALOG_ENTRIES } from "./fixtures/lip-sync-requests.js"
+import { providerKindForVideoModel } from "../lib/reconcile/provider-kind.js"
 import { retiredLipSyncProviderMessage } from "@nodaro/shared/models"
 import { MINIMAX_H3_LIP_SYNC_CREDIT_ID, isLipSyncChargedAtRunCost, isSeedanceLipSyncProvider, seedanceLipSyncCreditId, seedanceLipSyncResolution, usdToCredits } from "@nodaro/shared/credits"
 
@@ -355,8 +356,12 @@ function seedancePlainNow(lane: "route" | "workflow", run: Json, provider: strin
   const sent = JSON.parse(JSON.stringify(run.sent)) as Json
   const args = sent.args as unknown[] | undefined
   if (sent.via === "imageToVideo" && args) args[5] = { ...(args[5] as Json), resolution: res }
-  if (lane === "route") return { ...run, check: id, debit: id, sent }
-  return { ...run, modelIdentifier: id, payload: { ...(run.payload as Json), resolution: res }, sent }
+  // A Seedance 2.5 run at 4K renders 4K since 2026-11-25, a long render: the
+  // long-video reconcile kind (`providerKindForVideoModel`), as the worker records it.
+  const kind = typeof run.kind === "string" ? providerKindForVideoModel(provider, { resolution: res }) : undefined
+  const withKind = kind !== undefined && kind !== run.kind ? { kind } : {}
+  if (lane === "route") return { ...run, check: id, debit: id, sent, ...withKind }
+  return { ...run, modelIdentifier: id, payload: { ...(run.payload as Json), resolution: res }, sent, ...withKind }
 }
 
 async function record(): Promise<Recorded> {

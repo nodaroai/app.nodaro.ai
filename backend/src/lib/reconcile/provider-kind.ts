@@ -6,6 +6,7 @@
  */
 import { isKling4Provider, isVeoProvider, normalizeKling4Resolution, videoRunsHdr } from "@nodaro/shared/models"
 import { REPLICATE_IMAGE_EDIT_MODEL_IDS, REPLICATE_IMAGE_MODEL_IDS } from "../../providers/replicate/image.js"
+import { isLongKieVideoRender } from "../../providers/kie/long-render.js"
 import type { ProviderKind } from "./types.js"
 
 // ---------------------------------------------------------------------------
@@ -50,9 +51,12 @@ const VIDEO_REPLICATE_MODELS: ReadonlySet<string> = new Set([
  * `run`: the run's resolution and dynamic range, where the kind depends on
  * them — a Kling 4.0 run at 4K or in HDR renders far slower (polled up to ~45
  * min, `kling4PollAttempts`), so it is `kie-long-video`, whose threshold is past
- * that; at 720p / 1080p SDR it stays `kie-standard`.
+ * that; at 720p / 1080p SDR it stays `kie-standard`. A Seedance 2.5 run at 4K
+ * (decided 2026-11-25) is a long render too (`longRenderPollAttempts`, about
+ * 56 min for a 30 s clip), and so `kie-long-video` as well.
  */
 export function providerKindForVideoModel(model: string, run?: { resolution?: unknown; dynamicRange?: unknown }): ProviderKind {
+  if (run && isLongKieVideoRender(model, run.resolution)) return "kie-long-video"
   if (isKling4Provider(model) && run) {
     const res = typeof run.resolution === "string" ? run.resolution : undefined
     if (normalizeKling4Resolution(res) === "4k" || videoRunsHdr(model, run.dynamicRange)) return "kie-long-video"

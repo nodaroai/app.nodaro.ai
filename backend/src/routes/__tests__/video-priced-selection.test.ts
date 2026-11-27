@@ -260,11 +260,12 @@ for (const route of ROUTES) {
       const res = await app.inject({
         method: "POST",
         url: route.url,
-        payload: { prompt: "a cat", userId: USER, provider: "seedance-2-5", duration: 8, resolution: "4k", ...route.extra },
+        payload: { prompt: "a cat", userId: USER, provider: "seedance-2-5", duration: 8, resolution: "2k", ...route.extra },
       })
       expect(res.statusCode).toBe(200)
 
-      // seedance-2-5 tops out at 1080p — R7: nearest band, not the 480p floor.
+      // 2k is not a seedance-2-5 size, and only an explicit 4K is 4K on it — R7:
+      // the nearest band below 4K, not the 480p floor.
       expect(reservedIdentifier()).toBe("seedance-2-5:8s:1080p")
       expect(queued().resolution).toBe("1080p")
       expect(persisted().resolution).toBe("1080p")
@@ -309,7 +310,7 @@ for (const route of ROUTES) {
       const res = await app.inject({
         method: "POST",
         url: route.url,
-        payload: { prompt: "a cat", userId: USER, provider: "seedance-2-5", duration: 8, resolution: "4k", ...route.extra },
+        payload: { prompt: "a cat", userId: USER, provider: "seedance-2-5", duration: 8, resolution: "2k", ...route.extra },
       })
       expect(res.statusCode).toBe(200)
       const body = res.json()
@@ -317,7 +318,7 @@ for (const route of ROUTES) {
       // the prose message alone drops field/from/to, so a client could not tell
       // WHICH lever moved. gv ADDITIONALLY keeps its `warnings` vocabulary.
       expect(body.adjustments, JSON.stringify(body)).toHaveLength(1)
-      expect(body.adjustments[0]).toMatchObject({ field: "resolution", from: "4k", to: "1080p" })
+      expect(body.adjustments[0]).toMatchObject({ field: "resolution", from: "2k", to: "1080p" })
       expect(typeof body.adjustments[0].reason).toBe("string")
       if (route.url === "/v1/generate-video") {
         expect(body.warnings, JSON.stringify(body)).toHaveLength(1)

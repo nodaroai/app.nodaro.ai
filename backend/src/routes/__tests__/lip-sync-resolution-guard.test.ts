@@ -56,8 +56,9 @@ describe("the Lip Sync resolution menu = what the server runs and prices", () =>
     })
   }
 
-  it("the added tiers are the ones the server already ran: 1080p on Seedance 2.5, 4K on Seedance 2", () => {
-    expect(lipSyncResolutionChoices("seedance-2-5")?.values).toEqual(["480p", "720p", "1080p"])
+  it("the added tiers are the ones the server already ran: 1080p on Seedance 2.5, 4K on Seedance 2 (and on Seedance 2.5 since 2026-11-25)", () => {
+    expect(lipSyncResolutionChoices("seedance-2-5")?.values).toEqual(["480p", "720p", "1080p", "4k"])
+    expect(heldId("seedance-2-5", "4k")).toBe("seedance-2-5:8s:4k")
     expect(lipSyncResolutionChoices("seedance-2")?.values).toEqual(["480p", "720p", "1080p", "4k"])
     expect(heldId("seedance-2-5", "1080p")).toBe("seedance-2-5:8s:1080p")
     expect(heldId("seedance-2", "4k")).toBe("seedance-2:8s:4k")

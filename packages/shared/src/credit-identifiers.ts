@@ -94,6 +94,7 @@ import {
   type Seedream55Model,
 } from "./seedream-5-5.js"
 import { VIDEO_DURATION_AUTO } from "./video-duration-auto.js"
+import { explicitFourKOf } from "./explicit-4k.js"
 import { uiResolutionFill } from "./video-ui-defaults.js"
 import { MODEL_CATALOG, autoAspectNeedsSourceImage, normalizeModelInput, normalizeVideoRequestParams, defaultResolutionFor, type ModelInputAdjustment, type SourceImageSize } from "./model-catalog.js"
 
@@ -717,7 +718,8 @@ export function buildVideoCreditModelIdentifier(
     // reserves 480p against a 720p render and commit_credits (refund-only) can
     // never collect the delta. Providers without an entry keep the historical
     // 480p fallback, so this cannot reprice anything already live.
-    const requested = resolution ?? PRICING_DEFAULT_RESOLUTION[effectiveProvider]
+    // On Seedance 2.5 a 4K spelling (`2160p`, `UHD`, any case) is 4K (decided 2026-11-27).
+    const requested = explicitFourKOf(effectiveProvider, resolution) ?? resolution ?? PRICING_DEFAULT_RESOLUTION[effectiveProvider]
     const want = requested === "4k" ? "4k" : requested === "1080p" ? "1080p" : requested === "720p" ? "720p" : "480p"
     // Unsupported (e.g. a stale 1080p on seedance-2-mini) clamps to the model's
     // top priced tier so the emitted composite is always seeded.
@@ -882,8 +884,13 @@ const TAIL_EXTEND_DEFAULT_RESOLUTION = "720p"
  * 4) can never render above, or bill apart from, the row it reserved.
  */
 export function tailExtendResolution(provider: TailExtendProvider, resolution?: unknown): string {
-  return typeof resolution === "string" && MODEL_CATALOG[provider]?.resolutions?.includes(resolution)
-    ? resolution
+  // Seedance 2.5 Extend: a 4K spelling (`4k`, `2160p`, `UHD`, any case) is 4K
+  // (decided 2026-11-25 / 2026-11-27), the one reading its 4K source check
+  // makes too (`seedanceExtend4kSourceProblem`). Every other value, and every
+  // other provider, is matched as written.
+  const asked = explicitFourKOf(provider, resolution) ?? resolution
+  return typeof asked === "string" && MODEL_CATALOG[provider]?.resolutions?.includes(asked)
+    ? asked
     : TAIL_EXTEND_DEFAULT_RESOLUTION
 }
 

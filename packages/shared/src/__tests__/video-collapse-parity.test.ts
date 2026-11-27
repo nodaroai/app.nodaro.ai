@@ -99,7 +99,7 @@ describe("unlistedResolutionRendersAs matches the provider's own collapse rule",
     // The collapse rule is an opt-in exception, not the default: a 4k request on
     // a 1080p-max model must still render 1080p, never the cheapest tier (R7).
     expect(MODEL_CATALOG["seedance-2-5"]!.unlistedResolutionRendersAs).toBeUndefined()
-    expect(normalizeVideoRequestParams("seedance-2-5", { resolution: "4k" }).resolution).toBe("1080p")
+    expect(normalizeVideoRequestParams("seedance-2-5", { resolution: "2k" }).resolution).toBe("1080p")
     expect(normalizeVideoRequestParams("seedance-2-5", { resolution: "360p" }).resolution).toBe("480p")
   })
 })

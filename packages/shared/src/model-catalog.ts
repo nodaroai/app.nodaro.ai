@@ -29,6 +29,7 @@
  */
 
 import { isSeedanceDraftCapable, SEEDANCE_DRAFT_RESOLUTION } from "./seedance-draft.js"
+import { explicitFourKOf, fourKSpellingReason, resolutionsALooseRequestMayLandOn } from "./explicit-4k.js"
 import { isFlux2Model } from "./flux2-pricing.js"
 import { MINIMAX_H3_IMAGE_DEFAULT_RESOLUTION, MINIMAX_H3_IMAGE_RESOLUTIONS } from "./minimax-h3-image.js"
 import { isAutoVideoDuration } from "./video-duration-auto.js"
@@ -3157,8 +3158,9 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
   },
   // Seedance 2.5 — the next Seedance generation, not a tier of the 2.0 ladder.
   // Two levers differ from every 2.0 SKU and drive its own entries throughout:
-  // durations run to 30s (2.0 caps at 15s) and there is NO 4K tier (1080p
-  // arrived on KIE 2026-08-17 — probe-verified; 4k/2k/1440p still rejected).
+  // durations run to 30s (2.0 caps at 15s). 1080p arrived on KIE 2026-08-17;
+  // native 4K on 2026-11-19 (probe-verified 2026-11-22: 3840x2160 HEVC Main
+  // 10, BT.709 SDR — stored as the provider sent it, beside a preview copy).
   // Reference caps are also wider (30 images / 10 videos / 10 audio) — see
   // SEEDANCE_2_5_REF_LIMITS in model-constants.
   "seedance-2-5": {
@@ -3172,7 +3174,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     maker: "bytedance",
     label: "Seedance 2.5",
     series: "Seedance",
-    description: "Seedance 2.5 — up to 30s in one shot, native audio, wide multimodal references. 480p/720p/1080p.",
+    description: "Seedance 2.5 — up to 30s in one shot, native audio, wide multimodal references. 480p/720p/1080p, and native 4K (slower to render).",
     useCases: ["premium", "narrative", "long-form"],
     features: ["end-frame", "audio", "reference-image", "video-reference", "reference-to-video"],
     aspectRatios: VIDEO_RATIOS_SEEDANCE_2,
@@ -3180,7 +3182,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     defaultDuration: 8,
     autoDuration: true,
     referenceTaskTypes: ["reference", "edit", "extend"],
-    resolutions: ["480p", "720p", "1080p"],
+    resolutions: ["480p", "720p", "1080p", "4k"],
     // KIE refuses a seed on Seedance 2.5 (422) — the provider config omits it.
     noSeed: true,
     pricing: [
@@ -3194,6 +3196,9 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "seedance-2-5:30s:480p", credits: 2100, note: "30s 480p (max)" },
       { identifier: "seedance-2-5:30s:720p", credits: 4730, note: "30s 720p (max)" },
       { identifier: "seedance-2-5:30s:1080p", credits: 11850, note: "30s 1080p (max)" },
+      { identifier: "seedance-2-5:8s:4k", credits: 5020, note: "8s 4K" },
+      { identifier: "seedance-2-5:8s:4k-ref", credits: 3100, note: "8s 4K with reference video" },
+      { identifier: "seedance-2-5:30s:4k", credits: 18830, note: "30s 4K (max)" },
     ],
   },
   // Seedance 2.5 Flash — the fast tier of Seedance 2.5, listed beside it (no
@@ -3913,11 +3918,13 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     maker: "bytedance",
     label: "Seedance 2.5 Extend",
     series: "Seedance",
-    description: "Extend ANY video with Seedance 2.5: a 4–30s continuation (audio included) of the source's last 10 seconds, joined onto it. Charged per second of video sent and added; the figure is the default run, 8s added at 720p to a source of 10s or more.",
+    description: "Extend ANY video with Seedance 2.5: a 4–30s continuation (audio included) of the source's last 10 seconds, joined onto it, at 480p, 720p, 1080p or (for a 4K source) 4K. Charged per second of video sent and added; the figure is the default run, 8s added at 720p to a source of 10s or more.",
     useCases: ["extend"],
     durations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30],
     defaultDuration: 8,
-    resolutions: ["480p", "720p", "1080p"],
+    // 4K extends only a source that is already 4K (short side 2160 or more;
+    // decided 2026-11-25): the result is the joined clip at the source's size.
+    resolutions: ["480p", "720p", "1080p", "4k"],
     pricing: [
       // The default run (8 s added to a source of 10 s or more: 18 s sent and
       // added, 9 units of the two-second row) at each resolution. A run is
@@ -3925,6 +3932,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "seedance-2-5-extend:720p:per-2s:9u", credits: 1710, note: "default run: 8s added at 720p to a source of 10s or more — priced per second sent and added" },
       { identifier: "seedance-2-5-extend:480p:per-2s:9u", credits: 765, note: "8s added at 480p to a source of 10s or more" },
       { identifier: "seedance-2-5-extend:1080p:per-2s:9u", credits: 4275, note: "8s added at 1080p to a source of 10s or more" },
+      { identifier: "seedance-2-5-extend:4k:per-2s:9u", credits: 6975, note: "8s added at 4K to a 4K source of 10s or more" },
     ],
   },
   // Seedance 2.5 Flash extends ANY video the way Seedance 2.5 does (the
@@ -6179,12 +6187,21 @@ export function normalizeModelInput(
     // it always has (its default fallback), so no price that was valid before
     // 8K joined the vocabulary moves.
     const largest = m.kind === "image" ? largestSizeFor8K(input.resolution, m.resolutions) : undefined
-    out.resolution = snap(
-      "resolution",
-      input.resolution,
-      m.resolutions,
-      largest ?? defaultResolutionFor(modelId),
-    )
+    // Seedance 2.5: a 4K spelling (`2160p`, `UHD`, any case) is 4K (decided 2026-11-27).
+    const fourK = explicitFourKOf(modelId, input.resolution)
+    if (fourK !== undefined && m.resolutions?.includes(fourK)) {
+      if (input.resolution!.trim().toLowerCase() !== fourK) {
+        adjustments.push({ field: "resolution", from: input.resolution!, to: fourK, reason: fourKSpellingReason(m.label, input.resolution!) })
+      }
+      out.resolution = fourK
+    } else {
+      out.resolution = snap(
+        "resolution",
+        input.resolution,
+        m.resolutions,
+        largest ?? defaultResolutionFor(modelId),
+      )
+    }
   }
   out.quality = snap("quality", input.quality, m.qualities, m.defaultQuality)
   out.background = snap("background", input.background, m.backgrounds)
@@ -6600,13 +6617,21 @@ export function normalizeVideoRequestParams(
   if (m.resolutions?.length && res) {
     const allowed = m.resolutions
     const exact = allowed.find((a) => a === res) ?? allowed.find((a) => a.toLowerCase() === res.toLowerCase())
+    // Seedance 2.5: a 4K spelling (`2160p`, `UHD`, any case) is 4K (decided 2026-11-27).
+    const fourK = exact === undefined ? explicitFourKOf(modelId, res) : undefined
     if (exact !== undefined) {
       out.resolution = exact
+    } else if (fourK !== undefined && allowed.includes(fourK)) {
+      out.adjustments.push({ field: "resolution", from: res, to: fourK, reason: fourKSpellingReason(m.label, res) })
+      out.resolution = fourK
     } else {
       // A provider that COLLAPSES an unrecognised band renders its declared
       // default no matter what we send, so that default — not the nearest band
       // — is the value the wire and the price must both carry.
-      const next = m.unlistedResolutionRendersAs ?? nearestResolutionBand(res, allowed)
+      // On a model where only an explicit 4K is 4K (Seedance 2.5, decided
+      // 2026-11-25), an off-list value snaps among the bands below 4K, where it
+      // landed before the model listed 4K (a 2k or a 1440p is 1080p).
+      const next = m.unlistedResolutionRendersAs ?? nearestResolutionBand(res, resolutionsALooseRequestMayLandOn(modelId, res, allowed))
       out.adjustments.push({
         field: "resolution", from: res, to: next,
         reason: `${m.label} does not support resolution "${res}" — using "${next}" instead. Supported: ${allowed.join(", ")}.`,

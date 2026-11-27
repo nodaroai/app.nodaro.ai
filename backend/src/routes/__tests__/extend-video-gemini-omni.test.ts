@@ -238,7 +238,8 @@ describe("POST /v1/extend-video — gemini-omni-flash-1-2-extend's refusals, bef
   })
 
   it("4k stays refused on every provider that does not render it, as before it joined the field", async () => {
-    for (const provider of ["seedance-2-5-extend", "seedance-2-5-flash-extend", "kling-4-extend", "pixverse-v6-extend", "ltx-2.3-pro"]) {
+    // Seedance 2.5 Extend renders 4K on a 4K source (decided 2026-11-25), refused here as `extend_source_below_4k`.
+    for (const provider of ["seedance-2-5-flash-extend", "kling-4-extend", "pixverse-v6-extend", "ltx-2.3-pro"]) {
       const res = await post({ provider, resolution: "4k" })
       expect(res.statusCode, provider).toBe(400)
       expect(res.json().error.code, provider).toBe("validation_error")

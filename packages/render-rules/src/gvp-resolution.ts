@@ -5,7 +5,7 @@
  * so a menu can never offer a tier a run renders as another.
  */
 import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
-import { isMinimaxH3Provider, normalizeMinimaxH3Resolution } from "@nodaro/shared/models"
+import { explicitFourKOf, isMinimaxH3Provider, normalizeMinimaxH3Resolution } from "@nodaro/shared/models"
 
 /** The tiers the rule speaks, low → high. */
 const GVP_RESOLUTION_LADDER = ["480p", "720p", "1080p", "4k"] as const
@@ -32,7 +32,8 @@ const GVP_RESOLUTION_LADDER = ["480p", "720p", "1080p", "4k"] as const
 export function gvpRenderResolution(provider: string, resolution: string): string {
   if (isMinimaxH3Provider(provider)) return normalizeMinimaxH3Resolution(resolution)
   const supported: readonly string[] = MODEL_CATALOG[provider]?.resolutions ?? ["480p", "720p", "1080p"]
-  const want = resolution === "4k" ? "4k" : resolution === "1080p" ? "1080p" : resolution === "720p" ? "720p" : "480p"
+  // Seedance 2.5: a 4K spelling (`2160p`, `UHD`, any case) is 4K (decided 2026-11-27).
+  const want = explicitFourKOf(provider, resolution) ?? (resolution === "4k" ? "4k" : resolution === "1080p" ? "1080p" : resolution === "720p" ? "720p" : "480p")
   if (supported.includes(want)) return want
   const wantAt = GVP_RESOLUTION_LADDER.indexOf(want)
   let best: string | undefined

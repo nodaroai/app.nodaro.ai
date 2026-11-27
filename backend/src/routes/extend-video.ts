@@ -31,6 +31,7 @@
  *   run is priced at the SOURCE's resolution, never the request's.
  */
 
+import { fourKSpellingPreHandler } from "../lib/four-k-spelling.js"
 import type { FastifyInstance, FastifyRequest } from "fastify"
 import { z } from "zod"
 import { safeUrlSchema } from "../lib/url-validator.js"
@@ -65,6 +66,7 @@ import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
 import { LTX_EXTEND_PER_SECOND_CREDIT_ID, catalogExtendCreditId, grokExtendCreditId, grokExtendSeconds, ltxExtendDurationSec, pixverseExtendQuality } from "@nodaro/shared/credits"
 import type { ConnectedReference, DescribedReference } from "@nodaro/shared/types"
 import { connectedReferenceSchema, describedReferenceSchema, DESCRIBED_REFERENCE_LIMIT } from "../lib/connected-reference-schema.js"
+import { SEEDANCE_EXTEND_4K_SOURCE_CODE, seedanceExtend4kSourceProblem } from "@nodaro/render-rules"
 import { geminiOmniExtendAddedCreditId, geminiOmniExtendResolution, isGeminiOmniExtendProvider, isSeedanceExtendPricedBySecondsSent, seedanceExtendRateCreditId } from "@nodaro/render-rules"
 import { EXTEND_REFERENCE_IMAGE_PROVIDERS, extendSourceTooShortMessage, isTailRecipeProvider, tailRecipeSeconds, TAIL_RECIPES } from "../lib/extend-recipe.js"
 import { EXTEND_DURATION_MAX_SEC, EXTEND_DURATION_SECONDS, describeSeconds } from "../lib/extend-durations.js"
@@ -343,7 +345,7 @@ function retiredLengthInWindow(data: ExtendVideoBody, retiredId: string | undefi
  */
 export type ExtendSourceCheck =
   | { ok: true; pictureSec?: number; size?: { width: number; height: number } }
-  | { ok: false; code: "video_too_short" | "video_aspect_unsupported"; message: string }
+  | { ok: false; code: "video_too_short" | "video_aspect_unsupported" | typeof SEEDANCE_EXTEND_4K_SOURCE_CODE; message: string }
 
 /**
  * Whether a tail-recipe provider can continue `videoUrl`. The run sends the
@@ -360,6 +362,10 @@ export type ExtendSourceCheck =
  * container's when the stream reports none. A source that can run answers
  * with that length (`pictureSec`).
  *
+ * A 4K request (`resolution`) on a Seedance 2.5 Extend source that is not
+ * already 4K is refused the same way (`seedanceExtend4kSourceProblem`, decided
+ * 2026-11-25).
+ *
  * Best-effort, like the route's other source probes: a probe that fails (the
  * source unreachable from here, a timeout) answers ok with no length —
  * `onProbeError` hears why — and the worker measures the source again before
@@ -370,6 +376,7 @@ export async function checkExtendSource(
   provider: string,
   videoUrl: string,
   onProbeError?: (err: unknown) => void,
+  resolution?: unknown,
 ): Promise<ExtendSourceCheck> {
   if (!isTailRecipeProvider(provider) || !safeUrlSchema.safeParse(videoUrl).success) return { ok: true }
   let pictureSec: number
@@ -396,9 +403,13 @@ export async function checkExtendSource(
     // or 9:16) refuses any other here, before anything is held.
     ?? extendSourceAspectProblem(provider, display.width, display.height)
   if (shape) return { ok: false, code: "video_aspect_unsupported", message: shape }
+  const below4k = seedanceExtend4kSourceProblem(provider, resolution, size)
+  if (below4k) return { ok: false, code: SEEDANCE_EXTEND_4K_SOURCE_CODE, message: below4k }
   // The size rides only where it is read: Gemini Omni Flash 1.2's tier cap.
   return isGeminiOmniExtendProvider(provider) ? { ok: true, pictureSec, size: display } : { ok: true, pictureSec }
 }
+
+const readExtendFourKSpelling = fourKSpellingPreHandler((b) => (typeof b.provider === "string" ? b.provider : undefined))
 
 export async function extendVideoRoutes(app: FastifyInstance) {
   // LTX 2.3 Pro extend is priced per second added, so its guard carries the
@@ -422,6 +433,9 @@ export async function extendVideoRoutes(app: FastifyInstance) {
     // nothing is checked against a balance, probed or reserved for a request
     // that cannot run. The source is probed only once its URL passed the schema.
     preHandler: async (req, reply) => {
+      // A 4K spelling (`2160p`, `UHD`) on Seedance 2.5 Extend is read as `4k`
+      // first (decided 2026-11-27), so the 4K source rule and the price follow it.
+      await readExtendFourKSpelling(req)
       const parsed = extendVideoBody.safeParse(req.body)
       if (!parsed.success) {
         return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
@@ -458,7 +472,7 @@ export async function extendVideoRoutes(app: FastifyInstance) {
       if (isTailRecipeProvider(provider) && videoUrl && req.userId) {
         const source = await checkExtendSource(provider, videoUrl, (err) => {
           req.log.warn({ err, provider }, "extend-video: source ffprobe failed; the worker measures it again")
-        })
+        }, data.resolution)
         if (!source.ok) return reply.status(400).send({ error: { code: source.code, message: source.message } })
         if (source.pictureSec !== undefined) measuredSourcePictureSec.set(req, source.pictureSec)
         // Gemini Omni Flash 1.2: a tier above the source's runs, and is

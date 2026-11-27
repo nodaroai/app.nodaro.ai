@@ -30,7 +30,7 @@ import { falGeminiOmniExtend, GEMINI_OMNI_EXTEND_KEY_COVERAGE, GEMINI_OMNI_EXTEN
 import { falGeminiOmniExtendCostUsd } from "../../providers/fal/pricing.js"
 import { requireProviderKey } from "../../providers/provider-keys.js"
 import { extendSourceAspectProblem, displayVideoSize } from "../../lib/extend-source-shape.js"
-import { geminiOmniExtendResolution, isGeminiOmniExtendProvider } from "@nodaro/render-rules"
+import { geminiOmniExtendResolution, isGeminiOmniExtendProvider, seedanceExtend4kSourceProblem } from "@nodaro/render-rules"
 import { prepareLipSyncAudio } from "../../providers/kie/lip-sync-audio.js"
 import { lipSyncAudioPricingOf, lipSyncModelLabel } from "../../lib/lip-sync-inputs.js"
 import { providersCanFetchOwnMedia } from "../../lib/own-media-reachability.js"
@@ -570,7 +570,7 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
   const wantsMov = outputFormat === "mov" && resolvedI2vProvider === "seedance-2-5"
   let result
   try {
-    result = await imageToVideo(imageUrl, resolvedI2vProvider, prompt, duration, endFrameUrl, { onProgress, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShots: multiShot, multiPrompt, klingElements, resolution: baseResolution, ...(fps !== undefined ? { fps } : {}), ...(audioToVideo === true ? { audioToVideo: true } : {}), grokMode, seed, cameraFixed, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, keepOriginalSound, dynamicRange, webSearch, nsfwChecker, generationType, frameFit, frameDelivery, enableTranslation, videoTrimStart, videoTrimEnd, draft, ...(referenceTaskType ? { referenceTaskType } : {}), ...(wantsMov ? { outputFormat: "mov" as const } : {}) }, { onTaskCreated, routeJob: { jobId: ctx.jobId, jobType: "image-to-video" } })
+    result = await imageToVideo(imageUrl, resolvedI2vProvider, prompt, duration, endFrameUrl, { onProgress, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShots: multiShot, multiPrompt, klingElements, resolution: baseResolution, ...(fps !== undefined ? { fps } : {}), ...(audioToVideo === true ? { audioToVideo: true } : {}), grokMode, seed, cameraFixed, generateAudio, referenceImageUrls, referenceVideoUrls, ...(refVideoDurationsSec ? { referenceVideoDurationsSec: refVideoDurationsSec } : {}), referenceAudioUrls, characterReferences, keepOriginalSound, dynamicRange, webSearch, nsfwChecker, generationType, frameFit, frameDelivery, enableTranslation, videoTrimStart, videoTrimEnd, draft, ...(referenceTaskType ? { referenceTaskType } : {}), ...(wantsMov ? { outputFormat: "mov" as const } : {}) }, { onTaskCreated, routeJob: { jobId: ctx.jobId, jobType: "image-to-video" } })
   } finally {
     ramp.stop()
   }
@@ -913,7 +913,7 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
   // `outputFormat` only when the route honoured mov (Seedance 2.5, a child
   // job): the mp4 options stay key-for-key what they were.
   const wantsMov = outputFormat === "mov" && resolvedT2vProvider === "seedance-2-5"
-  const t2vOpts = { mode, sound, negativePrompt, cfgScale, multiShots: multiShot, multiPrompt, klingElements, seed, resolution: baseResolution, ...(fps !== undefined ? { fps } : {}), ...(audioToVideo === true ? { audioToVideo: true } : {}), generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, keepOriginalSound, dynamicRange, webSearch, nsfwChecker, enableTranslation, draft, ...(referenceTaskType ? { referenceTaskType } : {}), contentPolicyRewrite: allowContentPolicyRewrite, ...(wantsMov ? { outputFormat: "mov" as const } : {}) }
+  const t2vOpts = { mode, sound, negativePrompt, cfgScale, multiShots: multiShot, multiPrompt, klingElements, seed, resolution: baseResolution, ...(fps !== undefined ? { fps } : {}), ...(audioToVideo === true ? { audioToVideo: true } : {}), generateAudio, referenceImageUrls, referenceVideoUrls, ...(refVideoDurationsSec ? { referenceVideoDurationsSec: refVideoDurationsSec } : {}), referenceAudioUrls, characterReferences, keepOriginalSound, dynamicRange, webSearch, nsfwChecker, enableTranslation, draft, ...(referenceTaskType ? { referenceTaskType } : {}), contentPolicyRewrite: allowContentPolicyRewrite, ...(wantsMov ? { outputFormat: "mov" as const } : {}) }
   let result
   // Content-policy rewrite-once (Task A2, 2026-08-03): a `contentPolicy`-
   // classified KieError (see classifyContentPolicy in providers/kie/client.ts)
@@ -1137,7 +1137,7 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
     // reconcile cron can recover/refund a crashed mid-poll fal job).
     lipSyncKind = "fal-request"
   } else if (SEEDANCE_LIP_SYNC_PROVIDERS.has(resolvedProvider as never) || isDrivingAudioLipSyncProvider(resolvedProvider)) {
-    lipSyncKind = providerKindForVideoModel(resolvedProvider)
+    lipSyncKind = providerKindForVideoModel(resolvedProvider, { resolution: isSeedanceLipSyncProvider(resolvedProvider) ? seedanceLipSyncResolution(resolvedProvider, resolution) : resolution })
   } else {
     lipSyncKind = providerKindForLipSyncModel(resolvedProvider)
   }
@@ -1982,6 +1982,11 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
       const displaySize = displayVideoSize(srcProbe)
       const shapeProblem = extendSourceAspectProblem(provider, displaySize.width, displaySize.height)
       if (shapeProblem) throw new DeterministicJobError(shapeProblem)
+      // Seedance 2.5 Extend at 4K continues only a source that is already 4K
+      // (decided 2026-11-25): refused again here, final and refunded in full,
+      // for a source the route's or the workflow run's probe could not read.
+      const below4k = seedanceExtend4kSourceProblem(provider, resolution, { width: srcProbe.width, height: srcProbe.height })
+      if (below4k) throw new DeterministicJobError(below4k)
       // The seconds of the source cut and sent: the recipe's tail, or all of a
       // shorter picture (a Seedance 2.5 run is charged for them, settled below).
       const sentSec = tailCutSec(provider, pictureSec)

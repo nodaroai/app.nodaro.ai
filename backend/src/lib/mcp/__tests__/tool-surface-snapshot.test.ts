@@ -2003,6 +2003,12 @@ const MERGED_HEADROOM_BYTES = 52
 // 571_043 B, then 571_129 B, 86 B more (neither tool near the per-tool budget). The list had no headroom,
 // so it is raised by exactly what it measures.
 const SPLIT_TAKES_VIDEO_BYTES = 86
+// Seedance 2.5 renders 4K (decided 2026-11-25): extend_video's resolution text
+// names Seedance 2.5 Extend's 4k apart from Seedance 2.0's sizes, and
+// modify_video's Seedance 2.5 range reads 480p-4k; both take 2160p / uhd as 4k
+// (decided 2026-11-27). Measured on top of Kling 4.0's 4K / HDR arguments:
+// 571_298 B, 53 B over.
+const SEEDANCE_2_5_4K_BYTES = 53
 
 // RAISED by Kling 4.0's HDR setting (decided 2026-11-22): `generate_video` takes `dynamic_range` ("sdr" |
 // "hdr", 1080p / 4K only). No tool was added, so the membership fixtures do NOT move (tool-list-wire.json
@@ -2263,7 +2269,8 @@ export const TOOL_WIRE_BUDGET = {
     LIP_SYNC_SERVER_TIERS_BYTES +
     MERGED_HEADROOM_BYTES +
     SPLIT_TAKES_VIDEO_BYTES +
-    KLING_4_HDR_ARG_BYTES,
+    KLING_4_HDR_ARG_BYTES +
+    SEEDANCE_2_5_4K_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

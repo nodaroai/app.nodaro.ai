@@ -1,4 +1,4 @@
-import { isSeedanceExtendPricedBySecondsSent, seedanceExtendPrice, type SeedanceExtendPrice, type SentPricedSeedanceExtendProvider } from "@nodaro/render-rules"
+import { isSeedanceExtendPricedBySecondsSent, seedanceExtendPrice, SEEDANCE_EXTEND_4K_SOURCE_CODE, seedanceExtend4kSourceProblem, type SeedanceExtendPrice, type SentPricedSeedanceExtendProvider } from "@nodaro/render-rules"
 import { canonicalVideoProvider, refVideoAspectProblem } from "@nodaro/shared/models"
 import { seedanceExtendAddedSec, seedanceExtendSentSec } from "@nodaro/shared/credits"
 import {
@@ -124,7 +124,7 @@ function stampedSec(value: unknown): number | undefined {
 export type SeedanceExtendSourceStamp =
   /** `modelIdentifier`: the id the job is now held at, when the stamp moved it (Gemini Omni Flash 1.2's capped tier). */
   | { readonly ok: true; readonly patch: Record<string, unknown>; readonly modelIdentifier?: string }
-  | { readonly ok: false; readonly code: "video_aspect_unsupported" | "video_too_short" | "provider_unavailable"; readonly message: string }
+  | { readonly ok: false; readonly code: "video_aspect_unsupported" | "video_too_short" | "provider_unavailable" | typeof SEEDANCE_EXTEND_4K_SOURCE_CODE; readonly message: string }
 
 /**
  * The providers whose workflow run refuses a source shorter than their
@@ -150,7 +150,9 @@ const WORKFLOW_REFUSES_SHORT_SOURCE: ReadonlySet<SentChargedExtendProvider> = ne
  * Flash source under its 2 s ({@link WORKFLOW_REFUSES_SHORT_SOURCE}). Gemini
  * Omni Flash 1.2 Extend alike: a source that is not 16:9 or 9:16
  * (`extendSourceAspectProblem`) or under its 4 s is refused before anything
- * is held. Every other job: no patch.
+ * is held. A 4K Seedance 2.5 Extend of a source that is not already 4K
+ * (`seedanceExtend4kSourceProblem`) is refused before anything is held too.
+ * Every other job: no patch.
  */
 export async function stampSeedanceExtendSource(
   jobName: string,
@@ -173,6 +175,10 @@ export async function stampSeedanceExtendSource(
     const shape = refVideoAspectProblem(TAIL_RECIPES[provider].genModel, probe.width, probe.height)
       ?? extendSourceAspectProblem(provider, display.width, display.height)
     if (shape) return { ok: false, code: "video_aspect_unsupported", message: shape }
+    // Seedance 2.5 Extend at 4K continues only a source that is already 4K
+    // (decided 2026-11-25), refused here as the route refuses it.
+    const below4k = seedanceExtend4kSourceProblem(provider, payload.resolution, { width: probe.width, height: probe.height })
+    if (below4k) return { ok: false, code: SEEDANCE_EXTEND_4K_SOURCE_CODE, message: below4k }
     const pictureSec = stampedSec(probe.videoDurationSeconds ?? probe.durationSeconds)
     if (pictureSec !== undefined && WORKFLOW_REFUSES_SHORT_SOURCE.has(provider) && pictureSec < TAIL_RECIPES[provider].minSourceSec) {
       return { ok: false, code: "video_too_short", message: extendSourceTooShortMessage(provider, pictureSec) }

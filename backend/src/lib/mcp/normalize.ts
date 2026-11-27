@@ -14,7 +14,7 @@
  * resolved model). Validation errors are SWALLOWED, not surfaced.
  */
 import { MODEL_CATALOG, VIDEO_DURATION_AUTO, defaultImageModel, defaultResolutionFor, isAutoAspectToken, isAutoVideoDuration, type ModelCatalogEntry } from "@nodaro/shared/model-catalog"
-import { IMAGE_GEN_PROVIDERS, IMAGE_TO_VIDEO_PROVIDERS, MODIFY_IMAGE_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, canonicalVideoProvider, resolveVideoProviderForMode, videoProviderRequiresImage } from "@nodaro/shared/models"
+import { IMAGE_GEN_PROVIDERS, IMAGE_TO_VIDEO_PROVIDERS, MODIFY_IMAGE_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, canonicalVideoProvider, explicitFourKOf, resolutionsALooseRequestMayLandOn, resolveVideoProviderForMode, videoProviderRequiresImage } from "@nodaro/shared/models"
 import { imageToImageAspectRatio } from "../image-auto-aspect.js"
 
 /**
@@ -549,9 +549,16 @@ export function normalizeVideoInput(
     "16:9",
   )
 
+  // On a model where only an explicit 4K means 4K (Seedance 2.5, decided
+  // 2026-11-25), any other value is fitted without the 4K tier: a K-style
+  // `2k` / `1K` / `8K` lands on the model's default, as before it listed 4K.
+  // A 4K spelling (`2160p`, `UHD`, any case) is 4K on it (decided 2026-11-27).
+  const landing = (asked: string | null | undefined) =>
+    modelEntry?.resolutions ? resolutionsALooseRequestMayLandOn(model, asked, modelEntry.resolutions) : undefined
+  const fit = (asked: string | null | undefined) => explicitFourKOf(model, asked) ?? normalizeResolution(asked, landing(asked))
   const resolution =
-    normalizeResolution(raw.resolution, modelEntry?.resolutions)
-    ?? normalizeResolution(saved.resolution, modelEntry?.resolutions)
+    fit(raw.resolution)
+    ?? fit(saved.resolution)
     // Default to the lowest catalog resolution (catalog arrays are ordered
     // low→high) so MCP video tools default to the cheapest tier when the
     // caller doesn't specify one, unless the model declares otherwise.

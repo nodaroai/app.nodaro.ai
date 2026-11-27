@@ -45,9 +45,9 @@ Edit Video Pro is scoped to the same supported providers as Generate Video Pro:
 | `seedance-2` | Seedance 2.0 | 480p / 720p / 1080p / 4K |
 | `seedance-2-fast` | Seedance 2.0 Fast | 480p / 720p only |
 | `seedance-2-mini` | Seedance 2.0 Mini | 480p / 720p only |
-| `seedance-2-5` | Seedance 2.5 | 480p / 720p / 1080p (no 4K) |
+| `seedance-2-5` | Seedance 2.5 | 480p / 720p / 1080p / 4K (4K since 2026-11-25) |
 
-The bridge always renders at the largest resolution tier the selected provider supports that's still at or below the source video's shorter dimension — there's no manual resolution picker. A 4K source paired with `seedance-2` bridges at 4K; the same source paired with `seedance-2-fast` bridges at 720p, since it offers no higher tier.
+The bridge always renders at the largest resolution tier the selected provider supports that's still at or below the source video's shorter dimension — there's no manual resolution picker. A 4K source (its shorter side 2160 pixels or more) paired with `seedance-2` or `seedance-2-5` bridges, and is charged, at 4K (on `seedance-2-5` since 2026-11-25; before that it bridged at 1080p); the same source paired with `seedance-2-fast` bridges at 720p, since it offers no higher tier.
 
 ## How replace mode works
 

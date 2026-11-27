@@ -1,3 +1,4 @@
+import { explicitFourKOf } from "@nodaro/shared/models"
 import { KIE_CREDIT_USD } from "./models.js"
 
 /**
@@ -17,16 +18,18 @@ import { KIE_CREDIT_USD } from "./models.js"
  * the output seconds), `ref` with one (billed on input + output seconds). The
  * figures the `seedance-2-5` model entry (models.ts) carries.
  */
-export const SEEDANCE_25_KIE_CREDITS_PER_SEC: Readonly<Record<"480p" | "720p" | "1080p", { plain: number; ref: number }>> = {
+export const SEEDANCE_25_KIE_CREDITS_PER_SEC: Readonly<Record<"480p" | "720p" | "1080p" | "4k", { plain: number; ref: number }>> = {
   "480p": { plain: 28, ref: 17 },
   "720p": { plain: 63, ref: 38 },
   "1080p": { plain: 158, ref: 95 },
+  // Native 4K (KIE, 2026-11-19; a 4 s probe consumed exactly 251 × 4).
+  "4k": { plain: 251, ref: 155 },
 }
 
 type Seedance25Resolution = keyof typeof SEEDANCE_25_KIE_CREDITS_PER_SEC
 
 const isSeedance25Resolution = (resolution: string | undefined): resolution is Seedance25Resolution =>
-  resolution === "480p" || resolution === "720p" || resolution === "1080p"
+  resolution === "480p" || resolution === "720p" || resolution === "1080p" || resolution === "4k"
 
 /**
  * The USD KIE bills for a Seedance 2.5 render: a draft renders (and bills) at
@@ -41,7 +44,9 @@ export function seedance25CostUsd(o: {
   outputSec: number
   inputSec: number
 }): number {
-  const tier: Seedance25Resolution = o.draft ? "480p" : isSeedance25Resolution(o.resolution) ? o.resolution : "720p"
+  // A 4K spelling (`2160p`, `UHD`, any case) rendered 4K (decided 2026-11-27).
+  const asked = explicitFourKOf("seedance-2-5", o.resolution) ?? o.resolution
+  const tier: Seedance25Resolution = o.draft ? "480p" : isSeedance25Resolution(asked) ? asked : "720p"
   const rate = SEEDANCE_25_KIE_CREDITS_PER_SEC[tier]
   const kieCredits = o.hasVideoRef ? rate.ref * (o.inputSec + o.outputSec) : rate.plain * o.outputSec
   return kieCredits * KIE_CREDIT_USD

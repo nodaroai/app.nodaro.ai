@@ -22,7 +22,7 @@ import { ALTERNATE_ROUTE_BUDGET_MS } from "../../alternate-route.js"
 import { ALTERNATE_ROUTE_PROVIDER_KIND } from "../../alternate-route-request.js"
 
 describe("ProviderKind registry", () => {
-  it("exposes spec-listed kinds at runtime (14 base + 2 suno-voice in P5.2 + 3 reconcile blind-spot fixes + heygen stall-retry guard + fal-request + beeble switchx + 4b nodaro-cloud + copilot-turn + seedance draft finalize + apify-run for background scrapes + house-model + alternate-route)", () => {
+  it("exposes spec-listed kinds at runtime (14 base + 2 suno-voice in P5.2 + 3 reconcile blind-spot fixes + heygen stall-retry guard + fal-request + beeble switchx + 4b nodaro-cloud + copilot-turn + seedance draft finalize + a long KIE video render + apify-run for background scrapes + house-model + alternate-route)", () => {
     expect(PROVIDER_KIND_VALUES).toEqual([
       "kie-standard", "kie-veo", "kie-veo-1080p", "kie-suno", "kie-suno-market",
       "kie-suno-voice-create", "kie-suno-voice-validate",

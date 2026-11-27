@@ -336,7 +336,11 @@ describe("the job's provider picks the model", () => {
   it.each(["seedance-2-5-extend", "seedance-2-0-extend", "seedance-2-extend"])(
     "renders a resolution the model offers as sent, and any other at 720p (%s)",
     async (provider) => {
-      for (const [sent, rendered] of [["480p", "480p"], ["1080p", "1080p"], [undefined, "720p"], ["4k", "720p"], ["2160p", "720p"]] as const) {
+      // 4k is Seedance 2.5's own (on a 4K source, below); 2.0 renders it at 720p.
+      const cases = provider === "seedance-2-0-extend"
+        ? [["480p", "480p"], ["1080p", "1080p"], [undefined, "720p"], ["4k", "720p"], ["2160p", "720p"]] as const
+        : [["480p", "480p"], ["1080p", "1080p"], [undefined, "720p"], ["2k", "720p"]] as const
+      for (const [sent, rendered] of cases) {
         mocks.mockImageToVideo.mockClear()
         mocks.mockTextToVideo.mockClear()
         await run({ provider, resolution: sent })
@@ -344,6 +348,21 @@ describe("the job's provider picks the model", () => {
       }
     },
   )
+
+  // Decided 2026-11-25: Seedance 2.5 Extend at 4K continues only a source that
+  // is already 4K. The worker checks again (the route's and the workflow run's
+  // probes are best effort): a smaller source is refused before any provider call.
+  it("renders 4K on a 4K source, and refuses 4K on a smaller one before any provider call", async () => {
+    mocks.mockProbeVideoSource.mockResolvedValue({ width: 3840, height: 2160, durationSeconds: 6, videoDurationSeconds: 6 })
+    await run({ provider: "seedance-2-5-extend", resolution: "4k" })
+    expect(generation().options).toMatchObject({ resolution: "4k", aspectRatio: "adaptive" })
+    mocks.mockImageToVideo.mockClear()
+    mocks.mockTextToVideo.mockClear()
+    mocks.mockProbeVideoSource.mockResolvedValue({ width: 1920, height: 1080, durationSeconds: 6, videoDurationSeconds: 6 })
+    await expect(run({ provider: "seedance-2-5-extend", resolution: "4k" })).rejects.toThrow(/already 4K/)
+    expect(mocks.mockTextToVideo).not.toHaveBeenCalled()
+    expect(mocks.mockImageToVideo).not.toHaveBeenCalled()
+  })
 
   // The route refuses the same sources with the same words (one floor, one
   // message: extend-recipe.ts) — this is the backstop for a probe that failed there.

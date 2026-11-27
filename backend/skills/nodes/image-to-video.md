@@ -1,7 +1,7 @@
 ---
 node_type: image-to-video
-generated_at: 2026-11-22T18:00:57.026Z
-generated_from: 249066c36b
+generated_at: 2026-11-25T14:26:59.308Z
+generated_from: 9b2406d57f
 ---
 
 # image-to-video
@@ -9,7 +9,7 @@ generated_from: 249066c36b
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `image-to-video`
 **Category:** ai
-**Credit cost:** `11-13035` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
+**Credit cost:** `11-20713` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `startFrame`, `endFrame`, `audio`
 **Outputs (source handles):** `video`
 
@@ -193,7 +193,7 @@ precise subject → action details → scene/environment → lighting & color to
 **Generation differences (seedance-2-5 vs the 2.0 SKUs)**
 - A single 2.5 shot runs to 30s, where every 2.0 SKU stops at 15s. Plan a complete 4-6 shot beat inside ONE generation instead of splitting it into two clips and stitching — no seam to hide, and continuity holds because it never leaves the model.
 - 2.5 also takes far more reference material (30 images / 10 videos / 10 audio vs 9/3/3). Treat that as room for COVERAGE — more distinct characters, locations and props in one shot — not as licence to pile refs onto one identity. The "ONE headshot + ONE full-body, 4-5 assets total" rule above still produces the best likeness on 2.5.
-- 2.5 renders at 480p/720p/1080p (1080p since 2026-08-17): there is no 4K tier, so route a job that needs 4K to seedance-2 (which has it) or upscale afterwards.
+- 2.5 renders at 480p/720p/1080p and native 4K (4K since 2026-11-25): 4K is the priciest tier and the slowest to render (minutes for a few seconds), so pick it only when the deliverable needs 4K, and draft at a lower tier first.
 - With a start frame, 2.5 always derives the output aspect from that frame — an explicit aspect ratio is rejected outright, so compose the frame at the ratio you want.
 - seedance-2-5-flash is the fast, cheaper tier of 2.5 (KIE API docs https://docs.kie.ai/market/bytedance/seedance-2-5-flash): the same 4-30s single shot and the same start-frame aspect rule, but 480p/720p only (no 1080p), up to 10 images / 5 videos / 5 audio clips, reference audio 2-30s a clip and 30s together (other formats are converted to MP3), a prompt with reference audio alone is a valid request, and no draft mode. The official 2.5 guide's timestamp and multi-view notes are written for 2.5; treat them as untested on Flash.
 - Timestamps (official 2.5 guide, "Differences from Seedance 2.0"): 2.0 does not respond to them; 2.5 supports integer-second timestamps in three forms — gap-free intervals ("0-3s: … 3-7s: … 7-15s: …" or "[1s-4s] … [4s-8s] …"; never leave a hole like "0-3s … 5-6s"), time-point control ("At the 5-second mark, …"), and relative time ("After 3 seconds, …"). Use 1-second units. Too little content in a range lets the model improvise; too much packs in extra cuts or drops beats — budget the seconds. Never use timestamps to drive high-frequency actions ("shake three times per second").

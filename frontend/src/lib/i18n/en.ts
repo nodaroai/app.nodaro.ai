@@ -1731,6 +1731,7 @@ export const en = {
   "vidcfg.nodaroModeTransparentUnavailableNotice": "This deployment cannot run Transparent, so a run in this mode is refused. Choose Sharp to run it here.",
   "vidcfg.descNodaroUpscale": "Nodaro Video Upscale fits the clip into a 1080p, 2K or 4K frame without cropping, and keeps its frame rate, length and sound. It takes clips of up to 60 seconds and 50 MB. The price is per second of the clip, so the figure shown is an estimate until the run measures the clip; the amount held is the amount charged.",
   "vidcfg.nodaroUpscaleTooLong": "Nodaro Video Upscale takes clips of up to {max} s — this one is {d} s. Trim it, or the run will be refused.",
+  "vidcfg.extend4kNeeds4kSource": "{model} extends at 4K only a source that is already 4K (its short side {min} px or more) — this one is {w}×{h}. Choose 1080p or lower, or the run will be refused.",
   "vidcfg.topazLegacyFactorNote": "Saved as {factor}× — it renders at the resolution nearest to {factor}× the clip's size. Pick a resolution to set it exactly.",
   "vidcfg.depthSize.small": "Small (fastest)",
   "vidcfg.depthSize.base": "Base",

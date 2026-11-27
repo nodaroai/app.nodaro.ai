@@ -70,7 +70,9 @@ describe("Seedance Lip Sync price", () => {
     expect(seedanceLipSyncCreditId("seedance-2", "4k")).toBe("seedance-2:8s:4k")
     expect(seedanceLipSyncCreditId("seedance-2-fast", "4k")).toBe("seedance-2-fast:8s:720p")
     expect(seedanceLipSyncCreditId("seedance-2-mini", "1080p")).toBe("seedance-2-mini:8s:720p")
-    expect(seedanceLipSyncCreditId("seedance-2-5", "4k")).toBe("seedance-2-5:8s:1080p")
+    // Seedance 2.5 renders 4K (decided 2026-11-25), and an unlisted size lands below it.
+    expect(seedanceLipSyncCreditId("seedance-2-5", "4k")).toBe("seedance-2-5:8s:4k")
+    expect(seedanceLipSyncCreditId("seedance-2-5", "1440p")).toBe("seedance-2-5:8s:1080p")
     expect(seedanceLipSyncCreditId("seedance-2-5-flash", "1080p")).toBe("seedance-2-5-flash:8s:720p")
     expect(seedanceLipSyncCreditId("seedance-2-5-flash")).toBe("seedance-2-5-flash:8s:720p")
   })
