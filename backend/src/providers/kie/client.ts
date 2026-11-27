@@ -10,7 +10,7 @@
  */
 
 import { config, hasCredits } from "../../lib/config.js"
-import { pollDelay } from "./poll-delay.js"
+import { MAX_POLL_ATTEMPTS_VIDEO, pollDelay } from "./poll-delay.js"
 import { PLATFORM_CAPACITY_MESSAGE } from "../../lib/llm-platform-exhaustion.js"
 import { requireProviderKey, MissingProviderKeyError } from "../provider-keys.js"
 import { isWorkerDraining, DrainAbortError } from "../../lib/worker-drain.js"
@@ -35,7 +35,7 @@ export const KIE_API_BASE = config.KIE_API_BASE_URL
 export const POLL_INTERVAL_MS = 2000 // Used by kling3-client
 // With exponential backoff: ~15 min total for 120 attempts
 export const MAX_POLL_ATTEMPTS = 120
-export const MAX_POLL_ATTEMPTS_VIDEO = 120
+export { MAX_POLL_ATTEMPTS_VIDEO }
 // Kling AI Avatar 2.0 accepts up to 5min audio; KIE warns long generations
 // can take "tens of minutes". 360 attempts × ~10s cap ≈ 1 hour ceiling.
 export const MAX_POLL_ATTEMPTS_LIP_SYNC_LONG = 360

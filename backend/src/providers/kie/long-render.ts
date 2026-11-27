@@ -10,9 +10,14 @@
  * than the default: a 30 s clip about 56 minutes. It is recorded under the
  * reconcile kind `kie-long-video` (75 minutes), above that and the stored
  * preview's encode, so the reconcile cron never races a live render.
+ *
+ * MAGI-2 is slow at its one size, 1080p (decided 2026-11-27): a 30 s clip took
+ * 22 min 42 s to render on staging, about 46 s per output second, past the
+ * standard ceiling. Its budget is sized the same way at every length, and a run
+ * whose budget passes the standard ceiling (longer than 12 s) is a long render.
  */
 import { isFourKResolution, maxVideoDurationSec, videoDefaultDurationSec } from "@nodaro/shared/models"
-import { pollDelay } from "./poll-delay.js"
+import { MAX_POLL_ATTEMPTS_VIDEO, pollDelay } from "./poll-delay.js"
 
 /** The models whose render at 4K is long. */
 const LONG_AT_4K: ReadonlySet<string> = new Set(["seedance-2-5"])
@@ -22,9 +27,36 @@ export const SEEDANCE_25_4K_RENDER_SEC_PER_OUTPUT_SEC = 56
 /** The margin over that measure a 4K run is polled for (a 30 s one was not measured). */
 export const SEEDANCE_25_4K_MARGIN = 2
 
-/** Whether a KIE video run of `model` at `resolution` is a long render. */
-export function isLongKieVideoRender(model: string | undefined, resolution: unknown): boolean {
-  return model !== undefined && LONG_AT_4K.has(model) && isFourKResolution(resolution)
+/** Seconds a MAGI-2 render took per output second (30 s in 22 min 42 s on staging, 2026-11-27). */
+export const MAGI_2_RENDER_SEC_PER_OUTPUT_SEC = 46
+/** The margin over that measure a MAGI-2 run is polled for (one long run measured). */
+export const MAGI_2_MARGIN = 2
+
+/** The models slow at every size, by their measured render rate. */
+const SLOW_AT_EVERY_SIZE: Readonly<Record<string, { readonly secPerOutputSec: number; readonly margin: number }>> = {
+  "magi-2": { secPerOutputSec: MAGI_2_RENDER_SEC_PER_OUTPUT_SEC, margin: MAGI_2_MARGIN },
+}
+
+/** The measured render rate a run of `model` at `resolution` is sized on, or undefined for a standard run. */
+function renderRate(model: string | undefined, resolution: unknown): { readonly secPerOutputSec: number; readonly margin: number } | undefined {
+  if (model === undefined) return undefined
+  if (LONG_AT_4K.has(model) && isFourKResolution(resolution)) {
+    return { secPerOutputSec: SEEDANCE_25_4K_RENDER_SEC_PER_OUTPUT_SEC, margin: SEEDANCE_25_4K_MARGIN }
+  }
+  return SLOW_AT_EVERY_SIZE[model]
+}
+
+/**
+ * Whether a KIE video run of `model` at `resolution` (of `duration` seconds) is
+ * a long render, recorded under the reconcile kind `kie-long-video`: every
+ * Seedance 2.5 run at 4K, and a run of a model slow at every size (MAGI-2)
+ * whose budget passes the standard ceiling.
+ */
+export function isLongKieVideoRender(model: string | undefined, resolution: unknown, duration?: unknown): boolean {
+  if (model === undefined) return false
+  if (LONG_AT_4K.has(model) && isFourKResolution(resolution)) return true
+  if (!SLOW_AT_EVERY_SIZE[model]) return false
+  return longRenderPollAttempts(model, { resolution, duration }, MAX_POLL_ATTEMPTS_VIDEO) > MAX_POLL_ATTEMPTS_VIDEO
 }
 
 /**
@@ -47,9 +79,9 @@ function budgetSeconds(model: string, duration: unknown, edit: boolean, referenc
 }
 
 /**
- * How many times a Seedance 2.5 task is polled: the default for every run but
- * 4K; at 4K the measured rate × the margin over the seconds it renders
- * (`budgetSeconds`), never less than the default.
+ * How many times a long-rendering task is polled: the default for a standard
+ * run; for Seedance 2.5 at 4K and for MAGI-2 the measured rate × the margin
+ * over the seconds it renders (`budgetSeconds`), never less than the default.
  */
 export function longRenderPollAttempts(
   model: string,
@@ -58,11 +90,12 @@ export function longRenderPollAttempts(
   context: { readonly referenceVideoSec?: ReadonlyArray<number | null>; readonly edit?: boolean } = {},
   pollDelayMs: (attempt: number) => number = pollDelay,
 ): number {
-  if (!isLongKieVideoRender(model, input.resolution)) return defaultAttempts
+  const rate = renderRate(model, input.resolution)
+  if (!rate) return defaultAttempts
   // The declared edit task type is the edit lane's (`omni_reference_task_type`, the wire key `seedance-edit-mode.ts` names).
   const edit = context.edit === true || input.omni_reference_task_type === "edit"
   const seconds = budgetSeconds(model, input.duration, edit, context.referenceVideoSec)
-  const budgetMs = seconds * SEEDANCE_25_4K_RENDER_SEC_PER_OUTPUT_SEC * SEEDANCE_25_4K_MARGIN * 1000
+  const budgetMs = seconds * rate.secPerOutputSec * rate.margin * 1000
   let attempts = 0
   for (let waited = 0; waited < budgetMs; ) waited += pollDelayMs(++attempts)
   return Math.max(defaultAttempts, attempts)
