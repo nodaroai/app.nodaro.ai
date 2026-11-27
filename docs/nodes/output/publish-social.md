@@ -35,5 +35,6 @@ Costs **11 credits**<!-- credits: publish-social --> per post — the same as th
 ## Notes
 
 - Instagram posts wait for Meta to finish ingesting the media before publishing — up to 90 seconds for an image, up to 5 minutes for video or Reels on scheduled posts (immediate runs cap the whole wait at about 4 minutes so the request can still answer; if Meta is slower than that, the run fails as safely retryable — nothing was posted). Instagram accepts media asynchronously, so this wait is what prevents a "media is not ready for publishing" failure. A post sitting in this stage is slow, not stuck.
+- Facebook and Instagram photos larger than 8 MB are converted to a JPEG at quality 90 and their full size before they are posted, and scaled down, keeping their shape, only if still larger than 8 MB (Facebook refuses photos of 10 MB or more, Instagram photos over 8 MB). When Facebook or Instagram refuses a photo, the run fails with the network's own message, and nothing was posted.
 - Networks added after this node is placed appear in the account dropdown automatically — no node change needed.
 - The 7 original per-platform nodes (Instagram Post, Telegram Post, …) still work; Publish to Social is the one-node alternative that covers all of them plus the newer networks.

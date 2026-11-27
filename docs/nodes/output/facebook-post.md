@@ -41,6 +41,8 @@ None. This is a terminal output node.
 ## Tips
 - Facebook has the most generous text limit of all supported platforms (63,206 characters).
 - Reels are capped at 90 seconds. For longer video content, use the standard `post-video` action.
+- Facebook refuses photos of 10 MB or more. A photo larger than 8 MB (a 2K PNG, for example) is converted to a JPEG at quality 90 and its full size before it is posted, and scaled down, keeping its shape, only if it is still larger than 8 MB. Transparent areas become white. Smaller photos are posted unchanged.
+- When Facebook refuses a post (a file it cannot read, a missing permission), the node fails with Facebook's own message, and nothing was posted. The node says the post may have been published only when the connection to Facebook was lost or timed out, or Facebook answered with a server error, after the post was sent. Check the Page before running it again.
 - OAuth tokens are encrypted at rest using AES-256-GCM.
 - One Facebook account can be connected per user.
 - The `post-story` action creates ephemeral content that disappears after 24 hours.

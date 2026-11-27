@@ -159,6 +159,15 @@ describe("processScheduledPost", () => {
     expect(releaseMock).toHaveBeenCalledWith("c1", "lock-token")
   })
 
+  it("names its job to the executor, so a resized photo is stored in that job's scratch folder", async () => {
+    scheduledRow = baseRow()
+    executeMock.mockResolvedValue({ connectionId: "c1", platformPostId: "pp", platformPostUrl: "https://x/pp" })
+
+    await processScheduledPost(fakeJob())
+
+    expect(executeMock).toHaveBeenCalledWith(expect.objectContaining({ jobId: "job-1" }))
+  })
+
   it("BadBody -> row error, refund, UnrecoverableError (no BullMQ retry)", async () => {
     scheduledRow = baseRow()
     executeMock.mockRejectedValue(new BadBodyError("caption too long"))

@@ -92,3 +92,13 @@ describe("POST /v1/social/publish settles its credit hold", () => {
     expect(refundCredits).not.toHaveBeenCalled()
   })
 })
+
+describe("POST /v1/social/publish names its job to the executor", () => {
+  it("passes the job's id, so a resized photo is stored in that job's scratch folder", async () => {
+    executePublish.mockResolvedValue({ platformPostId: "p1", platformPostUrl: "https://t.me/p1" })
+
+    await publish()
+
+    expect(executePublish).toHaveBeenCalledWith(expect.objectContaining({ jobId: "job-1" }))
+  })
+})

@@ -122,6 +122,14 @@ export interface SocialProvider {
   readonly requiredEnv: readonly string[]
   /** Per-provider platform rate cap for the Phase 1 worker. Default 1. */
   readonly maxConcurrentJob?: number
+  /**
+   * The largest photo, in bytes, this network is sent. A bigger one is
+   * re-encoded as a JPEG at its own size, and scaled down only if that is
+   * still too large, before the publish call (`photo-fit.ts`, run by
+   * `execute-publish.ts`). Absent: photos are sent as they are. Not part of
+   * `providerPublicInfo`.
+   */
+  readonly photoMaxBytes?: number
   /** Docs anchor surfaced with unavailable tiles / 400s. */
   readonly setupHint?: string
   /** Present for `oauth2` + `oauth2_between_steps`. */

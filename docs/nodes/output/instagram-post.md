@@ -45,3 +45,5 @@ None. This is a terminal output node.
 - OAuth tokens are encrypted at rest using AES-256-GCM.
 - One Instagram account can be connected per user. Reconnect on the Integrations page if the token expires.
 - The `platformPostUrl` field is populated after successful publication, providing a direct link to the posted content.
+- Instagram refuses photos larger than 8 MB. A larger photo, including each photo of a carousel, is converted to a JPEG at quality 90 and its full size before it is posted, and scaled down, keeping its shape, only if it is still larger than 8 MB. Transparent areas become white. Smaller photos are posted unchanged.
+- When Instagram refuses a photo, the node fails with Instagram's own message, and nothing was posted.

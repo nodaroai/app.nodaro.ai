@@ -9,6 +9,7 @@ const testProvider = {
   capabilities: { schedule: true, comment: false, media: ["image"], refresh: "real" as string },
   oauth: {} as Record<string, unknown>,
   publisher: { publish: publishMock },
+  photoMaxBytes: undefined as number | undefined,
 }
 vi.mock("../providers/registry.js", () => ({
   getProvider: (id: string) => (id === "prov" ? testProvider : null),
@@ -23,6 +24,14 @@ vi.mock("../encryption.js", () => ({
 const refreshMock = vi.fn()
 vi.mock("../oauth.js", () => ({
   refreshAccessToken: (...args: unknown[]) => refreshMock(...args),
+}))
+
+// ---- photo fitting (its own suite: photo-fit.test.ts) -------------------------
+const fitRequestPhotosMock = vi.fn()
+const discardPhotoCopiesMock = vi.fn()
+vi.mock("../photo-fit.js", () => ({
+  fitRequestPhotos: (...args: unknown[]) => fitRequestPhotosMock(...args),
+  discardPhotoCopies: (...args: unknown[]) => discardPhotoCopiesMock(...args),
 }))
 
 // ---- recording supabase fake ------------------------------------------------
@@ -71,9 +80,12 @@ function conn(overrides: Record<string, unknown> = {}) {
 beforeEach(() => {
   publishMock.mockReset()
   refreshMock.mockReset()
+  fitRequestPhotosMock.mockReset().mockImplementation(async (request: unknown) => ({ request, copies: [] }))
+  discardPhotoCopiesMock.mockReset().mockResolvedValue(undefined)
   updates.length = 0
   connectionRows = []
   testProvider.capabilities.refresh = "real"
+  testProvider.photoMaxBytes = undefined
 })
 
 describe("executePublish", () => {
@@ -191,5 +203,62 @@ describe("executePublish", () => {
     expect(metadata.page_access_token).toBe("page-tok")
     expect(metadata.page_id).toBe("pg")
     expect(metadata.chatId).toBe("42")
+  })
+})
+
+describe("executePublish: photos over the network's byte limit", () => {
+  const BIG = { action: "post-image", mediaUrl: "https://cdn.test/images/big.png" }
+  const COPY = "https://cdn.test/tmp/provider-input/job-9/social-photo-1.jpg"
+
+  it("fits the photos to the network's limit, in the job's scratch folder, and posts the fitted request", async () => {
+    connectionRows = [conn()]
+    testProvider.photoMaxBytes = 8_000_000
+    const fitted = { action: "post-image", mediaUrl: COPY }
+    fitRequestPhotosMock.mockResolvedValue({ request: fitted, copies: [COPY] })
+    publishMock.mockResolvedValue({ success: true, platformPostId: "p1" })
+
+    await executePublish({ userId: "u1", platform: "prov", jobId: "job-9", request: BIG })
+
+    expect(fitRequestPhotosMock).toHaveBeenCalledWith(BIG, 8_000_000, "job-9")
+    expect(publishMock).toHaveBeenCalledWith("tok-live", fitted, expect.any(Object))
+    expect(discardPhotoCopiesMock).toHaveBeenCalledWith([COPY], "job-9")
+    // The copy goes only once the network has answered: it fetches the photo during the call.
+    expect(publishMock.mock.invocationCallOrder[0]!).toBeLessThan(discardPhotoCopiesMock.mock.invocationCallOrder[0]!)
+  })
+
+  it("asks for no fitting on a network that declares no photo limit", async () => {
+    connectionRows = [conn()]
+    publishMock.mockResolvedValue({ success: true })
+
+    await executePublish({ userId: "u1", platform: "prov", request: BIG })
+
+    expect(fitRequestPhotosMock).toHaveBeenCalledWith(BIG, undefined, undefined)
+    expect(publishMock).toHaveBeenCalledWith("tok-live", BIG, expect.any(Object))
+  })
+
+  it("discards the copies when the call fails too", async () => {
+    connectionRows = [conn()]
+    testProvider.photoMaxBytes = 8_000_000
+    fitRequestPhotosMock.mockResolvedValue({ request: { action: "post-image", mediaUrl: COPY }, copies: [COPY] })
+    publishMock.mockRejectedValue(new Error("socket hang up"))
+
+    await expect(executePublish({ userId: "u1", platform: "prov", jobId: "job-9", request: BIG })).rejects.toBeInstanceOf(
+      UnknownOutcomeError,
+    )
+    expect(discardPhotoCopiesMock).toHaveBeenCalledWith([COPY], "job-9")
+  })
+
+  it("reports a photo it could not prepare as NOT published: the network was never called", async () => {
+    connectionRows = [conn()]
+    testProvider.photoMaxBytes = 8_000_000
+    fitRequestPhotosMock.mockRejectedValue(new NotPublishedError("Could not store the photo. The post was NOT published."))
+
+    const err = await executePublish({ userId: "u1", platform: "prov", jobId: "job-9", request: BIG })
+      .then(() => null)
+      .catch((e) => e)
+
+    expect(err).toBeInstanceOf(NotPublishedError)
+    expect(err).not.toBeInstanceOf(UnknownOutcomeError)
+    expect(publishMock).not.toHaveBeenCalled()
   })
 })
