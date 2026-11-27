@@ -1,4 +1,8 @@
 import { describe, it, expect } from "vitest"
+import { isLongKieVideoRender, longRenderPollAttempts, MAGI_2_MARGIN, MAGI_2_RENDER_SEC_PER_OUTPUT_SEC } from "../long-render.js"
+import { MAX_POLL_ATTEMPTS_VIDEO, pollDelay } from "../poll-delay.js"
+import { providerKindForVideoModel } from "../../../lib/reconcile/provider-kind.js"
+import { STALE_THRESHOLD_MS } from "../../../lib/reconcile/types.js"
 import { getModel } from "@nodaro/shared/model-catalog"
 import { videoProviderFoldsLoneEndFrame, VIDEO_REF_LIMITS_BY_PROVIDER } from "@nodaro/shared/models"
 import {
@@ -157,5 +161,48 @@ describe("MAGI-2 request bodies (magi-2.ts)", () => {
     }
     expect(KIE_VIDEO_MODELS["magi-2"]?.model).toBe(MAGI_2_IMAGE_TO_VIDEO_MODEL)
     expect(KIE_TEXT_TO_VIDEO_MODELS["magi-2"]?.model).toBe(MAGI_2_TEXT_TO_VIDEO_MODEL)
+  })
+})
+
+describe("MAGI-2 render budget", () => {
+  const waitedMs = (attempts: number) => Array.from({ length: attempts }, (_, i) => pollDelay(i + 1)).reduce((a, b) => a + b, 0)
+  const neededMs = (seconds: number) => seconds * MAGI_2_RENDER_SEC_PER_OUTPUT_SEC * MAGI_2_MARGIN * 1000
+
+  it("a short clip keeps the standard budget and kind", () => {
+    for (const duration of [4, 5, 12]) {
+      expect(longRenderPollAttempts("magi-2", { resolution: "1080p", duration }, MAX_POLL_ATTEMPTS_VIDEO), `${duration}s`).toBe(MAX_POLL_ATTEMPTS_VIDEO)
+      expect(isLongKieVideoRender("magi-2", "1080p", duration), `${duration}s`).toBe(false)
+      expect(providerKindForVideoModel("magi-2", { resolution: "1080p", duration }), `${duration}s`).toBe("kie-standard")
+    }
+    // No length sent: the 5 s default.
+    expect(providerKindForVideoModel("magi-2", { resolution: "1080p" })).toBe("kie-standard")
+    expect(providerKindForVideoModel("magi-2")).toBe("kie-standard")
+  })
+
+  it("a long clip is polled for twice its measured render rate over its seconds, and recorded as a long render", () => {
+    for (const duration of [13, 20, 30]) {
+      const attempts = longRenderPollAttempts("magi-2", { resolution: "1080p", duration }, MAX_POLL_ATTEMPTS_VIDEO)
+      expect(attempts, `${duration}s`).toBeGreaterThan(MAX_POLL_ATTEMPTS_VIDEO)
+      expect(waitedMs(attempts), `${duration}s`).toBeGreaterThanOrEqual(neededMs(duration))
+      expect(waitedMs(attempts - 1), `${duration}s`).toBeLessThan(neededMs(duration))
+      expect(providerKindForVideoModel("magi-2", { resolution: "1080p", duration }), `${duration}s`).toBe("kie-long-video")
+    }
+    // The measured 30 s render (22 min 42 s) fits inside its budget, which the standard one did not.
+    const thirty = longRenderPollAttempts("magi-2", { resolution: "1080p", duration: 30 }, MAX_POLL_ATTEMPTS_VIDEO)
+    expect(waitedMs(thirty)).toBeGreaterThan(1_362_000)
+    expect(waitedMs(MAX_POLL_ATTEMPTS_VIDEO)).toBeLessThan(1_362_000)
+    // An Auto length is sized on the longest clip.
+    expect(longRenderPollAttempts("magi-2", { resolution: "1080p", duration: 0 }, MAX_POLL_ATTEMPTS_VIDEO)).toBe(thirty)
+  })
+
+  it("the long kind's staleness threshold is above a 30 s run's poll, and the standard one above a 12 s run's", () => {
+    expect(STALE_THRESHOLD_MS["kie-long-video"]).toBeGreaterThan(waitedMs(longRenderPollAttempts("magi-2", { resolution: "1080p", duration: 30 }, MAX_POLL_ATTEMPTS_VIDEO)))
+    expect(STALE_THRESHOLD_MS["kie-standard"]).toBeGreaterThan(waitedMs(longRenderPollAttempts("magi-2", { resolution: "1080p", duration: 12 }, MAX_POLL_ATTEMPTS_VIDEO)))
+  })
+
+  it("leaves every other model's budget alone", () => {
+    expect(longRenderPollAttempts("seedance-2-5", { resolution: "1080p", duration: 30 }, MAX_POLL_ATTEMPTS_VIDEO)).toBe(MAX_POLL_ATTEMPTS_VIDEO)
+    expect(longRenderPollAttempts("wan-3", { resolution: "1080p", duration: 30 }, MAX_POLL_ATTEMPTS_VIDEO)).toBe(MAX_POLL_ATTEMPTS_VIDEO)
+    expect(providerKindForVideoModel("wan-3", { resolution: "1080p", duration: 30 })).toBe("kie-standard")
   })
 })

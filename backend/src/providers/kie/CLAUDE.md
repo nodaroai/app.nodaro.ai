@@ -559,7 +559,12 @@ registered in BOTH model maps under that id. The pure `buildMagi2Request`
   after the caller's own (ordinals unchanged) and are named in the prompt; the
   frame line is fitted inside the 15,000-character cap. A reference run whose
   request names no aspect ratio follows its wired frame (the runner measures
-  the frame, `magi2FrameAspect`; unmeasurable → 16:9; decided 2026-11-27). A prompt with only
+  the frame, `magi2FrameAspect`; unmeasurable → 16:9; decided 2026-11-27).
+- **Slow at 1080p:** a 30 s clip took 22 min 42 s to render on staging (about
+  46 s per output second), past the standard ~19-min poll ceiling. The runner
+  polls for 2 × that rate over the clip's seconds (`longRenderPollAttempts`,
+  long-render.ts), and a run longer than 12 s is recorded as `kie-long-video`
+  (75 min) so the reconcile cron does not poll a live render (decided 2026-11-27). A prompt with only
   reference audio is a valid request. A first frame and no references →
   `magi-2/image-to-video` (`first_frame_url`, optional `last_frame_url`; NO
   `aspect_ratio` — the output follows the first frame). Nothing wired →

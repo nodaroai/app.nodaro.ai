@@ -2506,8 +2506,9 @@ async function runMagi2(
 
   const tierCostUsd = magi2CostUsd(snapped)
   console.log(`[KIE.ai] ${logLabel} (${model}) input:`, JSON.stringify(input, null, 2))
+  // A long clip renders past the standard poll ceiling: polled for its length (long-render.ts).
   const { resultJson, taskId, providerMs, rawRecordInfo } = await runKieTask(
-    model, input, MAX_POLL_ATTEMPTS_VIDEO, options?.onProgress,
+    model, input, longRenderPollAttempts(modelKey, input, MAX_POLL_ATTEMPTS_VIDEO), options?.onProgress,
     { ...reconcileOpts, modelKey, dimensions: { ...reconcileOpts?.dimensions, ...deriveKieEgressDimensions(input) } },
   )
   const videoUrl = resultJson.resultUrls?.[0] ?? resultJson.videoUrl

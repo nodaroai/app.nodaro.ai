@@ -572,8 +572,8 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
   const resolvedI2vProvider = provider ?? IMAGE_TO_VIDEO_DEFAULT_PROVIDER
   const onTaskCreated = makeOnTaskCreated(
     ctx.jobId,
-    // A Kling 4.0 run at 4K or in HDR is its own, slower kind (kie-long-video).
-    providerKindForVideoModel(resolvedI2vProvider, { resolution, dynamicRange }),
+    // A Kling 4.0 run at 4K or in HDR, and a long MAGI-2 run, is its own, slower kind (kie-long-video).
+    providerKindForVideoModel(resolvedI2vProvider, { resolution, dynamicRange, duration }),
   )
   // VEO direct-4K: KIE's generate endpoint has no "4k" — 4K is produced by
   // chaining get-4k-video off the base task (see chainVeoBaseTo4k below).
@@ -917,7 +917,7 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
   const resolvedT2vProvider = provider ?? TEXT_TO_VIDEO_DEFAULT_PROVIDER
   const t2vOnTaskCreated = makeOnTaskCreated(
     ctx.jobId,
-    providerKindForVideoModel(resolvedT2vProvider, { resolution, dynamicRange }),
+    providerKindForVideoModel(resolvedT2vProvider, { resolution, dynamicRange, duration }),
   )
   // VEO direct-4K: run the base at VEO_4K_BASE_RESOLUTION, then chain get-4k-video below.
   const wantsVeo4k = resolution === "4k" && isVeoProvider(provider)
