@@ -412,6 +412,27 @@ describe("instagramPublisher container readiness (error 9007)", () => {
     const err500 = await publishImage().then(() => null).catch((e) => e)
     expect(err500).toBeInstanceOf(NotPublishedError)
   })
+
+  it("words a refused container in Meta's own sentence for the person", async () => {
+    mockFetch.mockResolvedValueOnce(
+      badResponse(
+        400,
+        JSON.stringify({
+          error: {
+            message: "Invalid parameter",
+            type: "OAuthException",
+            code: 100,
+            error_user_msg: "The image could not be downloaded.",
+          },
+        }),
+      ),
+    )
+
+    const err = await publishImage().then(() => null).catch((e) => e)
+
+    expect(err).toBeInstanceOf(BadBodyError)
+    expect((err as Error).message).toBe("Instagram container creation failed: The image could not be downloaded.")
+  })
 })
 
 /**

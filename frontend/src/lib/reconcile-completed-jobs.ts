@@ -56,6 +56,7 @@ import { applyEdlRunCutFields, applyEdlTakeTranscriptField } from "@/lib/apply-e
 import { usecaseRestoredResults, usecaseTextRunPatch } from "@/lib/use-case-run-result"
 import { runResultIdentity } from "@/lib/run-result-identity"
 import { holdsJsonRunResult, isJsonRunResultType, jobRunOutput, jsonRunResultPatch, unitBatchClearFields, unitSideJobFields } from "@/lib/json-run-result"
+import { isSocialPostNodeType, socialPostRunFields } from "@/lib/social-post-run"
 import { UGC_JOB_RESULT_TYPES, ugcJobMayLand, ugcJobResultPatch } from "@/lib/ugc-run-patch"
 import { ugcFinishNodeIds, usecaseResultIsText } from "@nodaro/render-rules"
 import { resultsRunMark } from "@/components/editor/workflow-editor/triggered-run-follow"
@@ -435,6 +436,10 @@ export function buildCompletedResultPatch(
   // URL to land, so the URL gate below would drop it. The mapping every lane
   // shares (lib/use-case-run-result.ts); a job holding no show notes lands nothing.
   if (usecaseResultIsText(nodeType)) return usecaseTextRunPatch(nodeType, output, nodeData, jobId)
+  // A social post: its result is the post's link ("View post"), not a media
+  // URL, so the URL gate below would drop it — the mapping every lane shares
+  // (lib/social-post-run.ts).
+  if (isSocialPostNodeType(nodeType)) return { executionStatus: "completed", ...socialPostRunFields(nodeType, output) }
   const videoUrl = typeof output.videoUrl === "string" ? output.videoUrl : undefined
   const imageUrl = typeof output.imageUrl === "string" ? output.imageUrl : undefined
   const audioUrl = typeof output.audioUrl === "string" ? output.audioUrl : undefined

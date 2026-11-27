@@ -142,6 +142,7 @@ export async function socialPublishRoutes(app: FastifyInstance) {
         connectionId,
         request: publishReq,
         extraMetadata,
+        jobId: job.id,
       })
 
       // Update job as completed

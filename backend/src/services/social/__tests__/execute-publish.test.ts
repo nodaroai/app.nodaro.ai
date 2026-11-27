@@ -9,6 +9,7 @@ const testProvider = {
   capabilities: { schedule: true, comment: false, media: ["image"], refresh: "real" as string },
   oauth: {} as Record<string, unknown>,
   publisher: { publish: publishMock },
+  photoMaxBytes: undefined as number | undefined,
 }
 vi.mock("../providers/registry.js", () => ({
   getProvider: (id: string) => (id === "prov" ? testProvider : null),
@@ -23,6 +24,14 @@ vi.mock("../encryption.js", () => ({
 const refreshMock = vi.fn()
 vi.mock("../oauth.js", () => ({
   refreshAccessToken: (...args: unknown[]) => refreshMock(...args),
+}))
+
+// ---- photo fitting (its own suite: photo-fit.test.ts) -------------------------
+const fitRequestPhotosMock = vi.fn()
+const discardPhotoCopiesMock = vi.fn()
+vi.mock("../photo-fit.js", () => ({
+  fitRequestPhotos: (...args: unknown[]) => fitRequestPhotosMock(...args),
+  discardPhotoCopies: (...args: unknown[]) => discardPhotoCopiesMock(...args),
 }))
 
 // ---- recording supabase fake ------------------------------------------------
@@ -71,9 +80,12 @@ function conn(overrides: Record<string, unknown> = {}) {
 beforeEach(() => {
   publishMock.mockReset()
   refreshMock.mockReset()
+  fitRequestPhotosMock.mockReset().mockImplementation(async (request: unknown) => ({ request, copies: [] }))
+  discardPhotoCopiesMock.mockReset().mockResolvedValue(undefined)
   updates.length = 0
   connectionRows = []
   testProvider.capabilities.refresh = "real"
+  testProvider.photoMaxBytes = undefined
 })
 
 describe("executePublish", () => {
@@ -84,6 +96,7 @@ describe("executePublish", () => {
     const res = await executePublish({
       userId: "u1",
       platform: "prov",
+      jobId: "job-1",
       request: { action: "post-image" },
     })
     expect(res).toEqual({ connectionId: "c1", platformPostId: "p1", platformPostUrl: "https://x/p1" })
@@ -93,7 +106,7 @@ describe("executePublish", () => {
   it("throws NotConnectedError when no row matches", async () => {
     connectionRows = []
     await expect(
-      executePublish({ userId: "u1", platform: "prov", request: { action: "post-image" } }),
+      executePublish({ userId: "u1", platform: "prov", jobId: "job-1", request: { action: "post-image" } }),
     ).rejects.toBeInstanceOf(NotConnectedError)
   })
 
@@ -101,7 +114,7 @@ describe("executePublish", () => {
     connectionRows = [conn()]
     publishMock.mockRejectedValue(new Error("socket hang up"))
     await expect(
-      executePublish({ userId: "u1", platform: "prov", request: { action: "post-image" } }),
+      executePublish({ userId: "u1", platform: "prov", jobId: "job-1", request: { action: "post-image" } }),
     ).rejects.toBeInstanceOf(UnknownOutcomeError)
   })
 
@@ -111,7 +124,7 @@ describe("executePublish", () => {
       new NotPublishedError("Instagram publish failed: media still not ready (code 9007)"),
     )
 
-    const err = await executePublish({ userId: "u1", platform: "prov", request: { action: "post-image" } })
+    const err = await executePublish({ userId: "u1", platform: "prov", jobId: "job-1", request: { action: "post-image" } })
       .then(() => null)
       .catch((e) => e)
 
@@ -125,7 +138,7 @@ describe("executePublish", () => {
     connectionRows = [conn()]
     publishMock.mockRejectedValue(new BadBodyError("Instagram media processing failed (status_code=ERROR)"))
     await expect(
-      executePublish({ userId: "u1", platform: "prov", request: { action: "post-image" } }),
+      executePublish({ userId: "u1", platform: "prov", jobId: "job-1", request: { action: "post-image" } }),
     ).rejects.toBeInstanceOf(BadBodyError)
   })
 
@@ -133,7 +146,7 @@ describe("executePublish", () => {
     connectionRows = [conn()]
     publishMock.mockResolvedValue({ success: false, error: "Caption too long" })
     await expect(
-      executePublish({ userId: "u1", platform: "prov", request: { action: "post-image" } }),
+      executePublish({ userId: "u1", platform: "prov", jobId: "job-1", request: { action: "post-image" } }),
     ).rejects.toBeInstanceOf(BadBodyError)
   })
 
@@ -141,7 +154,7 @@ describe("executePublish", () => {
     testProvider.capabilities.refresh = "reconnect"
     connectionRows = [conn({ token_expires_at: past })]
 
-    const err = await executePublish({ userId: "u1", platform: "prov", request: { action: "post-image" } })
+    const err = await executePublish({ userId: "u1", platform: "prov", jobId: "job-1", request: { action: "post-image" } })
       .then(() => null)
       .catch((e) => e)
     expect(err).toBeInstanceOf(RefreshTokenError)
@@ -155,7 +168,7 @@ describe("executePublish", () => {
     refreshMock.mockResolvedValue({ accessToken: "tok-new", refreshToken: "refresh-2", expiresIn: 3600 })
     publishMock.mockResolvedValue({ success: true })
 
-    await executePublish({ userId: "u1", platform: "prov", request: { action: "post-image" } })
+    await executePublish({ userId: "u1", platform: "prov", jobId: "job-1", request: { action: "post-image" } })
 
     expect(refreshMock).toHaveBeenCalledWith(testProvider, "refresh-1")
     expect(publishMock).toHaveBeenCalledWith("tok-new", expect.any(Object), expect.any(Object))
@@ -169,7 +182,7 @@ describe("executePublish", () => {
     connectionRows = [conn({ token_expires_at: past, refresh_token_encrypted: "enc:refresh-1" })]
     refreshMock.mockRejectedValue(new Error("invalid_grant"))
 
-    const err = await executePublish({ userId: "u1", platform: "prov", request: { action: "post-image" } })
+    const err = await executePublish({ userId: "u1", platform: "prov", jobId: "job-1", request: { action: "post-image" } })
       .then(() => null)
       .catch((e) => e)
     expect(err).toBeInstanceOf(RefreshTokenError)
@@ -184,6 +197,7 @@ describe("executePublish", () => {
     await executePublish({
       userId: "u1",
       platform: "prov",
+      jobId: "job-1",
       request: { action: "post-image" },
       extraMetadata: { chatId: "42" },
     })
@@ -191,5 +205,79 @@ describe("executePublish", () => {
     expect(metadata.page_access_token).toBe("page-tok")
     expect(metadata.page_id).toBe("pg")
     expect(metadata.chatId).toBe("42")
+  })
+})
+
+describe("executePublish: photos over the network's byte limit", () => {
+  const BIG = { action: "post-image", mediaUrl: "https://cdn.test/images/big.png" }
+  const COPY = "https://cdn.test/tmp/provider-input/job-9/social-photo-1.jpg"
+
+  it("fits the photos to the network's limit, in the job's scratch folder, and posts the fitted request", async () => {
+    connectionRows = [conn()]
+    testProvider.photoMaxBytes = 8_000_000
+    const fitted = { action: "post-image", mediaUrl: COPY }
+    fitRequestPhotosMock.mockResolvedValue({ request: fitted, copies: [COPY] })
+    publishMock.mockResolvedValue({ success: true, platformPostId: "p1" })
+
+    await executePublish({ userId: "u1", platform: "prov", jobId: "job-9", request: BIG })
+
+    expect(fitRequestPhotosMock).toHaveBeenCalledWith(BIG, 8_000_000, "job-9", { deadlineMs: undefined })
+    expect(publishMock).toHaveBeenCalledWith("tok-live", fitted, expect.any(Object))
+    expect(discardPhotoCopiesMock).toHaveBeenCalledWith([COPY], "job-9")
+    // The copy goes only once the network has answered: it fetches the photo during the call.
+    expect(publishMock.mock.invocationCallOrder[0]!).toBeLessThan(discardPhotoCopiesMock.mock.invocationCallOrder[0]!)
+  })
+
+  it("asks for no fitting on a network that declares no photo limit", async () => {
+    connectionRows = [conn()]
+    publishMock.mockResolvedValue({ success: true })
+
+    await executePublish({ userId: "u1", platform: "prov", jobId: "job-9", request: BIG })
+
+    expect(fitRequestPhotosMock).toHaveBeenCalledWith(BIG, undefined, "job-9", { deadlineMs: undefined })
+    expect(publishMock).toHaveBeenCalledWith("tok-live", BIG, expect.any(Object))
+  })
+
+  it("holds the fitting to the deadline a caller that must answer has set", async () => {
+    connectionRows = [conn()]
+    testProvider.photoMaxBytes = 8_000_000
+    publishMock.mockResolvedValue({ success: true })
+    const deadline = Date.now() + 250_000
+
+    await executePublish({
+      userId: "u1",
+      platform: "prov",
+      jobId: "job-9",
+      request: BIG,
+      extraMetadata: { publishDeadlineMs: deadline },
+    })
+
+    expect(fitRequestPhotosMock).toHaveBeenCalledWith(BIG, 8_000_000, "job-9", { deadlineMs: deadline })
+  })
+
+  it("discards the copies when the call fails too", async () => {
+    connectionRows = [conn()]
+    testProvider.photoMaxBytes = 8_000_000
+    fitRequestPhotosMock.mockResolvedValue({ request: { action: "post-image", mediaUrl: COPY }, copies: [COPY] })
+    publishMock.mockRejectedValue(new Error("socket hang up"))
+
+    await expect(executePublish({ userId: "u1", platform: "prov", jobId: "job-9", request: BIG })).rejects.toBeInstanceOf(
+      UnknownOutcomeError,
+    )
+    expect(discardPhotoCopiesMock).toHaveBeenCalledWith([COPY], "job-9")
+  })
+
+  it("reports a photo it could not prepare as NOT published: the network was never called", async () => {
+    connectionRows = [conn()]
+    testProvider.photoMaxBytes = 8_000_000
+    fitRequestPhotosMock.mockRejectedValue(new NotPublishedError("Could not store the photo. The post was NOT published."))
+
+    const err = await executePublish({ userId: "u1", platform: "prov", jobId: "job-9", request: BIG })
+      .then(() => null)
+      .catch((e) => e)
+
+    expect(err).toBeInstanceOf(NotPublishedError)
+    expect(err).not.toBeInstanceOf(UnknownOutcomeError)
+    expect(publishMock).not.toHaveBeenCalled()
   })
 })

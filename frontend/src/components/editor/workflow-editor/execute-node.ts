@@ -90,6 +90,7 @@ import { dialogueFillerWordsFor, dialogueHoldsReplica, dialogueLineStyleFor, dia
 import { dialogueCloneRunProblem, ttsCloneRunProblem } from "@/lib/voice-clone";
 import { ttsOutputFormatOf } from "@/lib/speech-output-format";
 import { sunoSeparateRunOutputFields } from "@/lib/named-run-outputs";
+import { socialPostRunFields } from "@/lib/social-post-run";
 import {
   resolveEditPlanSources,
   describeAudioSyncOffsetIssue,
@@ -11134,8 +11135,8 @@ function executeNodeCore(
           updateNodeData(node.id, {
             executionStatus: "completed",
             currentJobId: result.jobId,
-            platformPostId: result.platformPostId,
-            platformPostUrl: result.platformPostUrl,
+            // The post's link ("View post") and id: the mapping every lane shares (lib/social-post-run.ts).
+            ...socialPostRunFields(node.type, result),
             generatedResults: [{
               jobId: result.jobId,
               url: result.platformPostUrl ?? "",

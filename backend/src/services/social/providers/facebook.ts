@@ -1,4 +1,5 @@
 import { facebookPublisher } from "../platforms/facebook.js"
+import { META_PHOTO_MAX_BYTES } from "../photo-limits.js"
 import { listFacebookChoices, finalizeFacebookAccount, NO_FB_PAGE_MSG } from "./meta-accounts.js"
 import type { SocialProvider } from "./types.js"
 
@@ -16,6 +17,8 @@ export const facebookProvider: SocialProvider = {
   },
   requiredEnv: ["META_APP_ID", "META_APP_SECRET"],
   maxConcurrentJob: 500,
+  // Facebook refuses a photo of 10 MB or more; a bigger one is re-encoded first.
+  photoMaxBytes: META_PHOTO_MAX_BYTES,
   setupHint: "oauth-flow#meta",
   oauth: {
     authUrl: "https://www.facebook.com/v25.0/dialog/oauth",
