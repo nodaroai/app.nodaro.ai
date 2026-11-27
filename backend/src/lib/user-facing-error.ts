@@ -1,4 +1,5 @@
 import { LlmAdvancedModeUnavailableError, LlmLaneError, LlmStreamResponseError } from "./llm-errors.js"
+import { BOX_SHORTAGE_MESSAGE, causedByResourceShortage } from "../providers/video/ffmpeg-shortage-retry.js"
 
 /**
  * The message a person sees for a failed job or request.
@@ -8,12 +9,17 @@ import { LlmAdvancedModeUnavailableError, LlmLaneError, LlmStreamResponseError }
  * vendor or internal model id — its `message` is the full diagnostic, which
  * logs and the private plugins' retry classifier still read, and which the
  * job keeps in `error_detail`. It is found anywhere on the `cause` chain, so a
- * caller that wraps it does not leak the diagnostic. Any other error's own
+ * caller that wraps it does not leak the diagnostic. A failure the server's
+ * own passing shortage caused (a program it could not start, a thread it could
+ * not create — marked by the runners, `ffmpeg-shortage-retry.ts`) reads as the
+ * server being busy, never as the program's words for it ("spawn ffmpeg
+ * EAGAIN", "Error while opening encoder — maybe incorrect parameters"), which
+ * send a person looking for a fault in their own file. Any other error's own
  * message stands: provider classes such as `KieError` are already sanitized
  * where they are thrown.
  */
 export function userFacingMessage(err: unknown, fallback: string): string {
-  return laneUserMessage(err) ?? (err instanceof Error ? err.message : fallback)
+  return laneUserMessage(err) ?? (causedByResourceShortage(err) ? BOX_SHORTAGE_MESSAGE : undefined) ?? (err instanceof Error ? err.message : fallback)
 }
 
 /**

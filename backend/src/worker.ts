@@ -10,6 +10,7 @@ import { useProviderSafetySettings } from "./lib/provider-safety.js"
 import { startLaneParking } from "./lib/concurrency-lanes/park.js"
 import { startServerOccupancyPublisher } from "./lib/concurrency-lanes/server-occupancy.js"
 import { logStorageDeletesAtBoot } from "./lib/storage-deletes-setting.js"
+import { startProcessShortageWatch } from "./lib/process-shortage.js"
 
 process.on("unhandledRejection", (err) => {
   console.error("Unhandled rejection:", err)
@@ -47,6 +48,10 @@ logStorageDeletesAtBoot("worker")
 // One line, on boot: which ffmpeg is this worker rendering with? Output is
 // version-dependent (see the Dockerfile FFMPEG_VERSION pin).
 logFfmpegVersion("worker")
+// The process limit this container really has, then one line whenever the
+// kernel refuses a process or thread, with who holds the threads
+// (lib/process-shortage.ts). Stopped on shutdown.
+const stopShortageWatch = startProcessShortageWatch("worker")
 
 // NOTE (incident 2026-07-15): this handler only runs if the signal actually
 // REACHES this process — start.sh must forward SIGTERM to its background
@@ -78,5 +83,5 @@ const shutdown = createWorkerShutdown({
   beginDrain: beginWorkerDrain,
   exit: (code) => process.exit(code),
 })
-process.on("SIGTERM", () => { stopLaneParking(); stopServerOccupancy(); void shutdown("SIGTERM") })
-process.on("SIGINT", () => { stopLaneParking(); stopServerOccupancy(); void shutdown("SIGINT") })
+process.on("SIGTERM", () => { stopLaneParking(); stopServerOccupancy(); stopShortageWatch(); void shutdown("SIGTERM") })
+process.on("SIGINT", () => { stopLaneParking(); stopServerOccupancy(); stopShortageWatch(); void shutdown("SIGINT") })

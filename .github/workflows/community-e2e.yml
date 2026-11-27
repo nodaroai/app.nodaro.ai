@@ -47,6 +47,7 @@ on:
       - "packages/**"
       - "supabase/migrations/**"
       - "tools/community-smoke.mjs"
+      - "tools/supervise-no-process-probe.sh"
       - ".github/workflows/community-e2e.yml"
   push:
     branches: [dev, main]
@@ -60,6 +61,7 @@ on:
       - "packages/**"
       - "supabase/migrations/**"
       - "tools/community-smoke.mjs"
+      - "tools/supervise-no-process-probe.sh"
       - ".github/workflows/community-e2e.yml"
   workflow_dispatch: {}
   # Nightly, against the PUBLISHED image (ghcr…:latest) — the artifact
@@ -200,6 +202,24 @@ jobs:
             exit 1
           fi
 
+      # start.sh keeps every program of the container running through its
+      # `supervise` function. On 2026-11-25 two renders at once used every
+      # thread the container may have: the proxy died of it, and for minutes
+      # nothing in the container could start a process. The image's shell ends
+      # at once when a start is refused, so a supervisor is gone at exactly
+      # that moment unless it is written for it. This has the kernel refuse
+      # the image's own `supervise` every start (a limit of one process on
+      # that shell alone: the same refusal, with no race for a freed process),
+      # ends its program, and requires the supervisor to still be there, to
+      # keep trying, and to start the program again once a start is allowed.
+      # Built image only: the published image predates it until a release.
+      - name: A program that dies with no process free is started again
+        if: github.event_name != 'schedule'
+        run: |
+          docker run --rm --entrypoint sh \
+            -v "$PWD/tools/supervise-no-process-probe.sh:/probe.sh:ro" \
+            nodaro-community:ci /probe.sh
+
       # The published compose file verbatim, so this tests the file users
       # actually run. --no-build pins it to the image built above; every other
       # value is the committed default, which is what a fresh install gets.
@@ -221,6 +241,39 @@ jobs:
 
       - name: Run the community contract probe
         run: node tools/community-smoke.mjs http://localhost:3000 --strict-keyless
+
+      # The proxy is one of the programs start.sh keeps running. On 2026-11-25
+      # it was the one program started bare: it died, nothing started it again,
+      # and every page answered 502 for 27 minutes while the container stayed
+      # green. End it the hard way inside the running container: the pages
+      # must answer again within seconds, in the SAME container (a restart of
+      # the whole container would cut every running job). Built image only:
+      # the published image predates the supervised proxy until a release.
+      - name: The proxy is started again when it dies
+        if: github.event_name != 'schedule'
+        run: |
+          set -u
+          dc() { docker compose -f docker-compose.community.yml "$@"; }
+          cid=$(dc ps -q nodaro)
+          started=$(docker inspect -f '{{.State.StartedAt}}' "$cid")
+          curl -sf --max-time 5 http://localhost:3000/health > /dev/null \
+            || { echo "::error::the stack does not answer before the proxy is ended"; exit 1; }
+          # The image has no ps: find the proxy by its name under /proc. The
+          # quoted script is the container's shell's to expand, not this one's.
+          # shellcheck disable=SC2016
+          dc exec -T nodaro sh -c 'found=""; for p in /proc/[0-9]*; do read -r n < "$p/comm" 2>/dev/null || continue; if [ "$n" = caddy ]; then kill -KILL "${p#/proc/}" && found=1; fi; done; [ -n "$found" ]' \
+            || { echo "::error::no proxy process was found in the container"; exit 1; }
+          back=""
+          for i in $(seq 1 30); do
+            if curl -sf --max-time 3 http://localhost:3000/health > /dev/null; then back=$i; break; fi
+            sleep 1
+          done
+          [ -n "$back" ] || { echo "::error::the pages did not answer within 30 s of the proxy dying"; exit 1; }
+          echo "the pages answered again after about ${back}s"
+          dc logs --no-color nodaro | grep -F "[supervise] caddy exited" \
+            || { echo "::error::the container log has no line of the proxy being started again"; exit 1; }
+          [ "$(docker inspect -f '{{.State.StartedAt}}' "$cid")" = "$started" ] \
+            || { echo "::error::the container was restarted instead of the proxy being started again in place"; exit 1; }
 
       # ── BYO-key success lane (#648) ──────────────────────────────────────
       # Gate first: internal pushes/dispatches only (never pull_request — PR

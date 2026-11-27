@@ -33,6 +33,7 @@ import {
 import { createOrchestratorWorker } from "./workers/orchestrator-worker.js"
 import { createVideoDirectorWorker } from "./workers/video-director-worker.js"
 import { logFfmpegVersion } from "./providers/video/ffmpeg-utils.js"
+import { startProcessShortageWatch } from "./lib/process-shortage.js"
 import { assertClientAddressConfig, describeClientAddressConfig } from "./lib/client-address.js"
 import { watchProviderCredentials } from "./providers/index.js"
 import { warmHeygenCatalog } from "./providers/heygen/catalog.js"
@@ -112,6 +113,10 @@ async function main() {
   // version-dependent (see the Dockerfile FFMPEG_VERSION pin), and "which
   // ffmpeg?" is the first question when production output changes.
   logFfmpegVersion("server")
+  // And the process limit this container really has, then one line whenever the kernel refuses it a
+  // process or a thread: this program starts others too (probes, downloads), and a launch that fails
+  // is judged by how recently one was refused (providers/video/box-shortage.ts). Stopped on shutdown.
+  const stopShortageWatch = startProcessShortageWatch("server")
   // And which client address — the line to compare across environments after
   // NETWORK_HASH_SECRET changes (staging and production share one database).
   console.info(describeClientAddressConfig())
@@ -354,6 +359,7 @@ async function main() {
     // First: no platform claim from a process on its way out (a beat already in flight may still land; that claim
     // then lapses within its TTL). The engine record is never the heartbeat's.
     stopPlatformClaimHeartbeat?.()
+    stopShortageWatch()
     const hardExit = setTimeout(() => {
       console.error("[server] Shutdown timed out, forcing exit")
       process.exit(1)

@@ -216,8 +216,9 @@ here for each one anyway.
 | `PLUGIN_DAEMONS_HOST` | `::` (in-container: `127.0.0.1`) | Bind address of that listener. As its own service, `::` accepts IPv4 and IPv6 (a private network may resolve over IPv6 only); inside the app container `start.sh` binds loopback, since the API reaches it on `127.0.0.1` |
 | `PLUGIN_DAEMONS_URL` | `http://127.0.0.1:9100` | Where the API reaches the plugin daemon host — a bare http(s) origin (no credentials, path or query; boot refuses anything else, since every request to it carries the internal secret). The default suits the in-container setup; when the host runs as its own service, point it at that service's private address (on Railway: `http://<service>.railway.internal:9100`) |
 | `ORCHESTRATOR_CONCURRENCY` | `20` | BullMQ concurrency of the orchestrator (I/O-bound) |
-| `RENDER_WORKER_CONCURRENCY` | `2` (max 10) | Remotion renders in parallel — each is a headless Chrome |
-| `REMOTION_CONCURRENCY` | `2` for 3D scenes; Remotion default (50 % of cores) for other compositions | Browser tabs per render. An explicit value overrides both paths. Keep this low when running multiple 3D jobs: each WebGL tab uses additional threads and counts toward the container process limit. |
+| `RENDER_WORKER_CONCURRENCY` | `2` (max 10) | Remotion renders in parallel — each is a headless Chrome. Every render's tabs and encoder count toward the container's process limit; see [The process limit](#the-process-limit) |
+| `RENDER_WORKER_IN_CONTAINER` | `true` | Read by `start.sh` only: which programs the container runs. `true` — everything, the render worker included. `false` — everything but the render worker, for an app whose renders run in a container of their own. `only` — the render worker and nothing else: that container. Any other value stops the container before it starts anything. See [The render worker as its own service](#the-render-worker-as-its-own-service) |
+| `REMOTION_CONCURRENCY` | `2` for 3D scenes; for other compositions half the CPUs, at most `4` | Browser tabs per render. An explicit value overrides both paths (the renderer refuses more tabs than CPUs). Each tab is a browser process with threads of its own, and all of them count toward the container's process limit; see [The process limit](#the-process-limit). |
 | `FFMPEG_CONCURRENCY` | `4` (max 32) | Concurrent ffmpeg processes across every ffmpeg node. Every ffmpeg the backend runs is given the container's CPU quota (cgroup `cpu.max`, rounded up) as its decoder, filter and encoder thread counts: left to itself, ffmpeg counts every core of the host, and under a quota that multiplies the video encoder's memory. With no quota below the host's core count, ffmpeg picks its own counts as before |
 | `FFMPEG_MEMORY_RESERVE_MIB` | `2048` | Memory kept back from ffmpeg for the backend's own processes and the rest of the container. Every ffmpeg reserves its predicted peak memory from a budget of (memory limit − this) × `FFMPEG_MEMORY_HEADROOM` before it starts, and gives it back when it ends; a launch that does not fit waits for one that does (it never fails), and one larger than the whole budget runs alone. The prediction follows the picture size, the segment count and the thread counts the ffmpeg runs with. The memory limit is the container's (cgroup `memory.max`). A container runs several backend processes (API, worker, render worker, orchestrator) under one limit, so they spend ONE budget between them — see `FFMPEG_MEMORY_LEDGER`. The default covers an idle container's measured memory use (1.66 to 1.9 GB, page cache included). On a 7,629 MiB container the defaults give 5,022 MiB, and on a 32,000,000,000-byte one 25,622 MiB — two dense 4K Apply EDL chunks on the small box then run one after the other instead of together. The slot count above still applies, per process |
 | `FFMPEG_MEMORY_HEADROOM` | `0.9` | Share, in (0, 1], of (memory limit − reserve) that running ffmpeg processes may reserve together |
@@ -620,6 +621,26 @@ failed reads in a row, 10 seconds apart, each given 5 seconds (failures in its
 first 60 seconds do not count). Docker does not restart a container for being
 unhealthy. Point any other health check or uptime monitor at this address too,
 with a time limit of its own.
+
+Caddy is kept running the same way as the API server: when it exits,
+`start.sh` starts it again two seconds later, in the same container, and
+nothing answers on port 3000 in between (the log line is `[supervise] caddy
+exited (code N) — restarting in 2s`). The API server and the queue workers are
+started again 10 seconds after they exit. This is what brings a program back:
+a platform's deploy health check typically runs only while a deployment
+starts (Railway's does), and Docker does not act on an unhealthy container.
+When the container has no process free at that moment, the program is started
+again as soon as one is (`could not be started: no process is free`; see
+[The process limit](#the-process-limit)). The proxy runs with `GOMAXPROCS=4`,
+or the CPU quota when that is smaller, so that it has its few threads soon
+after boot; set `GOMAXPROCS` on the container to choose another value.
+
+If the part of `start.sh` that keeps one of these programs running ends on its
+own, the script stops every program and exits with a failure status, so the
+container is replaced instead of running on without that program. Docker
+restarts it under the compose file's `restart: unless-stopped`. On a platform,
+set the service to restart on failure (Railway: restart policy `On Failure` or
+`Always`). Jobs that were running are cut, as on any restart.
 
 A platform's deploy health check must read port 3000, where Caddy listens. A
 platform that probes the port it hands the container in `PORT` (Railway does)
@@ -2525,6 +2546,10 @@ All containers share the same Redis + Supabase + R2. They don't talk
 to each other directly — Redis (BullMQ) is the only coordination
 point.
 
+One of these splits needs no start command of your own: the render worker
+in a container by itself, which the image's start script does when told to.
+See [The render worker as its own service](#the-render-worker-as-its-own-service).
+
 Give every container the same `NODARO_SURFACE_PROFILE` (and, with an
 external wallet, the same `DEPLOYMENT_WALLET_*` variables). The workers
 reserve each node's credits and write the failure a run is saved with, so the
@@ -2595,6 +2620,134 @@ It likewise deletes temporary provider uploads under `tmp/provider-input/`
 once they are older than 7 days. These are copies of a user's media made only
 so a provider can fetch them; a job deletes its own when it ends, and the
 sweep removes the ones a crashed attempt left behind.
+
+### The process limit
+
+A container has one limit on processes and threads together (cgroup
+`pids.max`), and every program in it shares it: the API server, the workers,
+each ffmpeg, the proxy, and every browser tab and encoder of a render. When it
+is reached the kernel refuses the next process or thread, and whatever asked
+fails in its own way: an encoder that cannot open, a job that cannot start
+ffmpeg (`spawn ffmpeg EAGAIN`), a render that waits for a frame that never
+comes, a proxy that exits.
+
+Two log lines tell you where a container stands. At boot, the API server,
+the video worker and the render worker each state the limits they find:
+
+```
+[render-worker] process limit: the container is limited to 1000 processes and threads together (pids.max): 143 now, 143 at most so far, 0 refused so far; per-user limit none; 64 CPUs visible, CPU quota 32
+```
+
+And whenever the kernel refuses one, at most once every 30 seconds per
+process, with the threads each program holds:
+
+```
+[render-worker] the container is at its process limit: 12 new processes or threads refused. the container is limited to 1000 … Threads by program: chrome-headless-shell (renderer) ×10: 310, ffmpeg ×3: 148, node render-worker.js: 24, … (998 threads in 41 processes)
+```
+
+Renders are the largest user, because a browser sizes its threads by the CPUs
+it can see. Each render therefore opens a bounded number of tabs
+(`REMOTION_CONCURRENCY`) and its encoder runs with at most 8 threads. After a
+refusal:
+
+- a render that makes no progress for 25 seconds is stopped and run again
+  1 to 5 minutes later, instead of holding its threads until a timeout;
+- for the next 10 minutes renders run one at a time;
+- a job whose runs are used up fails with "The render server is busy right
+  now and could not finish this video — try again in a few minutes." Its
+  credits are released as for any failed job.
+
+Every other job that starts a program is held to the same count:
+
+- an ffmpeg that ends on its own within 30 seconds of a refusal failed for
+  the shortage, whatever it printed (an encoder that cannot start its threads
+  says only "Error while opening encoder"). It is run again, with waits that
+  grow from 2 to 30 seconds, for up to 4 minutes after its first failure —
+  inside its own time limit, and only while at least half of that is left.
+  Without a refusal counted, a launch that names the shortage itself
+  ("Resource temporarily unavailable") gets three tries, as before;
+- a download whose yt-dlp the system would not start is started again the
+  same way. When the waiting gives up the download stops there: it is not
+  tried again through the next client or proxy, which would be refused too;
+- a job that still fails for the shortage says "The server is busy right now
+  and could not finish this — try again in a few minutes." instead of the
+  program's own words. Its credits are released as for any failed job.
+
+A probe (ffprobe) that could not be started is not waited for: it fails as
+it did before.
+
+If the second line appears, the container is too small for what runs in it.
+Lower `RENDER_WORKER_CONCURRENCY` to `1`, or `REMOTION_CONCURRENCY`, or give
+the render worker a container of its own (next section): it then has a limit
+of its own and cannot take the API or the proxy down with it. Whether the
+limit itself can be raised depends on the platform.
+
+### The render worker as its own service
+
+The video renders are the one program in the container that can use every
+thread it may have (above). They can run in a container of their own, started
+from the same image. One variable, read by the start script, says which
+programs a container runs:
+
+| Container | `RENDER_WORKER_IN_CONTAINER` | What it runs |
+|---|---|---|
+| The app, by itself (the default) | unset or `true` | everything, the render worker included |
+| The app, beside a render service | `false` | everything but the render worker |
+| The render service | `only` | the render worker and nothing else: no API, no proxy, no migrations |
+
+Any other value stops the container before it starts anything — a mistyped
+`only` would otherwise be a second whole app.
+
+The render service runs the image's own start script, not a bare `node`
+command. The render worker is started again in place when it dies, a shutdown
+is forwarded to it and its drain waited for, and the script stays the
+container's first process, which collects any process left without a parent
+(left uncollected, each one keeps counting toward the process limit).
+
+What the render service needs:
+
+- **The same build as the app** — the same commit and the same build
+  arguments — and **the same variables**, with
+  `RENDER_WORKER_IN_CONTAINER=only` added. A render reaches it through Redis,
+  reads its inputs from the database and from storage, and writes its result
+  there: nothing passes between the two containers directly.
+- **Every address it is given reachable from it**: the ones in those
+  variables, and the links a render is handed — its inputs are links to the
+  stored media (`R2_PUBLIC_URL`). The bundled Community stack on its default
+  addresses is not such an install: `SUPABASE_URL` and `R2_PUBLIC_URL` name
+  `localhost:3000`, the app container's own proxy, and in a second container
+  that name is the second container. Splitting the renders needs a database,
+  a storage and a media address that any container can reach (a managed
+  project and bucket, or the stack behind a real host name). A render-only
+  container given a `localhost` address says so in one line at boot.
+- **No port, no public address and no health-check path**: it serves nothing
+  over HTTP.
+- **Time to stop.** The same shutdown grace as the app (on Railway,
+  `RAILWAY_DEPLOYMENT_DRAINING_SECONDS`), so a render that is running when a
+  deploy replaces the container can end or hand itself back to the queue.
+- **Self-hosted with `RUN_MIGRATIONS_ON_BOOT=true`**: a render-only container
+  never applies the migrations and never generates the instance encryption
+  key. Give it the app's `NODARO_ENCRYPTION_KEY`, or mount the app's data
+  volume in it.
+
+The order matters:
+
+1. **Deploy a build that knows the variable, to the app, first.** An older
+   build ignores it, so a container started with `only` on an older build
+   runs the whole app a second time.
+2. **Start the render service.** For as long as both run, each render goes to
+   whichever of the two takes it from the queue.
+3. **Then set `RENDER_WORKER_IN_CONTAINER=false` on the app.** From here on a
+   render waits in the queue whenever the render service is down — the app
+   says so in one line at boot.
+
+To go back, remove the variable from the app (it renders again), then stop
+the render service.
+
+Each render container runs `RENDER_WORKER_CONCURRENCY` renders at once and has
+a process limit, CPU and memory of its own; more replicas of the render
+service add to that. Its boot line states the limit it found, as in
+[The process limit](#the-process-limit).
 
 ### Concurrency lanes
 
@@ -2867,6 +3020,16 @@ errors when it tries to insert.
 domain, also check the bucket's **public access** setting — Nodaro
 returns public R2 URLs to the browser, so reads must work without
 auth.
+
+**Every page answers 502 while the API still answers.** The proxy inside the
+container is down. It is started again by itself within seconds; the log has
+`[supervise] caddy exited (code N) — restarting in 2s`. If it keeps exiting,
+look for `the container is at its process limit` just before it and see
+[The process limit](#the-process-limit).
+
+**A render fails with "The render server is busy right now…".** The container
+refused a new process or thread while the render ran, on each of its runs.
+See [The process limit](#the-process-limit).
 
 **Workflows enqueue but never start running.** Check the worker logs
 (`docker compose logs nodaro` in the single-container layout). The

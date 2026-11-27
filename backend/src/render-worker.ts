@@ -8,8 +8,14 @@ import { beginWorkerDrain, SHUTDOWN_DRAIN_MS } from "./lib/worker-drain.js"
 import { startLaneParking } from "./lib/concurrency-lanes/park.js"
 import { startServerOccupancyPublisher } from "./lib/concurrency-lanes/server-occupancy.js"
 import { logStorageDeletesAtBoot } from "./lib/storage-deletes-setting.js"
+import { startProcessShortageWatch } from "./lib/process-shortage.js"
+import { isRendererEncoderDeath, renderWatch } from "./workers/render-shortage.js"
 
 process.on("unhandledRejection", (err) => {
+  // The renderer says that a render's encoder quit only this way: it rejects a
+  // promise nobody awaits and keeps drawing frames. The render that stops
+  // making progress after it is stopped by the watch (render-shortage.ts).
+  if (isRendererEncoderDeath(err)) renderWatch().noteEncoderDeath(err)
   console.error("Unhandled rejection:", err)
 })
 process.on("uncaughtException", (err) => {
@@ -38,12 +44,15 @@ const worker = createRenderWorker()
 const stopServerOccupancy = startServerOccupancyPublisher()
 
 console.log("Render worker started, waiting for jobs...")
+// The process limit this container really has, then one line whenever the kernel refuses a process or thread. Stopped on shutdown.
+const stopShortageWatch = startProcessShortageWatch("render-worker")
 // On a deployment that deletes nothing from storage (STORAGE_DELETES=skip), one line saying so, naming this process.
 logStorageDeletesAtBoot("render-worker")
 
 const shutdown = async () => {
   stopLaneParking()
   stopServerOccupancy()
+  stopShortageWatch()
   beginWorkerDrain()
   const timeout = setTimeout(() => {
     console.error("Render worker shutdown timed out, forcing exit")
