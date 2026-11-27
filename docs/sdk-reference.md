@@ -3250,7 +3250,8 @@ interface TrendDetail extends TrendCard {
   previewSec: 4 | null                   // 4 when a 4 s preview run is offered
   engine?: "nodaro-prism" | "nodaro-pulse" // TrendEngine: the engine every run uses (the trend's choice); absent = nodaro-prism
   engineName?: string                   // "Nodaro Prism" | "Nodaro Pulse"
-  resolutions: ("480p" | "720p" | "1080p")[] // default first: nodaro-prism ["480p", "720p", "1080p"] (480p plain; a draft only with draft: true), nodaro-pulse ["720p", "1080p"]
+  resolutions: ("480p" | "720p" | "1080p" | "4k")[] // default first; with deliveredResolution, the sizes a run is delivered at here (e.g. ["720p", "1080p", "4k"], as styleChoice() lists them for the trend's engine choice); without it nodaro-prism ["480p", "720p", "1080p"] (480p plain; a draft only with draft: true), nodaro-pulse ["720p", "1080p"]
+  deliveredResolution?: true             // resolutions are the sizes a run is delivered at, and a run's resolution names the size it comes back at; absent = read as listed, as before
   original?: TrendOriginal               // the clip every run starts from, to show; absent only on a version without a display copy; the first example on a trend that hides its original
   slots: TrendDetailSlot[]
   examples: Array<TrendVideo & { slots: Record<string, string[]> }> // may be []; an optional slot the example kept as in the original has no key in its slots; from the second example on a trend that hides its original
@@ -3276,8 +3277,8 @@ interface TrendRunRequest {
   example?: number      // 1-based, as TrendDetail.examples lists them; its pictures fill the optional slots you leave out (not in Full depth trends). Default 1; leave it out on a trend with no examples. On a trend that hides its original, leaving it out uses the example shown as the original
   details?: string      // ≤ 1,000 characters; mention a slot as {slot:<key>}
   preview?: boolean     // 4 s run, when previewSec is 4
-  resolution?: "480p" | "720p" | "1080p" // one of the trend's resolutions, default its first; else 400 resolution_unsupported
-  draft?: boolean       // default false (480p is plain); true = a 480p draft Full Quality can finish at 1080p, nodaro-prism only; nodaro-pulse: true = 400 draft_unsupported
+  resolution?: "480p" | "720p" | "1080p" | "4k" // one of the trend's resolutions, default its first; else 400 resolution_unsupported ("4k" without deliveredResolution: 400 validation_error)
+  draft?: boolean       // default false (480p is plain); true = a 480p draft Full Quality can finish at 1080p, nodaro-prism only, whatever resolutions lists (resolution left out or "480p"); nodaro-pulse or a Flash trend: true = 400 draft_unsupported
   sessionId?: string    // accepted (and checked), not yet applied: trend runs are not filed into sessions yet
   projectId?: string    // accepted, but not used by the run today
   previewJobId?: string // a full run: the jobId of your own completed preview of this trend (uuid; any other job is ignored)
@@ -3302,7 +3303,8 @@ interface TrendRun {
   example?: number                   // 1-based, as the page listed the examples for the run's version; 0 = the trend had no example (none was used); absent when it used the example shown as the original of a trend that hides it
   slots: Array<{ key: string; label: string; kind: TrendSlotKind; images: string[]; fromExample: boolean; fromDefault?: true } & TrendChips>
   details?: string
-  preview: boolean; resolution: string; draft: boolean
+  preview: boolean; draft: boolean
+  resolution: string                 // the size it asked for; once completed, the size its video was delivered at (a smaller one when the size asked for could not be finished)
   engine?: "nodaro-prism" | "nodaro-pulse" // the engine it was made on; absent = nodaro-prism
   engineName?: string                   // "Nodaro Prism" | "Nodaro Pulse"
   videoUrl: string | null; posterUrl: string | null  // once completed
@@ -3367,7 +3369,9 @@ to `"new"` for everyone, or keep every face), and `estimate()` and `run()`
 set at least one chip to `"new"`). Other refusals: `401`, `404 not_found`
 (the trend is not published; for `run()` also a `sessionId` you may not use),
 `409 trend_unavailable` (the trend's setup is out of date: it cannot run until
-it is updated), `502 engine_error`, `503 engine_unsupported` /
+it is updated), `409 resolution_unavailable` (a trend with
+`deliveredResolution`: the size is offered but cannot be made for this run right
+now; choose a smaller one, or try again later), `502 engine_error`, `503 engine_unsupported` /
 `trend_unavailable` / `not_available`. When the video engine refuses, `estimate()` / `run()` get the
 trend routes' OWN codes with fixed messages, never the engine's text or
 `issues`: `400 trend_run_rejected` (or `clip_out_of_range`,

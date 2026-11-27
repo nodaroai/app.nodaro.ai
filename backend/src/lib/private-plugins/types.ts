@@ -5805,6 +5805,17 @@ export interface PluginSupports {
      * lib/video-remake-delivered-resolution.ts): an unknown engine id, size or `from` is dropped, never thrown on.
      */
     readonly deliveredResolutions?: PluginCastSwapDeliveredResolutions
+    /**
+     * Trend runs read by the size delivered too (stage 4 of the delivered resolution): a trend run body
+     * whose `trendRun` carries `delivered: true` has its `resolution` read as the size DELIVERED, as a
+     * direct run's is (`deliveredResolution`, its refusals and its answers included); a trend body
+     * without the marker (a draft, or one composed by an older platform) is read as before. Declared
+     * only while the deployment has turned it on, and read by the platform only beside
+     * `deliveredResolution`: it adds the marker, and lists a trend's delivered sizes, only from an
+     * engine that declares both (lib/video-remake-delivered-resolution.ts
+     * `engineDeliversTrendResolution`). Absent: every trend run as before.
+     */
+    readonly trendDeliveredResolution?: boolean
   }
 }
 

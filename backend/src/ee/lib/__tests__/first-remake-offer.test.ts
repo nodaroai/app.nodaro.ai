@@ -52,6 +52,7 @@ import {
   isVideoRemakeRunRequest,
   pendingFirstRemakeCover,
   quoteCreditsOf,
+  readsDeliveredResolution,
   sweepFirstRemakeOffers,
 } from "../first-remake-offer.js"
 
@@ -145,6 +146,26 @@ describe("firstRemakeRunAllowed — a request read the new way (resolution = the
     expect(firstRemakeRunAllowed({ preview: true, resolution: "720p", draft: true })).toBe(false)
     expect(firstRemakeRunAllowed({ preview: true, resolution: "480p", draft: true })).toBe(true)
     expect(firstRemakeRunAllowed({ preview: true, resolution: "720p", trendRun: { slug: "x" } })).toBe(false)
+  })
+
+  it("a trend run that says it is read by the size delivered, on an engine that reads trend runs so: judged the delivered way", () => {
+    const marked = (over: Record<string, unknown>) => ({ preview: true, draft: false, trendRun: { display: {}, delivered: true }, ...over })
+    // The marker alone is not enough: the engine must read trend runs that way too (else, as before: the engine's size).
+    expect(firstRemakeRunAllowed(marked({ resolution: "720p" }))).toBe(false)
+    expect(firstRemakeRunAllowed(marked({ resolution: "480p" }))).toBe(true)
+    setPluginSupports({ castSwap: { ...DELIVERS, trendDeliveredResolution: true } } as never)
+    expect(firstRemakeRunAllowed(marked({ resolution: "720p" }))).toBe(true)
+    expect(firstRemakeRunAllowed(marked({ resolution: "480p" }))).toBe(true)
+    expect(firstRemakeRunAllowed(marked({ resolution: "1080p" }))).toBe(false)
+    expect(firstRemakeRunAllowed(marked({ resolution: "4k" }))).toBe(false)
+    expect(firstRemakeRunAllowed(marked({ engine: "nodaro-pulse", resolution: "720p" }))).toBe(true)
+    expect(firstRemakeRunAllowed(marked({ engine: "nodaro-pulse", resolution: "1080p" }))).toBe(false)
+    expect(firstRemakeRunAllowed(marked({ preview: false, resolution: "720p" }))).toBe(false)
+    // A trend run without the marker (a draft, or one composed the old way): the engine's size, as before.
+    expect(firstRemakeRunAllowed({ preview: true, resolution: "720p", draft: false, trendRun: { display: {} } })).toBe(false)
+    expect(firstRemakeRunAllowed({ preview: true, resolution: "480p", draft: true, trendRun: { display: {} } })).toBe(true)
+    expect(readsDeliveredResolution(marked({ resolution: "720p" }))).toBe(true)
+    expect(readsDeliveredResolution({ preview: true, resolution: "720p", trendRun: { display: {} } })).toBe(false)
   })
 
   it("an engine without delivered sizes reads every body as before", () => {
@@ -362,6 +383,26 @@ describe("registerFirstRemakeEstimateHook", () => {
       expect(res.json()).toEqual({ totalCredits: 400, privacyCredits: 120, settlesLower: true, firstRemakeOffer: { allowed: true, coverCredits: 220 } })
     }
     await a.close()
+  })
+
+  it("judges a trend run's injected body as the engine reads it: marked, by the size delivered", async () => {
+    setPluginSupports({ castSwap: { roleKinds: [], fixedReferences: true, fullQuality: true, resolutions: ["720p"], trendRun: true, upscaleChoice: true, deliveredResolution: true, trendDeliveredResolution: true } } as never)
+    status("available", 300)
+    const a = await app()
+    const trendBody = (resolution: string, delivered: boolean) => ({
+      preview: true,
+      resolution,
+      draft: false,
+      trendRun: { display: { trend: { id: "t", slug: "s", version: 1, name: "N" }, example: 1, slots: [] }, ...(delivered ? { delivered: true } : {}) },
+    })
+    const offer = async (payload: object) => (await a.inject({ method: "POST", url: "/v1/cast-swap/estimate", payload })).json().firstRemakeOffer
+    expect(await offer(trendBody("720p", true))).toEqual({ allowed: true, coverCredits: 220 })
+    expect(await offer(trendBody("1080p", true))).toEqual({ allowed: false, coverCredits: 0 })
+    // Without the marker: the engine's size, as before (Prism's covered run is its 480p).
+    expect(await offer(trendBody("720p", false))).toEqual({ allowed: false, coverCredits: 0 })
+    expect(await offer(trendBody("480p", false))).toEqual({ allowed: true, coverCredits: 220 })
+    await a.close()
+    _resetPluginSupportsForTests()
   })
 
   it("leaves every other answer as it was", async () => {

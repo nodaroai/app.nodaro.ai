@@ -553,6 +553,7 @@ export default function AdminTrendEditorPage() {
               onPulseReferenceAudioChange={(pulseReferenceAudio) => set({ pulseReferenceAudio })}
               envs={envs.data}
               envsUnreadable={envsUnreadable}
+              deliveredSizes={server.runSizes?.delivered === true}
             />
           </Section>
           <Section title="6. Face masking" description="Covers the faces in the source clip before the video model sees it. Hidden from users.">
@@ -721,6 +722,8 @@ export default function AdminTrendEditorPage() {
               hasPreview={server.draft.previewStart !== null}
               previewInput={previewClipStatus(server.draft)}
               engine={server.draft.engine ?? "seedance-2-5"}
+              flash={server.draft.flash === true}
+              {...(server.runSizes ? { runSizes: server.runSizes } : {})}
               dirty={dirty}
               promotingId={promote.isPending ? (promote.variables ?? null) : null}
               onPromote={onPromote}

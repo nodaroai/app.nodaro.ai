@@ -12,6 +12,10 @@
  * choice (`castSwap.deliveredResolutions`), less the steps this deployment's admin switched off.
  *
  * A request that still carries `upscale` is read by the engine as before (lib/video-remake-upscale-choice.ts).
+ *
+ * A trend run is read that way only by an engine that also declares `castSwap.trendDeliveredResolution`, and only
+ * when its body says so (`trendRun.delivered: true`, which the platform adds for such an engine alone:
+ * ee/lib/trends/sizes.ts); every other trend run is read as before.
  */
 import {
   CAST_SWAP_ENGINE_OF_NODARO_MOTION,
@@ -66,6 +70,21 @@ export function engineDeliversResolution(cs: PluginSupports["castSwap"] | undefi
 /** Whether this process's Cast Swap engine reads `resolution` as the size delivered. */
 export function loadedEngineDeliversResolution(): boolean {
   return engineDeliversResolution(getPluginSupports().castSwap)
+}
+
+/**
+ * Whether an engine's supports read a TREND run's `resolution` as the size delivered too: both
+ * `castSwap.deliveredResolution` and `castSwap.trendDeliveredResolution`. Only then does a trend page list
+ * the sizes delivered and a trend run body carry `trendRun.delivered: true` (ee/lib/trends/sizes.ts); an
+ * engine with either alone reads every trend run as before.
+ */
+export function engineDeliversTrendResolution(cs: PluginSupports["castSwap"] | undefined): boolean {
+  return engineDeliversResolution(cs) && cs?.trendDeliveredResolution === true
+}
+
+/** Whether this process's Cast Swap engine reads a trend run's `resolution` as the size delivered. */
+export function loadedEngineDeliversTrendResolution(): boolean {
+  return engineDeliversTrendResolution(getPluginSupports().castSwap)
 }
 
 /**

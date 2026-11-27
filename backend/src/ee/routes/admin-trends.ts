@@ -9,7 +9,9 @@
  *   GET    /v1/admin/trends/tags                     every tag in use or labelled, with its labels
  *   PUT    /v1/admin/trends/tags                     save one tag's labels ({ tag, labels }; none = clear)
  *   GET    /v1/admin/trends/test-runs/:jobId/prompt  the engine prompt a run used, and the trend's prompt parts (admin-trends-prompt.ts; ?mode=full|preview)
- *   GET    /v1/admin/trends/:id                      the trend, its draft and published data
+ *   GET    /v1/admin/trends/:id                      the trend, its draft and published data (and `runSizes`, the sizes a test run of
+ *                                                    the saved draft may ask for, where this environment's engine reads trend runs by
+ *                                                    the size delivered: lib/trends/sizes.ts)
  *   PATCH  /v1/admin/trends/:id                      slug, tags, badges, sort order
  *   PUT    /v1/admin/trends/:id/draft                save the draft (examples kept)
  *   POST   /v1/admin/trends/:id/media                copy a clip (+ its display copy) / picture into trend storage
@@ -142,7 +144,8 @@ import {
   unpublish,
   updateTrendMeta,
 } from "../lib/trends/store.js"
-import { engineOf, trendRunRequestSchema, trendVersionDataSchema, withPulseReferenceAudioKept, withSavedSteps } from "../lib/trends/schemas.js"
+import { engineOf, trendRunRequestSchemaFor, trendVersionDataSchema, withPulseReferenceAudioKept, withSavedSteps } from "../lib/trends/schemas.js"
+import { readTrendSizesHere, trendRunSizes } from "../lib/trends/sizes.js"
 import type { CastSwapStepsProblem } from "../../lib/cast-swap-steps.js"
 import { pickText } from "../lib/trends/localize.js"
 import { TrendRunError, composeTrendRun, type ComposedTrendRun } from "../lib/trends/compose.js"
@@ -635,11 +638,16 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
           : trend.publishedVersion === trend.draftVersion
             ? draft
             : await getVersion(trend.id, trend.publishedVersion)
+      // The sizes a test run of the saved draft may ask for, only where this environment's engine reads trend runs by
+      // the size delivered (sizes.ts); absent, the page offers the sizes the draft's engine choice makes, as before.
+      const here = await readTrendSizesHere()
+      const runSizes = here.delivered ? trendRunSizes(draft, here) : undefined
       return {
         data: { trend, draft, published, revision, faceMaskState: await draftFaceMaskState(req, draft), faceMaskJob: pendingFaceMaskJob(draft),
           upscaleJobs: pendingUpscaleJobs(draft), sourceCrop: pendingSourceCrop(draft),
           // Whether a face mask with marks can be made here (the marks editor is offered only then).
-          faceMaskMarksSupported: loadedEngineMakesMarks() },
+          faceMaskMarksSupported: loadedEngineMakesMarks(),
+          ...(runSizes ? { runSizes: { resolutions: [...runSizes.sizes], delivered: true as const } } : {}) },
       }
     } catch (e) {
       return unavailableOrInternal(reply, req, e, "Failed to read the trend")
@@ -791,7 +799,9 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
   })
 
   app.post("/v1/admin/trends/:id/test-runs", { preHandler: requireAdmin }, async (req, reply) => {
-    const parsed = trendRunRequestSchema.safeParse(req.body)
+    // How this environment's engine reads a trend run's size (sizes.ts): the schema, the draft's sizes and the body follow it.
+    const here = await readTrendSizesHere()
+    const parsed = trendRunRequestSchemaFor(here).safeParse(req.body)
     if (!parsed.success) return badRequest(reply, parsed.error)
     try {
       const loaded = await loadDraft(req, reply)
@@ -806,7 +816,7 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
         composed = composeTrendRun(
           { id: trend.id, slug: trend.slug, version: trend.draftVersion, data: draft },
           parsed.data,
-          { allowHiddenChips: true },
+          { allowHiddenChips: true, ...(here.delivered ? { sizes: trendRunSizes(draft, here) } : {}) },
         )
       } catch (e) {
         if (e instanceof TrendRunError) return trendRunError(reply, e)

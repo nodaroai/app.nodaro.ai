@@ -2043,6 +2043,14 @@ const MAGI_2_BYTES = 95
 const REMAKE_LONG_CLIPS_PER_TOOL_BYTES = 162
 const REMAKE_LONG_CLIPS_BYTES = 162
 
+// RAISED by trend runs read by the size delivered (decided 2026-11-27): `estimate_trend`'s and `run_trend`'s
+// `resolution` takes "4k" and says it is the size delivered where get_trend says `deliveredResolution`, their `draft`
+// says a draft is the 480p take whatever the resolutions list, and `get_trend`'s description names the field. No tool
+// was added, so the membership fixtures do NOT move. Measured by this suite on the same tree before and after: the
+// list 572_002 B, then 572_235 B, 233 B more (`estimate_trend` and `run_trend` 93 B each, `get_trend` 47 B), with no
+// headroom before it. No tool reaches the per-tool budget.
+const TREND_DELIVERED_SIZES_BYTES = 233
+
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES + GPT_IMAGE_2_6_PER_TOOL_BYTES + GPT_IMAGE_2_6_FORMAT_PER_TOOL_BYTES + MINIMAX_H3_IMAGE_PER_TOOL_BYTES + SEEDREAM_5_5_PER_TOOL_BYTES + FLUX_3_KLEIN_PER_TOOL_BYTES + SEEDANCE_2_5_FLASH_PER_TOOL_BYTES + SEEDANCE_2_5_FLASH_REFERENCE_LIMIT_PER_TOOL_BYTES + OMNI_FLASH_1_2_CHARACTERS_BYTES + VIDEO_REMAKE_PREVIZ_PER_TOOL_BYTES + ROLE_FACE_PER_TOOL_BYTES + FLASH_CHOICES_PER_TOOL_BYTES + REMAKE_INTENT_CHECK_PER_TOOL_BYTES + REMAKE_UPSCALE_CHOICE_PER_TOOL_BYTES + REMAKE_UPSCALE_4K_PER_TOOL_BYTES + REMAKE_PORTION_PER_TOOL_BYTES + REMAKE_SIZES_HERE_PER_TOOL_BYTES + REMAKE_LONG_CLIPS_PER_TOOL_BYTES,
   totalBytes:
@@ -2300,7 +2308,8 @@ export const TOOL_WIRE_BUDGET = {
     REMAKE_PORTION_BYTES +
     REMAKE_SIZES_HERE_BYTES +
     MAGI_2_BYTES +
-    REMAKE_LONG_CLIPS_BYTES,
+    REMAKE_LONG_CLIPS_BYTES +
+    TREND_DELIVERED_SIZES_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

@@ -148,6 +148,17 @@
  * or `{}`, sends no key at all. Dropped for an engine that does not declare
  * `castSwap.steps` (`withoutUnsupportedSteps`, run-helpers.ts): its body
  * schema would strip the key silently.
+ *
+ * The run's size follows the trend's sizes (`options.sizes`, sizes.ts; left
+ * out: the sizes its engine choice makes, as before). Sizes its engine MAKES
+ * (every engine before stage 4): exactly as before. Sizes DELIVERED (an engine
+ * that reads trend runs that way): `resolution` is the size delivered (left
+ * out = the first listed; one not listed is `resolution_unsupported`, naming
+ * the sizes listed), `draft: false`, and `trendRun.delivered: true`, which
+ * tells the engine to read it so; the engine maps it onto the size it makes.
+ * A draft (`draft: true`, Nodaro Prism only) is the engine's own 480p take
+ * whatever the list says (`resolution` left out or "480p", else
+ * `validation_error`), sent as before: 480p, `draft: true`, no marker.
  */
 import {
   CAST_SWAP_ENGINE_WHEN_OMITTED,
@@ -197,14 +208,15 @@ import {
   type CastSwapPulseReferenceAudio,
 } from "../../../lib/cast-swap-pulse-reference-audio.js"
 import { originalCdnImageUrls } from "../../../lib/cdn-original-url.js"
+import { trendSizeLabel, type TrendRunSizes } from "./sizes.js"
 import type {
   CastSwapEngine,
   CastSwapKlingLength,
   Choice,
   TrendPreviewClip,
   TrendReference,
-  TrendResolution,
   TrendRunRequest,
+  TrendRunSize,
   TrendRunSlot,
   TrendSlot,
   TrendSlotKind,
@@ -387,7 +399,11 @@ export interface TrendRunBody {
   steps?: CastSwapSteps
   preview: boolean
   previewStart: number
-  resolution: TrendResolution
+  /**
+   * The size the engine MAKES, as before; with `trendRun.delivered`, the size
+   * DELIVERED ("4k" among them), which the engine maps onto the size it makes.
+   */
+  resolution: TrendRunSize
   draft: boolean
   /**
    * `videoUrl` IS the preview's prepared input clip (the 4 s window, cut
@@ -406,7 +422,12 @@ export interface TrendRunBody {
    * exactly the body it got before.
    */
   sourceAsset?: TrendRunSourceAsset
-  trendRun: { display: TrendRunDisplay }
+  /**
+   * The run's public record, and `delivered: true` when `resolution` is the
+   * size delivered: only from a trend whose sizes are sizes delivered
+   * (sizes.ts), and never on a draft. Absent: the size the engine makes.
+   */
+  trendRun: { display: TrendRunDisplay; delivered?: true }
 }
 
 /** A run's `sourceAsset`: which input it edits (provenance only, visible on the job). */
@@ -525,6 +546,12 @@ export interface ComposeOptions {
    * slot hides is refused (`chip_not_offered`).
    */
   allowHiddenChips?: boolean
+  /**
+   * The trend's sizes on this deployment (sizes.ts `trendRunSizes`, read once
+   * per request). Left out: the sizes its engine choice makes (`trendResolutions`),
+   * read by the size the engine makes, exactly as before.
+   */
+  sizes?: TrendRunSizes
 }
 
 export function composeTrendRun(
@@ -716,15 +743,26 @@ export function composeTrendRun(
   const engine = engineOf(data)
   // A Flash trend (decided 2026-11-22): its engine's run on the Flash model, with the Flash choice's resolutions and no draft.
   const flash = trendIsFlash(data)
-  const offered: readonly TrendResolution[] = trendResolutions(data)
+  // Sizes delivered (sizes.ts) only when the caller read them so; else the sizes the engine makes, as before.
+  const delivered = options.sizes?.delivered === true
+  const offered: readonly TrendRunSize[] = delivered ? options.sizes!.sizes : trendResolutions(data)
   if (req.draft === true && (flash || !castSwapEngineHasDraft(engine))) {
     throw new TrendRunError("draft_unsupported", "This trend has no draft: run it at 720p or 1080p.")
   }
   if (req.draft === true && req.resolution !== undefined && req.resolution !== "480p") {
     throw new TrendRunError("validation_error", "Draft is only available at 480p.")
   }
-  if (req.resolution !== undefined && !offered.includes(req.resolution)) {
+  // Read the delivered way, a draft (a Prism trend's, at 480p: the checks above) is the engine's own 480p take
+  // whatever the list says, so it is never held to the list; it is sent as before, without the marker.
+  const draftTake = delivered && req.draft === true
+  if (!delivered && req.resolution !== undefined && !offered.includes(req.resolution)) {
     throw new TrendRunError("resolution_unsupported", `This trend runs at ${offered.join(" or ")}, not ${req.resolution}.`)
+  }
+  if (delivered && !draftTake && req.resolution !== undefined && !offered.includes(req.resolution)) {
+    throw new TrendRunError(
+      "resolution_unsupported",
+      `This trend runs at ${offered.map(trendSizeLabel).join(" or ")}, not ${trendSizeLabel(req.resolution)}.`,
+    )
   }
   if (engine === "kling-4") {
     // What the run sends, as the route counts it: a trend run prepares its references (the
@@ -741,10 +779,13 @@ export function composeTrendRun(
       )
     }
   }
-  // The engine's default resolution comes first: Seedance's 480p, Kling's 720p.
-  const resolution: TrendResolution = req.resolution ?? offered[0]!
+  // The engine's default resolution comes first: Seedance's 480p, Kling's 720p (read the delivered way: the trend's
+  // first size delivered; a draft's 480p take).
+  const resolution: TrendRunSize = draftTake ? "480p" : (req.resolution ?? offered[0]!)
   // Plain unless the run asks for a draft (`draft: true`, Seedance 480p only); always sent, so the engine never applies a default of its own.
-  const draft = castSwapEngineHasDraft(engine) && resolution === "480p" && req.draft === true
+  const draft = draftTake || (!delivered && castSwapEngineHasDraft(engine) && resolution === "480p" && req.draft === true)
+  // The engine reads `resolution` as the size delivered only with the marker: every other body as before.
+  const sendsDelivered = delivered && !draftTake
 
   const parts = promptPartTexts(data.promptParts)
   const wording = trendPromptWordingSent(data)
@@ -807,7 +848,7 @@ export function composeTrendRun(
       ...(data.source.sha256 ? { sha256: data.source.sha256 } : {}),
       durationSec: data.source.durationSec,
     },
-    trendRun: { display },
+    trendRun: { display, ...(sendsDelivered ? { delivered: true as const } : {}) },
   }
 
   return {

@@ -11986,6 +11986,9 @@ export type TrendChoice = "new" | "original"
 export type TrendChipKey = "body" | "outfit" | "hair" | "face" | "coat" | "shape" | "finish"
 export type TrendResolution = "480p" | "720p" | "1080p"
 
+/** A size a trend's test run may ask for: an engine size, and "4k" where this environment's engine delivers trend sizes. */
+export type TrendRunSize = TrendResolution | "4k"
+
 export interface AdminTrendSlot {
   /** `^[a-z0-9_]{1,32}$`, unique, stable across versions. */
   key: string
@@ -12609,6 +12612,11 @@ export interface AdminTrendDetail {
   faceMaskMarksSupported?: boolean
   /** The source crop in the making or failed, or null (absent from an older server). */
   sourceCrop?: AdminTrendPendingSourceCrop | null
+  /**
+   * The sizes a test run of the SAVED draft may ask for, its default first, where this environment's engine reads
+   * trend runs by the size delivered (e.g. `["720p", "1080p", "4k"]`). Absent: the sizes the draft's engine makes.
+   */
+  runSizes?: { resolutions: TrendRunSize[]; delivered: true }
 }
 
 /** The shapes a trend's source clip can be cropped to. */
@@ -12730,7 +12738,7 @@ export interface TrendTestRunRequest {
   example?: number
   details?: string
   preview?: boolean
-  resolution?: TrendResolution
+  resolution?: TrendRunSize
   draft?: boolean
 }
 

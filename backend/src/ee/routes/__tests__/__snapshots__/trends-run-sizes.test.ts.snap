@@ -1,0 +1,3582 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`trend sizes without an engine that reads trend runs by the size delivered > answers and sends exactly what it did before (recorded) 1`] = `
+{
+  "prism": {
+    "detail": {
+      "guest": {
+        "data": {
+          "badges": [],
+          "cover": {
+            "height": 1280,
+            "videoUrl": "https://cdn.example/ex1.mp4",
+            "width": 720,
+          },
+          "durationSec": 12,
+          "engine": "nodaro-prism",
+          "engineName": "Nodaro Prism",
+          "examples": [
+            {
+              "height": 1280,
+              "slots": {
+                "lead": [
+                  "https://cdn.example/ex1-lead.png",
+                ],
+              },
+              "videoUrl": "https://cdn.example/ex1.mp4",
+              "width": 720,
+            },
+          ],
+          "id": "00000000-0000-4000-8000-0000000000a1",
+          "isFavorite": false,
+          "name": "Neon Dance",
+          "needs": {
+            "location": 0,
+            "person": 1,
+            "pet": 0,
+            "product": 0,
+          },
+          "original": {
+            "durationSec": 12,
+            "height": 1280,
+            "posterUrl": "https://cdn.example/trends/display-poster.png",
+            "previewStartSec": 2,
+            "videoUrl": "https://cdn.example/trends/display-copy.mp4",
+            "width": 720,
+          },
+          "previewSec": 4,
+          "resolutions": [
+            "480p",
+            "720p",
+            "1080p",
+          ],
+          "slots": [
+            {
+              "chips": [
+                "body",
+                "outfit",
+                "hair",
+              ],
+              "key": "lead",
+              "kind": "person",
+              "label": "Lead dancer",
+              "required": true,
+            },
+          ],
+          "slug": "prism",
+          "tags": [],
+          "version": 1,
+        },
+      },
+      "keys": [
+        "badges",
+        "cover",
+        "durationSec",
+        "engine",
+        "engineName",
+        "examples",
+        "id",
+        "isFavorite",
+        "name",
+        "needs",
+        "original",
+        "previewSec",
+        "resolutions",
+        "slots",
+        "slug",
+        "tags",
+        "version",
+      ],
+      "resolutions": [
+        "480p",
+        "720p",
+        "1080p",
+      ],
+      "status": 200,
+    },
+    "runs": {
+      "1080p": {
+        "estimate": {
+          "body": {
+            "data": {
+              "breakdown": {
+                "base": 40,
+                "motion": 80,
+              },
+              "engine": "nodaro-prism",
+              "engineName": "Nodaro Prism",
+              "expectedCredits": 120,
+              "holdCredits": 120,
+            },
+          },
+          "status": 200,
+        },
+        "run": {
+          "body": {
+            "data": {
+              "jobId": "00000000-0000-4000-8000-0000000000j1",
+            },
+          },
+          "status": 202,
+        },
+        "sent": [
+          {
+            "body": {
+              "draft": false,
+              "postPrompt": "dance under the neon",
+              "preview": false,
+              "previewStart": 2,
+              "references": [],
+              "resolution": "1080p",
+              "roles": [
+                {
+                  "body": "new",
+                  "hair": "new",
+                  "images": [
+                    "https://u.example/me.png",
+                  ],
+                  "kind": "person",
+                  "name": "the woman",
+                  "outfit": "new",
+                },
+              ],
+              "trendRun": {
+                "display": {
+                  "example": 1,
+                  "slots": [
+                    {
+                      "body": "new",
+                      "fromExample": false,
+                      "hair": "new",
+                      "images": [
+                        "https://u.example/me.png",
+                      ],
+                      "key": "lead",
+                      "kind": "person",
+                      "label": "Lead dancer",
+                      "outfit": "new",
+                    },
+                  ],
+                  "trend": {
+                    "id": "00000000-0000-4000-8000-0000000000a1",
+                    "name": "Neon Dance",
+                    "slug": "prism",
+                    "version": 1,
+                  },
+                },
+              },
+              "videoUrl": "https://cdn.example/trends/src.mp4",
+            },
+            "url": "/v1/cast-swap/estimate",
+          },
+          {
+            "body": {
+              "draft": false,
+              "postPrompt": "dance under the neon",
+              "preview": false,
+              "previewStart": 2,
+              "references": [],
+              "resolution": "1080p",
+              "roles": [
+                {
+                  "body": "new",
+                  "hair": "new",
+                  "images": [
+                    "https://u.example/me.png",
+                  ],
+                  "kind": "person",
+                  "name": "the woman",
+                  "outfit": "new",
+                },
+              ],
+              "trendRun": {
+                "display": {
+                  "example": 1,
+                  "slots": [
+                    {
+                      "body": "new",
+                      "fromExample": false,
+                      "hair": "new",
+                      "images": [
+                        "https://u.example/me.png",
+                      ],
+                      "key": "lead",
+                      "kind": "person",
+                      "label": "Lead dancer",
+                      "outfit": "new",
+                    },
+                  ],
+                  "trend": {
+                    "id": "00000000-0000-4000-8000-0000000000a1",
+                    "name": "Neon Dance",
+                    "slug": "prism",
+                    "version": 1,
+                  },
+                },
+              },
+              "videoUrl": "https://cdn.example/trends/src.mp4",
+            },
+            "url": "/v1/cast-swap",
+          },
+        ],
+      },
+      "480p": {
+        "estimate": {
+          "body": {
+            "data": {
+              "breakdown": {
+                "base": 40,
+                "motion": 80,
+              },
+              "engine": "nodaro-prism",
+              "engineName": "Nodaro Prism",
+              "expectedCredits": 120,
+              "holdCredits": 120,
+            },
+          },
+          "status": 200,
+        },
+        "run": {
+          "body": {
+            "data": {
+              "jobId": "00000000-0000-4000-8000-0000000000j1",
+            },
+          },
+          "status": 202,
+        },
+        "sent": [
+          {
+            "body": {
+              "draft": false,
+              "postPrompt": "dance under the neon",
+              "preview": false,
+              "previewStart": 2,
+              "references": [],
+              "resolution": "480p",
+              "roles": [
+                {
+                  "body": "new",
+                  "hair": "new",
+                  "images": [
+                    "https://u.example/me.png",
+                  ],
+                  "kind": "person",
+                  "name": "the woman",
+                  "outfit": "new",
+                },
+              ],
+              "trendRun": {
+                "display": {
+                  "example": 1,
+                  "slots": [
+                    {
+                      "body": "new",
+                      "fromExample": false,
+                      "hair": "new",
+                      "images": [
+                        "https://u.example/me.png",
+                      ],
+                      "key": "lead",
+                      "kind": "person",
+                      "label": "Lead dancer",
+                      "outfit": "new",
+                    },
+                  ],
+                  "trend": {
+                    "id": "00000000-0000-4000-8000-0000000000a1",
+                    "name": "Neon Dance",
+                    "slug": "prism",
+                    "version": 1,
+                  },
+                },
+              },
+              "videoUrl": "https://cdn.example/trends/src.mp4",
+            },
+            "url": "/v1/cast-swap/estimate",
+          },
+          {
+            "body": {
+              "draft": false,
+              "postPrompt": "dance under the neon",
+              "preview": false,
+              "previewStart": 2,
+              "references": [],
+              "resolution": "480p",
+              "roles": [
+                {
+                  "body": "new",
+                  "hair": "new",
+                  "images": [
+                    "https://u.example/me.png",
+                  ],
+                  "kind": "person",
+                  "name": "the woman",
+                  "outfit": "new",
+                },
+              ],
+              "trendRun": {
+                "display": {
+                  "example": 1,
+                  "slots": [
+                    {
+                      "body": "new",
+                      "fromExample": false,
+                      "hair": "new",
+                      "images": [
+                        "https://u.example/me.png",
+                      ],
+                      "key": "lead",
+                      "kind": "person",
+                      "label": "Lead dancer",
+                      "outfit": "new",
+                    },
+                  ],
+                  "trend": {
+                    "id": "00000000-0000-4000-8000-0000000000a1",
+                    "name": "Neon Dance",
+                    "slug": "prism",
+                    "version": 1,
+                  },
+                },
+              },
+              "videoUrl": "https://cdn.example/trends/src.mp4",
+            },
+            "url": "/v1/cast-swap",
+          },
+        ],
+      },
+      "4k": {
+        "estimate": {
+          "body": {
+            "error": {
+              "code": "validation_error",
+              "issues": [
+                {
+                  "message": "Invalid option: expected one of "480p"|"720p"|"1080p"",
+                  "path": "resolution",
+                },
+              ],
+              "message": "resolution: Invalid option: expected one of "480p"|"720p"|"1080p"",
+            },
+          },
+          "status": 400,
+        },
+        "run": {
+          "body": {
+            "error": {
+              "code": "validation_error",
+              "issues": [
+                {
+                  "message": "Invalid option: expected one of "480p"|"720p"|"1080p"",
+                  "path": "resolution",
+                },
+              ],
+              "message": "resolution: Invalid option: expected one of "480p"|"720p"|"1080p"",
+            },
+          },
+          "status": 400,
+        },
+        "sent": [],
+      },
+      "720p": {
+        "estimate": {
+          "body": {
+            "data": {
+              "breakdown": {
+                "base": 40,
+                "motion": 80,
+              },
+              "engine": "nodaro-prism",
+              "engineName": "Nodaro Prism",
+              "expectedCredits": 120,
+              "holdCredits": 120,
+            },
+          },
+          "status": 200,
+        },
+        "run": {
+          "body": {
+            "data": {
+              "jobId": "00000000-0000-4000-8000-0000000000j1",
+            },
+          },
+          "status": 202,
+        },
+        "sent": [
+          {
+            "body": {
+              "draft": false,
+              "postPrompt": "dance under the neon",
+              "preview": false,
+              "previewStart": 2,
+              "references": [],
+              "resolution": "720p",
+              "roles": [
+                {
+                  "body": "new",
+                  "hair": "new",
+                  "images": [
+                    "https://u.example/me.png",
+                  ],
+                  "kind": "person",
+                  "name": "the woman",
+                  "outfit": "new",
+                },
+              ],
+              "trendRun": {
+                "display": {
+                  "example": 1,
+                  "slots": [
+                    {
+                      "body": "new",
+                      "fromExample": false,
+                      "hair": "new",
+                      "images": [
+                        "https://u.example/me.png",
+                      ],
+                      "key": "lead",
+                      "kind": "person",
+                      "label": "Lead dancer",
+                      "outfit": "new",
+                    },
+                  ],
+                  "trend": {
+                    "id": "00000000-0000-4000-8000-0000000000a1",
+                    "name": "Neon Dance",
+                    "slug": "prism",
+                    "version": 1,
+                  },
+                },
+              },
+              "videoUrl": "https://cdn.example/trends/src.mp4",
+            },
+            "url": "/v1/cast-swap/estimate",
+          },
+          {
+            "body": {
+              "draft": false,
+              "postPrompt": "dance under the neon",
+              "preview": false,
+              "previewStart": 2,
+              "references": [],
+              "resolution": "720p",
+              "roles": [
+                {
+                  "body": "new",
+                  "hair": "new",
+                  "images": [
+                    "https://u.example/me.png",
+                  ],
+                  "kind": "person",
+                  "name": "the woman",
+                  "outfit": "new",
+                },
+              ],
+              "trendRun": {
+                "display": {
+                  "example": 1,
+                  "slots": [
+                    {
+                      "body": "new",
+                      "fromExample": false,
+                      "hair": "new",
+                      "images": [
+                        "https://u.example/me.png",
+                      ],
+                      "key": "lead",
+                      "kind": "person",
+                      "label": "Lead dancer",
+                      "outfit": "new",
+                    },
+                  ],
+                  "trend": {
+                    "id": "00000000-0000-4000-8000-0000000000a1",
+                    "name": "Neon Dance",
+                    "slug": "prism",
+                    "version": 1,
+                  },
+                },
+              },
+              "videoUrl": "https://cdn.example/trends/src.mp4",
+            },
+            "url": "/v1/cast-swap",
+          },
+        ],
+      },
+      "draft": {
+        "estimate": {
+          "body": {
+            "data": {
+              "breakdown": {
+                "base": 40,
+                "motion": 80,
+              },
+              "engine": "nodaro-prism",
+              "engineName": "Nodaro Prism",
+              "expectedCredits": 120,
+              "holdCredits": 120,
+            },
+          },
+          "status": 200,
+        },
+        "run": {
+          "body": {
+            "data": {
+              "jobId": "00000000-0000-4000-8000-0000000000j1",
+            },
+          },
+          "status": 202,
+        },
+        "sent": [
+          {
+            "body": {
+              "draft": true,
+              "postPrompt": "dance under the neon",
+              "preview": false,
+              "previewStart": 2,
+              "references": [],
+              "resolution": "480p",
+              "roles": [
+                {
+                  "body": "new",
+                  "hair": "new",
+                  "images": [
+                    "https://u.example/me.png",
+                  ],
+                  "kind": "person",
+                  "name": "the woman",
+                  "outfit": "new",
+                },
+              ],
+              "trendRun": {
+                "display": {
+                  "example": 1,
+                  "slots": [
+                    {
+                      "body": "new",
+                      "fromExample": false,
+                      "hair": "new",
+                      "images": [
+                        "https://u.example/me.png",
+                      ],
+                      "key": "lead",
+                      "kind": "person",
+                      "label": "Lead dancer",
+                      "outfit": "new",
+                    },
+                  ],
+                  "trend": {
+                    "id": "00000000-0000-4000-8000-0000000000a1",
+                    "name": "Neon Dance",
+                    "slug": "prism",
+                    "version": 1,
+                  },
+                },
+              },
+              "videoUrl": "https://cdn.example/trends/src.mp4",
+            },
+            "url": "/v1/cast-swap/estimate",
+          },
+          {
+            "body": {
+              "draft": true,
+              "postPrompt": "dance under the neon",
+              "preview": false,
+              "previewStart": 2,
+              "references": [],
+              "resolution": "480p",
+              "roles": [
+                {
+                  "body": "new",
+                  "hair": "new",
+                  "images": [
+                    "https://u.example/me.png",
+                  ],
+                  "kind": "person",
+                  "name": "the woman",
+                  "outfit": "new",
+                },
+              ],
+              "trendRun": {
+                "display": {
+                  "example": 1,
+                  "slots": [
+                    {
+                      "body": "new",
+                      "fromExample": false,
+                      "hair": "new",
+                      "images": [
+                        "https://u.example/me.png",
+                      ],
+                      "key": "lead",
+                      "kind": "person",
+                      "label": "Lead dancer",
+                      "outfit": "new",
+                    },
+                  ],
+                  "trend": {
+                    "id": "00000000-0000-4000-8000-0000000000a1",
+                    "name": "Neon Dance",
+                    "slug": "prism",
+                    "version": 1,
+                  },
+                },
+              },
+              "videoUrl": "https://cdn.example/trends/src.mp4",
+            },
+            "url": "/v1/cast-swap",
+          },
+        ],
+      },
+      "draft at 480p": {
+        "estimate": {
+          "body": {
+            "data": {
+              "breakdown": {
+                "base": 40,
+                "motion": 80,
+              },
+              "engine": "nodaro-prism",
+              "engineName": "Nodaro Prism",
+              "expectedCredits": 120,
+              "holdCredits": 120,
+            },
+          },
+          "status": 200,
+        },
+        "run": {
+          "body": {
+            "data": {
+              "jobId": "00000000-0000-4000-8000-0000000000j1",
+            },
+          },
+          "status": 202,
+        },
+        "sent": [
+          {
+            "body": {
+              "draft": true,
+              "postPrompt": "dance under the neon",
+              "preview": false,
+              "previewStart": 2,
+              "references": [],
+              "resolution": "480p",
+              "roles": [
+                {
+                  "body": "new",
+                  "hair": "new",
+                  "images": [
+                    "https://u.example/me.png",
+                  ],
+                  "kind": "person",
+                  "name": "the woman",
+                  "outfit": "new",
+                },
+              ],
+              "trendRun": {
+                "display": {
+                  "example": 1,
+                  "slots": [
+                    {
+                      "body": "new",
+                      "fromExample": false,
+                      "hair": "new",
+                      "images": [
+                        "https://u.example/me.png",
+                      ],
+                      "key": "lead",
+                      "kind": "person",
+                      "label": "Lead dancer",
+                      "outfit": "new",
+                    },
+                  ],
+                  "trend": {
+                    "id": "00000000-0000-4000-8000-0000000000a1",
+                    "name": "Neon Dance",
+                    "slug": "prism",
+                    "version": 1,
+                  },
+                },
+              },
+              "videoUrl": "https://cdn.example/trends/src.mp4",
+            },
+            "url": "/v1/cast-swap/estimate",
+          },
+          {
+            "body": {
+              "draft": true,
+              "postPrompt": "dance under the neon",
+              "preview": false,
+              "previewStart": 2,
+              "references": [],
+              "resolution": "480p",
+              "roles": [
+                {
+                  "body": "new",
+                  "hair": "new",
+                  "images": [
+                    "https://u.example/me.png",
+                  ],
+                  "kind": "person",
+                  "name": "the woman",
+                  "outfit": "new",
+                },
+              ],
+              "trendRun": {
+                "display": {
+                  "example": 1,
+                  "slots": [
+                    {
+                      "body": "new",
+                      "fromExample": false,
+                      "hair": "new",
+                      "images": [
+                        "https://u.example/me.png",
+                      ],
+                      "key": "lead",
+                      "kind": "person",
+                      "label": "Lead dancer",
+                      "outfit": "new",
+                    },
+                  ],
+                  "trend": {
+                    "id": "00000000-0000-4000-8000-0000000000a1",
+                    "name": "Neon Dance",
+                    "slug": "prism",
+                    "version": 1,
+                  },
+                },
+              },
+              "videoUrl": "https://cdn.example/trends/src.mp4",
+            },
+            "url": "/v1/cast-swap",
+          },
+        ],
+      },
+      "draft at 720p": {
+        "estimate": {
+          "body": {
+            "error": {
+              "code": "validation_error",
+              "message": "Draft is only available at 480p.",
+            },
+          },
+          "status": 400,
+        },
+        "run": {
+          "body": {
+            "error": {
+              "code": "validation_error",
+              "message": "Draft is only available at 480p.",
+            },
+          },
+          "status": 400,
+        },
+        "sent": [],
+      },
+      "no size": {
+        "estimate": {
+          "body": {
+            "data": {
+              "breakdown": {
+                "base": 40,
+                "motion": 80,
+              },
+              "engine": "nodaro-prism",
+              "engineName": "Nodaro Prism",
+              "expectedCredits": 120,
+              "holdCredits": 120,
+            },
+          },
+          "status": 200,
+        },
+        "run": {
+          "body": {
+            "data": {
+              "jobId": "00000000-0000-4000-8000-0000000000j1",
+            },
+          },
+          "status": 202,
+        },
+        "sent": [
+          {
+            "body": {
+              "draft": false,
+              "postPrompt": "dance under the neon",
+              "preview": false,
+              "previewStart": 2,
+              "references": [],
+              "resolution": "480p",
+              "roles": [
+                {
+                  "body": "new",
+                  "hair": "new",
+                  "images": [
+                    "https://u.example/me.png",
+                  ],
+                  "kind": "person",
+                  "name": "the woman",
+                  "outfit": "new",
+                },
+              ],
+              "trendRun": {
+                "display": {
+                  "example": 1,
+                  "slots": [
+                    {
+                      "body": "new",
+                      "fromExample": false,
+                      "hair": "new",
+                      "images": [
+                        "https://u.example/me.png",
+                      ],
+                      "key": "lead",
+                      "kind": "person",
+                      "label": "Lead dancer",
+                      "outfit": "new",
+                    },
+                  ],
+                  "trend": {
+                    "id": "00000000-0000-4000-8000-0000000000a1",
+                    "name": "Neon Dance",
+                    "slug": "prism",
+                    "version": 1,
+                  },
+                },
+              },
+              "videoUrl": "https://cdn.example/trends/src.mp4",
+            },
+            "url": "/v1/cast-swap/estimate",
+          },
+          {
+            "body": {
+              "draft": false,
+              "postPrompt": "dance under the neon",
+              "preview": false,
+              "previewStart": 2,
+              "references": [],
+              "resolution": "480p",
+              "roles": [
+                {
+                  "body": "new",
+                  "hair": "new",
+                  "images": [
+                    "https://u.example/me.png",
+                  ],
+                  "kind": "person",
+                  "name": "the woman",
+                  "outfit": "new",
+                },
+              ],
+              "trendRun": {
+                "display": {
+                  "example": 1,
+                  "slots": [
+                    {
+                      "body": "new",
+                      "fromExample": false,
+                      "hair": "new",
+                      "images": [
+                        "https://u.example/me.png",
+                      ],
+                      "key": "lead",
+                      "kind": "person",
+                      "label": "Lead dancer",
+                      "outfit": "new",
+                    },
+                  ],
+                  "trend": {
+                    "id": "00000000-0000-4000-8000-0000000000a1",
+                    "name": "Neon Dance",
+                    "slug": "prism",
+                    "version": 1,
+                  },
+                },
+              },
+              "videoUrl": "https://cdn.example/trends/src.mp4",
+            },
+            "url": "/v1/cast-swap",
+          },
+        ],
+      },
+      "preview": {
+        "estimate": {
+          "body": {
+            "data": {
+              "breakdown": {
+                "base": 40,
+                "motion": 80,
+              },
+              "engine": "nodaro-prism",
+              "engineName": "Nodaro Prism",
+              "expectedCredits": 120,
+              "holdCredits": 120,
+            },
+          },
+          "status": 200,
+        },
+        "run": {
+          "body": {
+            "data": {
+              "jobId": "00000000-0000-4000-8000-0000000000j1",
+            },
+          },
+          "status": 202,
+        },
+        "sent": [
+          {
+            "body": {
+              "draft": false,
+              "postPrompt": "dance under the neon",
+              "preview": true,
+              "previewStart": 2,
+              "references": [],
+              "resolution": "480p",
+              "roles": [
+                {
+                  "body": "new",
+                  "hair": "new",
+                  "images": [
+                    "https://u.example/me.png",
+                  ],
+                  "kind": "person",
+                  "name": "the woman",
+                  "outfit": "new",
+                },
+              ],
+              "trendRun": {
+                "display": {
+                  "example": 1,
+                  "slots": [
+                    {
+                      "body": "new",
+                      "fromExample": false,
+                      "hair": "new",
+                      "images": [
+                        "https://u.example/me.png",
+                      ],
+                      "key": "lead",
+                      "kind": "person",
+                      "label": "Lead dancer",
+                      "outfit": "new",
+                    },
+                  ],
+                  "trend": {
+                    "id": "00000000-0000-4000-8000-0000000000a1",
+                    "name": "Neon Dance",
+                    "slug": "prism",
+                    "version": 1,
+                  },
+                },
+              },
+              "videoUrl": "https://cdn.example/trends/src.mp4",
+            },
+            "url": "/v1/cast-swap/estimate",
+          },
+          {
+            "body": {
+              "draft": false,
+              "postPrompt": "dance under the neon",
+              "preview": true,
+              "previewStart": 2,
+              "references": [],
+              "resolution": "480p",
+              "roles": [
+                {
+                  "body": "new",
+                  "hair": "new",
+                  "images": [
+                    "https://u.example/me.png",
+                  ],
+                  "kind": "person",
+                  "name": "the woman",
+                  "outfit": "new",
+                },
+              ],
+              "trendRun": {
+                "display": {
+                  "example": 1,
+                  "slots": [
+                    {
+                      "body": "new",
+                      "fromExample": false,
+                      "hair": "new",
+                      "images": [
+                        "https://u.example/me.png",
+                      ],
+                      "key": "lead",
+                      "kind": "person",
+                      "label": "Lead dancer",
+                      "outfit": "new",
+                    },
+                  ],
+                  "trend": {
+                    "id": "00000000-0000-4000-8000-0000000000a1",
+                    "name": "Neon Dance",
+                    "slug": "prism",
+                    "version": 1,
+                  },
+                },
+              },
+              "videoUrl": "https://cdn.example/trends/src.mp4",
+            },
+            "url": "/v1/cast-swap",
+          },
+        ],
+      },
+      "preview at 720p": {
+        "estimate": {
+          "body": {
+            "data": {
+              "breakdown": {
+                "base": 40,
+                "motion": 80,
+              },
+              "engine": "nodaro-prism",
+              "engineName": "Nodaro Prism",
+              "expectedCredits": 120,
+              "holdCredits": 120,
+            },
+          },
+          "status": 200,
+        },
+        "run": {
+          "body": {
+            "data": {
+              "jobId": "00000000-0000-4000-8000-0000000000j1",
+            },
+          },
+          "status": 202,
+        },
+        "sent": [
+          {
+            "body": {
+              "draft": false,
+              "postPrompt": "dance under the neon",
+              "preview": true,
+              "previewStart": 2,
+              "references": [],
+              "resolution": "720p",
+              "roles": [
+                {
+                  "body": "new",
+                  "hair": "new",
+                  "images": [
+                    "https://u.example/me.png",
+                  ],
+                  "kind": "person",
+                  "name": "the woman",
+                  "outfit": "new",
+                },
+              ],
+              "trendRun": {
+                "display": {
+                  "example": 1,
+                  "slots": [
+                    {
+                      "body": "new",
+                      "fromExample": false,
+                      "hair": "new",
+                      "images": [
+                        "https://u.example/me.png",
+                      ],
+                      "key": "lead",
+                      "kind": "person",
+                      "label": "Lead dancer",
+                      "outfit": "new",
+                    },
+                  ],
+                  "trend": {
+                    "id": "00000000-0000-4000-8000-0000000000a1",
+                    "name": "Neon Dance",
+                    "slug": "prism",
+                    "version": 1,
+                  },
+                },
+              },
+              "videoUrl": "https://cdn.example/trends/src.mp4",
+            },
+            "url": "/v1/cast-swap/estimate",
+          },
+          {
+            "body": {
+              "draft": false,
+              "postPrompt": "dance under the neon",
+              "preview": true,
+              "previewStart": 2,
+              "references": [],
+              "resolution": "720p",
+              "roles": [
+                {
+                  "body": "new",
+                  "hair": "new",
+                  "images": [
+                    "https://u.example/me.png",
+                  ],
+                  "kind": "person",
+                  "name": "the woman",
+                  "outfit": "new",
+                },
+              ],
+              "trendRun": {
+                "display": {
+                  "example": 1,
+                  "slots": [
+                    {
+                      "body": "new",
+                      "fromExample": false,
+                      "hair": "new",
+                      "images": [
+                        "https://u.example/me.png",
+                      ],
+                      "key": "lead",
+                      "kind": "person",
+                      "label": "Lead dancer",
+                      "outfit": "new",
+                    },
+                  ],
+                  "trend": {
+                    "id": "00000000-0000-4000-8000-0000000000a1",
+                    "name": "Neon Dance",
+                    "slug": "prism",
+                    "version": 1,
+                  },
+                },
+              },
+              "videoUrl": "https://cdn.example/trends/src.mp4",
+            },
+            "url": "/v1/cast-swap",
+          },
+        ],
+      },
+    },
+  },
+  "prism-flash": {
+    "detail": {
+      "guest": {
+        "data": {
+          "badges": [],
+          "cover": {
+            "height": 1280,
+            "videoUrl": "https://cdn.example/ex1.mp4",
+            "width": 720,
+          },
+          "durationSec": 12,
+          "engine": "nodaro-prism-flash",
+          "engineName": "Nodaro Prism Flash",
+          "examples": [
+            {
+              "height": 1280,
+              "slots": {
+                "lead": [
+                  "https://cdn.example/ex1-lead.png",
+                ],
+              },
+              "videoUrl": "https://cdn.example/ex1.mp4",
+              "width": 720,
+            },
+          ],
+          "id": "00000000-0000-4000-8000-0000000000a3",
+          "isFavorite": false,
+          "name": "Neon Dance",
+          "needs": {
+            "location": 0,
+            "person": 1,
+            "pet": 0,
+            "product": 0,
+          },
+          "original": {
+            "durationSec": 12,
+            "height": 1280,
+            "posterUrl": "https://cdn.example/trends/display-poster.png",
+            "previewStartSec": 2,
+            "videoUrl": "https://cdn.example/trends/display-copy.mp4",
+            "width": 720,
+          },
+          "previewSec": 4,
+          "resolutions": [
+            "480p",
+            "720p",
+          ],
+          "slots": [
+            {
+              "chips": [
+                "body",
+                "outfit",
+                "hair",
+              ],
+              "key": "lead",
+              "kind": "person",
+              "label": "Lead dancer",
+              "required": true,
+            },
+          ],
+          "slug": "prism-flash",
+          "tags": [],
+          "version": 1,
+        },
+      },
+      "keys": [
+        "badges",
+        "cover",
+        "durationSec",
+        "engine",
+        "engineName",
+        "examples",
+        "id",
+        "isFavorite",
+        "name",
+        "needs",
+        "original",
+        "previewSec",
+        "resolutions",
+        "slots",
+        "slug",
+        "tags",
+        "version",
+      ],
+      "resolutions": [
+        "480p",
+        "720p",
+      ],
+      "status": 200,
+    },
+    "runs": {
+      "1080p": {
+        "estimate": {
+          "body": {
+            "error": {
+              "code": "resolution_unsupported",
+              "message": "This trend runs at 480p or 720p, not 1080p.",
+            },
+          },
+          "status": 400,
+        },
+        "run": {
+          "body": {
+            "error": {
+              "code": "resolution_unsupported",
+              "message": "This trend runs at 480p or 720p, not 1080p.",
+            },
+          },
+          "status": 400,
+        },
+        "sent": [],
+      },
+      "480p": {
+        "estimate": {
+          "body": {
+            "data": {
+              "breakdown": {
+                "base": 40,
+                "motion": 80,
+              },
+              "engine": "nodaro-prism-flash",
+              "engineName": "Nodaro Prism Flash",
+              "expectedCredits": 120,
+              "holdCredits": 120,
+            },
+          },
+          "status": 200,
+        },
+        "run": {
+          "body": {
+            "data": {
+              "jobId": "00000000-0000-4000-8000-0000000000j1",
+            },
+          },
+          "status": 202,
+        },
+        "sent": [
+          {
+            "body": {
+              "draft": false,
+              "engine": "nodaro-prism-flash",
+              "postPrompt": "dance under the neon",
+              "preview": false,
+              "previewStart": 2,
+              "references": [],
+              "resolution": "480p",
+              "roles": [
+                {
+                  "body": "new",
+                  "hair": "new",
+                  "images": [
+                    "https://u.example/me.png",
+                  ],
+                  "kind": "person",
+                  "name": "the woman",
+                  "outfit": "new",
+                },
+              ],
+              "trendRun": {
+                "display": {
+                  "example": 1,
+                  "slots": [
+                    {
+                      "body": "new",
+                      "fromExample": false,
+                      "hair": "new",
+                      "images": [
+                        "https://u.example/me.png",
+                      ],
+                      "key": "lead",
+                      "kind": "person",
+                      "label": "Lead dancer",
+                      "outfit": "new",
+                    },
+                  ],
+                  "trend": {
+                    "id": "00000000-0000-4000-8000-0000000000a3",
+                    "name": "Neon Dance",
+                    "slug": "prism-flash",
+                    "version": 1,
+                  },
+                },
+              },
+              "videoUrl": "https://cdn.example/trends/src.mp4",
+            },
+            "url": "/v1/cast-swap/estimate",
+          },
+          {
+            "body": {
+              "draft": false,
+              "engine": "nodaro-prism-flash",
+              "postPrompt": "dance under the neon",
+              "preview": false,
+              "previewStart": 2,
+              "references": [],
+              "resolution": "480p",
+              "roles": [
+                {
+                  "body": "new",
+                  "hair": "new",
+                  "images": [
+                    "https://u.example/me.png",
+                  ],
+                  "kind": "person",
+                  "name": "the woman",
+                  "outfit": "new",
+                },
+              ],
+              "trendRun": {
+                "display": {
+                  "example": 1,
+                  "slots": [
+                    {
+                      "body": "new",
+                      "fromExample": false,
+                      "hair": "new",
+                      "images": [
+                        "https://u.example/me.png",
+                      ],
+                      "key": "lead",
+                      "kind": "person",
+                      "label": "Lead dancer",
+                      "outfit": "new",
+                    },
+                  ],
+                  "trend": {
+                    "id": "00000000-0000-4000-8000-0000000000a3",
+                    "name": "Neon Dance",
+                    "slug": "prism-flash",
+                    "version": 1,
+                  },
+                },
+              },
+              "videoUrl": "https://cdn.example/trends/src.mp4",
+            },
+            "url": "/v1/cast-swap",
+          },
+        ],
+      },
+      "4k": {
+        "estimate": {
+          "body": {
+            "error": {
+              "code": "validation_error",
+              "issues": [
+                {
+                  "message": "Invalid option: expected one of "480p"|"720p"|"1080p"",
+                  "path": "resolution",
+                },
+              ],
+              "message": "resolution: Invalid option: expected one of "480p"|"720p"|"1080p"",
+            },
+          },
+          "status": 400,
+        },
+        "run": {
+          "body": {
+            "error": {
+              "code": "validation_error",
+              "issues": [
+                {
+                  "message": "Invalid option: expected one of "480p"|"720p"|"1080p"",
+                  "path": "resolution",
+                },
+              ],
+              "message": "resolution: Invalid option: expected one of "480p"|"720p"|"1080p"",
+            },
+          },
+          "status": 400,
+        },
+        "sent": [],
+      },
+      "720p": {
+        "estimate": {
+          "body": {
+            "data": {
+              "breakdown": {
+                "base": 40,
+                "motion": 80,
+              },
+              "engine": "nodaro-prism-flash",
+              "engineName": "Nodaro Prism Flash",
+              "expectedCredits": 120,
+              "holdCredits": 120,
+            },
+          },
+          "status": 200,
+        },
+        "run": {
+          "body": {
+            "data": {
+              "jobId": "00000000-0000-4000-8000-0000000000j1",
+            },
+          },
+          "status": 202,
+        },
+        "sent": [
+          {
+            "body": {
+              "draft": false,
+              "engine": "nodaro-prism-flash",
+              "postPrompt": "dance under the neon",
+              "preview": false,
+              "previewStart": 2,
+              "references": [],
+              "resolution": "720p",
+              "roles": [
+                {
+                  "body": "new",
+                  "hair": "new",
+                  "images": [
+                    "https://u.example/me.png",
+                  ],
+                  "kind": "person",
+                  "name": "the woman",
+                  "outfit": "new",
+                },
+              ],
+              "trendRun": {
+                "display": {
+                  "example": 1,
+                  "slots": [
+                    {
+                      "body": "new",
+                      "fromExample": false,
+                      "hair": "new",
+                      "images": [
+                        "https://u.example/me.png",
+                      ],
+                      "key": "lead",
+                      "kind": "person",
+                      "label": "Lead dancer",
+                      "outfit": "new",
+                    },
+                  ],
+                  "trend": {
+                    "id": "00000000-0000-4000-8000-0000000000a3",
+                    "name": "Neon Dance",
+                    "slug": "prism-flash",
+                    "version": 1,
+                  },
+                },
+              },
+              "videoUrl": "https://cdn.example/trends/src.mp4",
+            },
+            "url": "/v1/cast-swap/estimate",
+          },
+          {
+            "body": {
+              "draft": false,
+              "engine": "nodaro-prism-flash",
+              "postPrompt": "dance under the neon",
+              "preview": false,
+              "previewStart": 2,
+              "references": [],
+              "resolution": "720p",
+              "roles": [
+                {
+                  "body": "new",
+                  "hair": "new",
+                  "images": [
+                    "https://u.example/me.png",
+                  ],
+                  "kind": "person",
+                  "name": "the woman",
+                  "outfit": "new",
+                },
+              ],
+              "trendRun": {
+                "display": {
+                  "example": 1,
+                  "slots": [
+                    {
+                      "body": "new",
+                      "fromExample": false,
+                      "hair": "new",
+                      "images": [
+                        "https://u.example/me.png",
+                      ],
+                      "key": "lead",
+                      "kind": "person",
+                      "label": "Lead dancer",
+                      "outfit": "new",
+                    },
+                  ],
+                  "trend": {
+                    "id": "00000000-0000-4000-8000-0000000000a3",
+                    "name": "Neon Dance",
+                    "slug": "prism-flash",
+                    "version": 1,
+                  },
+                },
+              },
+              "videoUrl": "https://cdn.example/trends/src.mp4",
+            },
+            "url": "/v1/cast-swap",
+          },
+        ],
+      },
+      "draft": {
+        "estimate": {
+          "body": {
+            "error": {
+              "code": "draft_unsupported",
+              "message": "This trend has no draft: run it at 720p or 1080p.",
+            },
+          },
+          "status": 400,
+        },
+        "run": {
+          "body": {
+            "error": {
+              "code": "draft_unsupported",
+              "message": "This trend has no draft: run it at 720p or 1080p.",
+            },
+          },
+          "status": 400,
+        },
+        "sent": [],
+      },
+      "draft at 480p": {
+        "estimate": {
+          "body": {
+            "error": {
+              "code": "draft_unsupported",
+              "message": "This trend has no draft: run it at 720p or 1080p.",
+            },
+          },
+          "status": 400,
+        },
+        "run": {
+          "body": {
+            "error": {
+              "code": "draft_unsupported",
+              "message": "This trend has no draft: run it at 720p or 1080p.",
+            },
+          },
+          "status": 400,
+        },
+        "sent": [],
+      },
+      "draft at 720p": {
+        "estimate": {
+          "body": {
+            "error": {
+              "code": "draft_unsupported",
+              "message": "This trend has no draft: run it at 720p or 1080p.",
+            },
+          },
+          "status": 400,
+        },
+        "run": {
+          "body": {
+            "error": {
+              "code": "draft_unsupported",
+              "message": "This trend has no draft: run it at 720p or 1080p.",
+            },
+          },
+          "status": 400,
+        },
+        "sent": [],
+      },
+      "no size": {
+        "estimate": {
+          "body": {
+            "data": {
+              "breakdown": {
+                "base": 40,
+                "motion": 80,
+              },
+              "engine": "nodaro-prism-flash",
+              "engineName": "Nodaro Prism Flash",
+              "expectedCredits": 120,
+              "holdCredits": 120,
+            },
+          },
+          "status": 200,
+        },
+        "run": {
+          "body": {
+            "data": {
+              "jobId": "00000000-0000-4000-8000-0000000000j1",
+            },
+          },
+          "status": 202,
+        },
+        "sent": [
+          {
+            "body": {
+              "draft": false,
+              "engine": "nodaro-prism-flash",
+              "postPrompt": "dance under the neon",
+              "preview": false,
+              "previewStart": 2,
+              "references": [],
+              "resolution": "480p",
+              "roles": [
+                {
+                  "body": "new",
+                  "hair": "new",
+                  "images": [
+                    "https://u.example/me.png",
+                  ],
+                  "kind": "person",
+                  "name": "the woman",
+                  "outfit": "new",
+                },
+              ],
+              "trendRun": {
+                "display": {
+                  "example": 1,
+                  "slots": [
+                    {
+                      "body": "new",
+                      "fromExample": false,
+                      "hair": "new",
+                      "images": [
+                        "https://u.example/me.png",
+                      ],
+                      "key": "lead",
+                      "kind": "person",
+                      "label": "Lead dancer",
+                      "outfit": "new",
+                    },
+                  ],
+                  "trend": {
+                    "id": "00000000-0000-4000-8000-0000000000a3",
+                    "name": "Neon Dance",
+                    "slug": "prism-flash",
+                    "version": 1,
+                  },
+                },
+              },
+              "videoUrl": "https://cdn.example/trends/src.mp4",
+            },
+            "url": "/v1/cast-swap/estimate",
+          },
+          {
+            "body": {
+              "draft": false,
+              "engine": "nodaro-prism-flash",
+              "postPrompt": "dance under the neon",
+              "preview": false,
+              "previewStart": 2,
+              "references": [],
+              "resolution": "480p",
+              "roles": [
+                {
+                  "body": "new",
+                  "hair": "new",
+                  "images": [
+                    "https://u.example/me.png",
+                  ],
+                  "kind": "person",
+                  "name": "the woman",
+                  "outfit": "new",
+                },
+              ],
+              "trendRun": {
+                "display": {
+                  "example": 1,
+                  "slots": [
+                    {
+                      "body": "new",
+                      "fromExample": false,
+                      "hair": "new",
+                      "images": [
+                        "https://u.example/me.png",
+                      ],
+                      "key": "lead",
+                      "kind": "person",
+                      "label": "Lead dancer",
+                      "outfit": "new",
+                    },
+                  ],
+                  "trend": {
+                    "id": "00000000-0000-4000-8000-0000000000a3",
+                    "name": "Neon Dance",
+                    "slug": "prism-flash",
+                    "version": 1,
+                  },
+                },
+              },
+              "videoUrl": "https://cdn.example/trends/src.mp4",
+            },
+            "url": "/v1/cast-swap",
+          },
+        ],
+      },
+      "preview": {
+        "estimate": {
+          "body": {
+            "data": {
+              "breakdown": {
+                "base": 40,
+                "motion": 80,
+              },
+              "engine": "nodaro-prism-flash",
+              "engineName": "Nodaro Prism Flash",
+              "expectedCredits": 120,
+              "holdCredits": 120,
+            },
+          },
+          "status": 200,
+        },
+        "run": {
+          "body": {
+            "data": {
+              "jobId": "00000000-0000-4000-8000-0000000000j1",
+            },
+          },
+          "status": 202,
+        },
+        "sent": [
+          {
+            "body": {
+              "draft": false,
+              "engine": "nodaro-prism-flash",
+              "postPrompt": "dance under the neon",
+              "preview": true,
+              "previewStart": 2,
+              "references": [],
+              "resolution": "480p",
+              "roles": [
+                {
+                  "body": "new",
+                  "hair": "new",
+                  "images": [
+                    "https://u.example/me.png",
+                  ],
+                  "kind": "person",
+                  "name": "the woman",
+                  "outfit": "new",
+                },
+              ],
+              "trendRun": {
+                "display": {
+                  "example": 1,
+                  "slots": [
+                    {
+                      "body": "new",
+                      "fromExample": false,
+                      "hair": "new",
+                      "images": [
+                        "https://u.example/me.png",
+                      ],
+                      "key": "lead",
+                      "kind": "person",
+                      "label": "Lead dancer",
+                      "outfit": "new",
+                    },
+                  ],
+                  "trend": {
+                    "id": "00000000-0000-4000-8000-0000000000a3",
+                    "name": "Neon Dance",
+                    "slug": "prism-flash",
+                    "version": 1,
+                  },
+                },
+              },
+              "videoUrl": "https://cdn.example/trends/src.mp4",
+            },
+            "url": "/v1/cast-swap/estimate",
+          },
+          {
+            "body": {
+              "draft": false,
+              "engine": "nodaro-prism-flash",
+              "postPrompt": "dance under the neon",
+              "preview": true,
+              "previewStart": 2,
+              "references": [],
+              "resolution": "480p",
+              "roles": [
+                {
+                  "body": "new",
+                  "hair": "new",
+                  "images": [
+                    "https://u.example/me.png",
+                  ],
+                  "kind": "person",
+                  "name": "the woman",
+                  "outfit": "new",
+                },
+              ],
+              "trendRun": {
+                "display": {
+                  "example": 1,
+                  "slots": [
+                    {
+                      "body": "new",
+                      "fromExample": false,
+                      "hair": "new",
+                      "images": [
+                        "https://u.example/me.png",
+                      ],
+                      "key": "lead",
+                      "kind": "person",
+                      "label": "Lead dancer",
+                      "outfit": "new",
+                    },
+                  ],
+                  "trend": {
+                    "id": "00000000-0000-4000-8000-0000000000a3",
+                    "name": "Neon Dance",
+                    "slug": "prism-flash",
+                    "version": 1,
+                  },
+                },
+              },
+              "videoUrl": "https://cdn.example/trends/src.mp4",
+            },
+            "url": "/v1/cast-swap",
+          },
+        ],
+      },
+      "preview at 720p": {
+        "estimate": {
+          "body": {
+            "data": {
+              "breakdown": {
+                "base": 40,
+                "motion": 80,
+              },
+              "engine": "nodaro-prism-flash",
+              "engineName": "Nodaro Prism Flash",
+              "expectedCredits": 120,
+              "holdCredits": 120,
+            },
+          },
+          "status": 200,
+        },
+        "run": {
+          "body": {
+            "data": {
+              "jobId": "00000000-0000-4000-8000-0000000000j1",
+            },
+          },
+          "status": 202,
+        },
+        "sent": [
+          {
+            "body": {
+              "draft": false,
+              "engine": "nodaro-prism-flash",
+              "postPrompt": "dance under the neon",
+              "preview": true,
+              "previewStart": 2,
+              "references": [],
+              "resolution": "720p",
+              "roles": [
+                {
+                  "body": "new",
+                  "hair": "new",
+                  "images": [
+                    "https://u.example/me.png",
+                  ],
+                  "kind": "person",
+                  "name": "the woman",
+                  "outfit": "new",
+                },
+              ],
+              "trendRun": {
+                "display": {
+                  "example": 1,
+                  "slots": [
+                    {
+                      "body": "new",
+                      "fromExample": false,
+                      "hair": "new",
+                      "images": [
+                        "https://u.example/me.png",
+                      ],
+                      "key": "lead",
+                      "kind": "person",
+                      "label": "Lead dancer",
+                      "outfit": "new",
+                    },
+                  ],
+                  "trend": {
+                    "id": "00000000-0000-4000-8000-0000000000a3",
+                    "name": "Neon Dance",
+                    "slug": "prism-flash",
+                    "version": 1,
+                  },
+                },
+              },
+              "videoUrl": "https://cdn.example/trends/src.mp4",
+            },
+            "url": "/v1/cast-swap/estimate",
+          },
+          {
+            "body": {
+              "draft": false,
+              "engine": "nodaro-prism-flash",
+              "postPrompt": "dance under the neon",
+              "preview": true,
+              "previewStart": 2,
+              "references": [],
+              "resolution": "720p",
+              "roles": [
+                {
+                  "body": "new",
+                  "hair": "new",
+                  "images": [
+                    "https://u.example/me.png",
+                  ],
+                  "kind": "person",
+                  "name": "the woman",
+                  "outfit": "new",
+                },
+              ],
+              "trendRun": {
+                "display": {
+                  "example": 1,
+                  "slots": [
+                    {
+                      "body": "new",
+                      "fromExample": false,
+                      "hair": "new",
+                      "images": [
+                        "https://u.example/me.png",
+                      ],
+                      "key": "lead",
+                      "kind": "person",
+                      "label": "Lead dancer",
+                      "outfit": "new",
+                    },
+                  ],
+                  "trend": {
+                    "id": "00000000-0000-4000-8000-0000000000a3",
+                    "name": "Neon Dance",
+                    "slug": "prism-flash",
+                    "version": 1,
+                  },
+                },
+              },
+              "videoUrl": "https://cdn.example/trends/src.mp4",
+            },
+            "url": "/v1/cast-swap",
+          },
+        ],
+      },
+    },
+  },
+  "pulse": {
+    "detail": {
+      "guest": {
+        "data": {
+          "badges": [],
+          "cover": {
+            "height": 1280,
+            "videoUrl": "https://cdn.example/ex1.mp4",
+            "width": 720,
+          },
+          "durationSec": 12,
+          "engine": "nodaro-pulse",
+          "engineName": "Nodaro Pulse",
+          "examples": [
+            {
+              "height": 1280,
+              "slots": {
+                "lead": [
+                  "https://cdn.example/ex1-lead.png",
+                ],
+              },
+              "videoUrl": "https://cdn.example/ex1.mp4",
+              "width": 720,
+            },
+          ],
+          "id": "00000000-0000-4000-8000-0000000000a2",
+          "isFavorite": false,
+          "name": "Neon Dance",
+          "needs": {
+            "location": 0,
+            "person": 1,
+            "pet": 0,
+            "product": 0,
+          },
+          "original": {
+            "durationSec": 12,
+            "height": 1280,
+            "posterUrl": "https://cdn.example/trends/display-poster.png",
+            "previewStartSec": 2,
+            "videoUrl": "https://cdn.example/trends/display-copy.mp4",
+            "width": 720,
+          },
+          "previewSec": 4,
+          "resolutions": [
+            "720p",
+            "1080p",
+          ],
+          "slots": [
+            {
+              "chips": [
+                "body",
+                "outfit",
+                "hair",
+              ],
+              "key": "lead",
+              "kind": "person",
+              "label": "Lead dancer",
+              "required": true,
+            },
+          ],
+          "slug": "pulse",
+          "tags": [],
+          "version": 1,
+        },
+      },
+      "keys": [
+        "badges",
+        "cover",
+        "durationSec",
+        "engine",
+        "engineName",
+        "examples",
+        "id",
+        "isFavorite",
+        "name",
+        "needs",
+        "original",
+        "previewSec",
+        "resolutions",
+        "slots",
+        "slug",
+        "tags",
+        "version",
+      ],
+      "resolutions": [
+        "720p",
+        "1080p",
+      ],
+      "status": 200,
+    },
+    "runs": {
+      "1080p": {
+        "estimate": {
+          "body": {
+            "data": {
+              "breakdown": {
+                "base": 40,
+                "motion": 80,
+              },
+              "engine": "nodaro-pulse",
+              "engineName": "Nodaro Pulse",
+              "expectedCredits": 120,
+              "holdCredits": 120,
+            },
+          },
+          "status": 200,
+        },
+        "run": {
+          "body": {
+            "data": {
+              "jobId": "00000000-0000-4000-8000-0000000000j1",
+            },
+          },
+          "status": 202,
+        },
+        "sent": [
+          {
+            "body": {
+              "draft": false,
+              "engine": "kling-4",
+              "postPrompt": "dance under the neon",
+              "preview": false,
+              "previewStart": 2,
+              "references": [],
+              "resolution": "1080p",
+              "roles": [
+                {
+                  "body": "new",
+                  "hair": "new",
+                  "images": [
+                    "https://u.example/me.png",
+                  ],
+                  "kind": "person",
+                  "name": "the woman",
+                  "outfit": "new",
+                },
+              ],
+              "trendRun": {
+                "display": {
+                  "example": 1,
+                  "slots": [
+                    {
+                      "body": "new",
+                      "fromExample": false,
+                      "hair": "new",
+                      "images": [
+                        "https://u.example/me.png",
+                      ],
+                      "key": "lead",
+                      "kind": "person",
+                      "label": "Lead dancer",
+                      "outfit": "new",
+                    },
+                  ],
+                  "trend": {
+                    "id": "00000000-0000-4000-8000-0000000000a2",
+                    "name": "Neon Dance",
+                    "slug": "pulse",
+                    "version": 1,
+                  },
+                },
+              },
+              "videoUrl": "https://cdn.example/trends/src.mp4",
+            },
+            "url": "/v1/cast-swap/estimate",
+          },
+          {
+            "body": {
+              "draft": false,
+              "engine": "kling-4",
+              "postPrompt": "dance under the neon",
+              "preview": false,
+              "previewStart": 2,
+              "references": [],
+              "resolution": "1080p",
+              "roles": [
+                {
+                  "body": "new",
+                  "hair": "new",
+                  "images": [
+                    "https://u.example/me.png",
+                  ],
+                  "kind": "person",
+                  "name": "the woman",
+                  "outfit": "new",
+                },
+              ],
+              "trendRun": {
+                "display": {
+                  "example": 1,
+                  "slots": [
+                    {
+                      "body": "new",
+                      "fromExample": false,
+                      "hair": "new",
+                      "images": [
+                        "https://u.example/me.png",
+                      ],
+                      "key": "lead",
+                      "kind": "person",
+                      "label": "Lead dancer",
+                      "outfit": "new",
+                    },
+                  ],
+                  "trend": {
+                    "id": "00000000-0000-4000-8000-0000000000a2",
+                    "name": "Neon Dance",
+                    "slug": "pulse",
+                    "version": 1,
+                  },
+                },
+              },
+              "videoUrl": "https://cdn.example/trends/src.mp4",
+            },
+            "url": "/v1/cast-swap",
+          },
+        ],
+      },
+      "480p": {
+        "estimate": {
+          "body": {
+            "error": {
+              "code": "resolution_unsupported",
+              "message": "This trend runs at 720p or 1080p, not 480p.",
+            },
+          },
+          "status": 400,
+        },
+        "run": {
+          "body": {
+            "error": {
+              "code": "resolution_unsupported",
+              "message": "This trend runs at 720p or 1080p, not 480p.",
+            },
+          },
+          "status": 400,
+        },
+        "sent": [],
+      },
+      "4k": {
+        "estimate": {
+          "body": {
+            "error": {
+              "code": "validation_error",
+              "issues": [
+                {
+                  "message": "Invalid option: expected one of "480p"|"720p"|"1080p"",
+                  "path": "resolution",
+                },
+              ],
+              "message": "resolution: Invalid option: expected one of "480p"|"720p"|"1080p"",
+            },
+          },
+          "status": 400,
+        },
+        "run": {
+          "body": {
+            "error": {
+              "code": "validation_error",
+              "issues": [
+                {
+                  "message": "Invalid option: expected one of "480p"|"720p"|"1080p"",
+                  "path": "resolution",
+                },
+              ],
+              "message": "resolution: Invalid option: expected one of "480p"|"720p"|"1080p"",
+            },
+          },
+          "status": 400,
+        },
+        "sent": [],
+      },
+      "720p": {
+        "estimate": {
+          "body": {
+            "data": {
+              "breakdown": {
+                "base": 40,
+                "motion": 80,
+              },
+              "engine": "nodaro-pulse",
+              "engineName": "Nodaro Pulse",
+              "expectedCredits": 120,
+              "holdCredits": 120,
+            },
+          },
+          "status": 200,
+        },
+        "run": {
+          "body": {
+            "data": {
+              "jobId": "00000000-0000-4000-8000-0000000000j1",
+            },
+          },
+          "status": 202,
+        },
+        "sent": [
+          {
+            "body": {
+              "draft": false,
+              "engine": "kling-4",
+              "postPrompt": "dance under the neon",
+              "preview": false,
+              "previewStart": 2,
+              "references": [],
+              "resolution": "720p",
+              "roles": [
+                {
+                  "body": "new",
+                  "hair": "new",
+                  "images": [
+                    "https://u.example/me.png",
+                  ],
+                  "kind": "person",
+                  "name": "the woman",
+                  "outfit": "new",
+                },
+              ],
+              "trendRun": {
+                "display": {
+                  "example": 1,
+                  "slots": [
+                    {
+                      "body": "new",
+                      "fromExample": false,
+                      "hair": "new",
+                      "images": [
+                        "https://u.example/me.png",
+                      ],
+                      "key": "lead",
+                      "kind": "person",
+                      "label": "Lead dancer",
+                      "outfit": "new",
+                    },
+                  ],
+                  "trend": {
+                    "id": "00000000-0000-4000-8000-0000000000a2",
+                    "name": "Neon Dance",
+                    "slug": "pulse",
+                    "version": 1,
+                  },
+                },
+              },
+              "videoUrl": "https://cdn.example/trends/src.mp4",
+            },
+            "url": "/v1/cast-swap/estimate",
+          },
+          {
+            "body": {
+              "draft": false,
+              "engine": "kling-4",
+              "postPrompt": "dance under the neon",
+              "preview": false,
+              "previewStart": 2,
+              "references": [],
+              "resolution": "720p",
+              "roles": [
+                {
+                  "body": "new",
+                  "hair": "new",
+                  "images": [
+                    "https://u.example/me.png",
+                  ],
+                  "kind": "person",
+                  "name": "the woman",
+                  "outfit": "new",
+                },
+              ],
+              "trendRun": {
+                "display": {
+                  "example": 1,
+                  "slots": [
+                    {
+                      "body": "new",
+                      "fromExample": false,
+                      "hair": "new",
+                      "images": [
+                        "https://u.example/me.png",
+                      ],
+                      "key": "lead",
+                      "kind": "person",
+                      "label": "Lead dancer",
+                      "outfit": "new",
+                    },
+                  ],
+                  "trend": {
+                    "id": "00000000-0000-4000-8000-0000000000a2",
+                    "name": "Neon Dance",
+                    "slug": "pulse",
+                    "version": 1,
+                  },
+                },
+              },
+              "videoUrl": "https://cdn.example/trends/src.mp4",
+            },
+            "url": "/v1/cast-swap",
+          },
+        ],
+      },
+      "draft": {
+        "estimate": {
+          "body": {
+            "error": {
+              "code": "draft_unsupported",
+              "message": "This trend has no draft: run it at 720p or 1080p.",
+            },
+          },
+          "status": 400,
+        },
+        "run": {
+          "body": {
+            "error": {
+              "code": "draft_unsupported",
+              "message": "This trend has no draft: run it at 720p or 1080p.",
+            },
+          },
+          "status": 400,
+        },
+        "sent": [],
+      },
+      "draft at 480p": {
+        "estimate": {
+          "body": {
+            "error": {
+              "code": "draft_unsupported",
+              "message": "This trend has no draft: run it at 720p or 1080p.",
+            },
+          },
+          "status": 400,
+        },
+        "run": {
+          "body": {
+            "error": {
+              "code": "draft_unsupported",
+              "message": "This trend has no draft: run it at 720p or 1080p.",
+            },
+          },
+          "status": 400,
+        },
+        "sent": [],
+      },
+      "draft at 720p": {
+        "estimate": {
+          "body": {
+            "error": {
+              "code": "draft_unsupported",
+              "message": "This trend has no draft: run it at 720p or 1080p.",
+            },
+          },
+          "status": 400,
+        },
+        "run": {
+          "body": {
+            "error": {
+              "code": "draft_unsupported",
+              "message": "This trend has no draft: run it at 720p or 1080p.",
+            },
+          },
+          "status": 400,
+        },
+        "sent": [],
+      },
+      "no size": {
+        "estimate": {
+          "body": {
+            "data": {
+              "breakdown": {
+                "base": 40,
+                "motion": 80,
+              },
+              "engine": "nodaro-pulse",
+              "engineName": "Nodaro Pulse",
+              "expectedCredits": 120,
+              "holdCredits": 120,
+            },
+          },
+          "status": 200,
+        },
+        "run": {
+          "body": {
+            "data": {
+              "jobId": "00000000-0000-4000-8000-0000000000j1",
+            },
+          },
+          "status": 202,
+        },
+        "sent": [
+          {
+            "body": {
+              "draft": false,
+              "engine": "kling-4",
+              "postPrompt": "dance under the neon",
+              "preview": false,
+              "previewStart": 2,
+              "references": [],
+              "resolution": "720p",
+              "roles": [
+                {
+                  "body": "new",
+                  "hair": "new",
+                  "images": [
+                    "https://u.example/me.png",
+                  ],
+                  "kind": "person",
+                  "name": "the woman",
+                  "outfit": "new",
+                },
+              ],
+              "trendRun": {
+                "display": {
+                  "example": 1,
+                  "slots": [
+                    {
+                      "body": "new",
+                      "fromExample": false,
+                      "hair": "new",
+                      "images": [
+                        "https://u.example/me.png",
+                      ],
+                      "key": "lead",
+                      "kind": "person",
+                      "label": "Lead dancer",
+                      "outfit": "new",
+                    },
+                  ],
+                  "trend": {
+                    "id": "00000000-0000-4000-8000-0000000000a2",
+                    "name": "Neon Dance",
+                    "slug": "pulse",
+                    "version": 1,
+                  },
+                },
+              },
+              "videoUrl": "https://cdn.example/trends/src.mp4",
+            },
+            "url": "/v1/cast-swap/estimate",
+          },
+          {
+            "body": {
+              "draft": false,
+              "engine": "kling-4",
+              "postPrompt": "dance under the neon",
+              "preview": false,
+              "previewStart": 2,
+              "references": [],
+              "resolution": "720p",
+              "roles": [
+                {
+                  "body": "new",
+                  "hair": "new",
+                  "images": [
+                    "https://u.example/me.png",
+                  ],
+                  "kind": "person",
+                  "name": "the woman",
+                  "outfit": "new",
+                },
+              ],
+              "trendRun": {
+                "display": {
+                  "example": 1,
+                  "slots": [
+                    {
+                      "body": "new",
+                      "fromExample": false,
+                      "hair": "new",
+                      "images": [
+                        "https://u.example/me.png",
+                      ],
+                      "key": "lead",
+                      "kind": "person",
+                      "label": "Lead dancer",
+                      "outfit": "new",
+                    },
+                  ],
+                  "trend": {
+                    "id": "00000000-0000-4000-8000-0000000000a2",
+                    "name": "Neon Dance",
+                    "slug": "pulse",
+                    "version": 1,
+                  },
+                },
+              },
+              "videoUrl": "https://cdn.example/trends/src.mp4",
+            },
+            "url": "/v1/cast-swap",
+          },
+        ],
+      },
+      "preview": {
+        "estimate": {
+          "body": {
+            "data": {
+              "breakdown": {
+                "base": 40,
+                "motion": 80,
+              },
+              "engine": "nodaro-pulse",
+              "engineName": "Nodaro Pulse",
+              "expectedCredits": 120,
+              "holdCredits": 120,
+            },
+          },
+          "status": 200,
+        },
+        "run": {
+          "body": {
+            "data": {
+              "jobId": "00000000-0000-4000-8000-0000000000j1",
+            },
+          },
+          "status": 202,
+        },
+        "sent": [
+          {
+            "body": {
+              "draft": false,
+              "engine": "kling-4",
+              "postPrompt": "dance under the neon",
+              "preview": true,
+              "previewStart": 2,
+              "references": [],
+              "resolution": "720p",
+              "roles": [
+                {
+                  "body": "new",
+                  "hair": "new",
+                  "images": [
+                    "https://u.example/me.png",
+                  ],
+                  "kind": "person",
+                  "name": "the woman",
+                  "outfit": "new",
+                },
+              ],
+              "trendRun": {
+                "display": {
+                  "example": 1,
+                  "slots": [
+                    {
+                      "body": "new",
+                      "fromExample": false,
+                      "hair": "new",
+                      "images": [
+                        "https://u.example/me.png",
+                      ],
+                      "key": "lead",
+                      "kind": "person",
+                      "label": "Lead dancer",
+                      "outfit": "new",
+                    },
+                  ],
+                  "trend": {
+                    "id": "00000000-0000-4000-8000-0000000000a2",
+                    "name": "Neon Dance",
+                    "slug": "pulse",
+                    "version": 1,
+                  },
+                },
+              },
+              "videoUrl": "https://cdn.example/trends/src.mp4",
+            },
+            "url": "/v1/cast-swap/estimate",
+          },
+          {
+            "body": {
+              "draft": false,
+              "engine": "kling-4",
+              "postPrompt": "dance under the neon",
+              "preview": true,
+              "previewStart": 2,
+              "references": [],
+              "resolution": "720p",
+              "roles": [
+                {
+                  "body": "new",
+                  "hair": "new",
+                  "images": [
+                    "https://u.example/me.png",
+                  ],
+                  "kind": "person",
+                  "name": "the woman",
+                  "outfit": "new",
+                },
+              ],
+              "trendRun": {
+                "display": {
+                  "example": 1,
+                  "slots": [
+                    {
+                      "body": "new",
+                      "fromExample": false,
+                      "hair": "new",
+                      "images": [
+                        "https://u.example/me.png",
+                      ],
+                      "key": "lead",
+                      "kind": "person",
+                      "label": "Lead dancer",
+                      "outfit": "new",
+                    },
+                  ],
+                  "trend": {
+                    "id": "00000000-0000-4000-8000-0000000000a2",
+                    "name": "Neon Dance",
+                    "slug": "pulse",
+                    "version": 1,
+                  },
+                },
+              },
+              "videoUrl": "https://cdn.example/trends/src.mp4",
+            },
+            "url": "/v1/cast-swap",
+          },
+        ],
+      },
+      "preview at 720p": {
+        "estimate": {
+          "body": {
+            "data": {
+              "breakdown": {
+                "base": 40,
+                "motion": 80,
+              },
+              "engine": "nodaro-pulse",
+              "engineName": "Nodaro Pulse",
+              "expectedCredits": 120,
+              "holdCredits": 120,
+            },
+          },
+          "status": 200,
+        },
+        "run": {
+          "body": {
+            "data": {
+              "jobId": "00000000-0000-4000-8000-0000000000j1",
+            },
+          },
+          "status": 202,
+        },
+        "sent": [
+          {
+            "body": {
+              "draft": false,
+              "engine": "kling-4",
+              "postPrompt": "dance under the neon",
+              "preview": true,
+              "previewStart": 2,
+              "references": [],
+              "resolution": "720p",
+              "roles": [
+                {
+                  "body": "new",
+                  "hair": "new",
+                  "images": [
+                    "https://u.example/me.png",
+                  ],
+                  "kind": "person",
+                  "name": "the woman",
+                  "outfit": "new",
+                },
+              ],
+              "trendRun": {
+                "display": {
+                  "example": 1,
+                  "slots": [
+                    {
+                      "body": "new",
+                      "fromExample": false,
+                      "hair": "new",
+                      "images": [
+                        "https://u.example/me.png",
+                      ],
+                      "key": "lead",
+                      "kind": "person",
+                      "label": "Lead dancer",
+                      "outfit": "new",
+                    },
+                  ],
+                  "trend": {
+                    "id": "00000000-0000-4000-8000-0000000000a2",
+                    "name": "Neon Dance",
+                    "slug": "pulse",
+                    "version": 1,
+                  },
+                },
+              },
+              "videoUrl": "https://cdn.example/trends/src.mp4",
+            },
+            "url": "/v1/cast-swap/estimate",
+          },
+          {
+            "body": {
+              "draft": false,
+              "engine": "kling-4",
+              "postPrompt": "dance under the neon",
+              "preview": true,
+              "previewStart": 2,
+              "references": [],
+              "resolution": "720p",
+              "roles": [
+                {
+                  "body": "new",
+                  "hair": "new",
+                  "images": [
+                    "https://u.example/me.png",
+                  ],
+                  "kind": "person",
+                  "name": "the woman",
+                  "outfit": "new",
+                },
+              ],
+              "trendRun": {
+                "display": {
+                  "example": 1,
+                  "slots": [
+                    {
+                      "body": "new",
+                      "fromExample": false,
+                      "hair": "new",
+                      "images": [
+                        "https://u.example/me.png",
+                      ],
+                      "key": "lead",
+                      "kind": "person",
+                      "label": "Lead dancer",
+                      "outfit": "new",
+                    },
+                  ],
+                  "trend": {
+                    "id": "00000000-0000-4000-8000-0000000000a2",
+                    "name": "Neon Dance",
+                    "slug": "pulse",
+                    "version": 1,
+                  },
+                },
+              },
+              "videoUrl": "https://cdn.example/trends/src.mp4",
+            },
+            "url": "/v1/cast-swap",
+          },
+        ],
+      },
+    },
+  },
+  "pulse-flash": {
+    "detail": {
+      "guest": {
+        "data": {
+          "badges": [],
+          "cover": {
+            "height": 1280,
+            "videoUrl": "https://cdn.example/ex1.mp4",
+            "width": 720,
+          },
+          "durationSec": 12,
+          "engine": "nodaro-pulse-flash",
+          "engineName": "Nodaro Pulse Flash",
+          "examples": [
+            {
+              "height": 1280,
+              "slots": {
+                "lead": [
+                  "https://cdn.example/ex1-lead.png",
+                ],
+              },
+              "videoUrl": "https://cdn.example/ex1.mp4",
+              "width": 720,
+            },
+          ],
+          "id": "00000000-0000-4000-8000-0000000000a4",
+          "isFavorite": false,
+          "name": "Neon Dance",
+          "needs": {
+            "location": 0,
+            "person": 1,
+            "pet": 0,
+            "product": 0,
+          },
+          "original": {
+            "durationSec": 12,
+            "height": 1280,
+            "posterUrl": "https://cdn.example/trends/display-poster.png",
+            "previewStartSec": 2,
+            "videoUrl": "https://cdn.example/trends/display-copy.mp4",
+            "width": 720,
+          },
+          "previewSec": 4,
+          "resolutions": [
+            "720p",
+          ],
+          "slots": [
+            {
+              "chips": [
+                "body",
+                "outfit",
+                "hair",
+              ],
+              "key": "lead",
+              "kind": "person",
+              "label": "Lead dancer",
+              "required": true,
+            },
+          ],
+          "slug": "pulse-flash",
+          "tags": [],
+          "version": 1,
+        },
+      },
+      "keys": [
+        "badges",
+        "cover",
+        "durationSec",
+        "engine",
+        "engineName",
+        "examples",
+        "id",
+        "isFavorite",
+        "name",
+        "needs",
+        "original",
+        "previewSec",
+        "resolutions",
+        "slots",
+        "slug",
+        "tags",
+        "version",
+      ],
+      "resolutions": [
+        "720p",
+      ],
+      "status": 200,
+    },
+    "runs": {
+      "1080p": {
+        "estimate": {
+          "body": {
+            "error": {
+              "code": "resolution_unsupported",
+              "message": "This trend runs at 720p, not 1080p.",
+            },
+          },
+          "status": 400,
+        },
+        "run": {
+          "body": {
+            "error": {
+              "code": "resolution_unsupported",
+              "message": "This trend runs at 720p, not 1080p.",
+            },
+          },
+          "status": 400,
+        },
+        "sent": [],
+      },
+      "480p": {
+        "estimate": {
+          "body": {
+            "error": {
+              "code": "resolution_unsupported",
+              "message": "This trend runs at 720p, not 480p.",
+            },
+          },
+          "status": 400,
+        },
+        "run": {
+          "body": {
+            "error": {
+              "code": "resolution_unsupported",
+              "message": "This trend runs at 720p, not 480p.",
+            },
+          },
+          "status": 400,
+        },
+        "sent": [],
+      },
+      "4k": {
+        "estimate": {
+          "body": {
+            "error": {
+              "code": "validation_error",
+              "issues": [
+                {
+                  "message": "Invalid option: expected one of "480p"|"720p"|"1080p"",
+                  "path": "resolution",
+                },
+              ],
+              "message": "resolution: Invalid option: expected one of "480p"|"720p"|"1080p"",
+            },
+          },
+          "status": 400,
+        },
+        "run": {
+          "body": {
+            "error": {
+              "code": "validation_error",
+              "issues": [
+                {
+                  "message": "Invalid option: expected one of "480p"|"720p"|"1080p"",
+                  "path": "resolution",
+                },
+              ],
+              "message": "resolution: Invalid option: expected one of "480p"|"720p"|"1080p"",
+            },
+          },
+          "status": 400,
+        },
+        "sent": [],
+      },
+      "720p": {
+        "estimate": {
+          "body": {
+            "data": {
+              "breakdown": {
+                "base": 40,
+                "motion": 80,
+              },
+              "engine": "nodaro-pulse-flash",
+              "engineName": "Nodaro Pulse Flash",
+              "expectedCredits": 120,
+              "holdCredits": 120,
+            },
+          },
+          "status": 200,
+        },
+        "run": {
+          "body": {
+            "data": {
+              "jobId": "00000000-0000-4000-8000-0000000000j1",
+            },
+          },
+          "status": 202,
+        },
+        "sent": [
+          {
+            "body": {
+              "draft": false,
+              "engine": "nodaro-pulse-flash",
+              "postPrompt": "dance under the neon",
+              "preview": false,
+              "previewStart": 2,
+              "references": [],
+              "resolution": "720p",
+              "roles": [
+                {
+                  "body": "new",
+                  "hair": "new",
+                  "images": [
+                    "https://u.example/me.png",
+                  ],
+                  "kind": "person",
+                  "name": "the woman",
+                  "outfit": "new",
+                },
+              ],
+              "trendRun": {
+                "display": {
+                  "example": 1,
+                  "slots": [
+                    {
+                      "body": "new",
+                      "fromExample": false,
+                      "hair": "new",
+                      "images": [
+                        "https://u.example/me.png",
+                      ],
+                      "key": "lead",
+                      "kind": "person",
+                      "label": "Lead dancer",
+                      "outfit": "new",
+                    },
+                  ],
+                  "trend": {
+                    "id": "00000000-0000-4000-8000-0000000000a4",
+                    "name": "Neon Dance",
+                    "slug": "pulse-flash",
+                    "version": 1,
+                  },
+                },
+              },
+              "videoUrl": "https://cdn.example/trends/src.mp4",
+            },
+            "url": "/v1/cast-swap/estimate",
+          },
+          {
+            "body": {
+              "draft": false,
+              "engine": "nodaro-pulse-flash",
+              "postPrompt": "dance under the neon",
+              "preview": false,
+              "previewStart": 2,
+              "references": [],
+              "resolution": "720p",
+              "roles": [
+                {
+                  "body": "new",
+                  "hair": "new",
+                  "images": [
+                    "https://u.example/me.png",
+                  ],
+                  "kind": "person",
+                  "name": "the woman",
+                  "outfit": "new",
+                },
+              ],
+              "trendRun": {
+                "display": {
+                  "example": 1,
+                  "slots": [
+                    {
+                      "body": "new",
+                      "fromExample": false,
+                      "hair": "new",
+                      "images": [
+                        "https://u.example/me.png",
+                      ],
+                      "key": "lead",
+                      "kind": "person",
+                      "label": "Lead dancer",
+                      "outfit": "new",
+                    },
+                  ],
+                  "trend": {
+                    "id": "00000000-0000-4000-8000-0000000000a4",
+                    "name": "Neon Dance",
+                    "slug": "pulse-flash",
+                    "version": 1,
+                  },
+                },
+              },
+              "videoUrl": "https://cdn.example/trends/src.mp4",
+            },
+            "url": "/v1/cast-swap",
+          },
+        ],
+      },
+      "draft": {
+        "estimate": {
+          "body": {
+            "error": {
+              "code": "draft_unsupported",
+              "message": "This trend has no draft: run it at 720p or 1080p.",
+            },
+          },
+          "status": 400,
+        },
+        "run": {
+          "body": {
+            "error": {
+              "code": "draft_unsupported",
+              "message": "This trend has no draft: run it at 720p or 1080p.",
+            },
+          },
+          "status": 400,
+        },
+        "sent": [],
+      },
+      "draft at 480p": {
+        "estimate": {
+          "body": {
+            "error": {
+              "code": "draft_unsupported",
+              "message": "This trend has no draft: run it at 720p or 1080p.",
+            },
+          },
+          "status": 400,
+        },
+        "run": {
+          "body": {
+            "error": {
+              "code": "draft_unsupported",
+              "message": "This trend has no draft: run it at 720p or 1080p.",
+            },
+          },
+          "status": 400,
+        },
+        "sent": [],
+      },
+      "draft at 720p": {
+        "estimate": {
+          "body": {
+            "error": {
+              "code": "draft_unsupported",
+              "message": "This trend has no draft: run it at 720p or 1080p.",
+            },
+          },
+          "status": 400,
+        },
+        "run": {
+          "body": {
+            "error": {
+              "code": "draft_unsupported",
+              "message": "This trend has no draft: run it at 720p or 1080p.",
+            },
+          },
+          "status": 400,
+        },
+        "sent": [],
+      },
+      "no size": {
+        "estimate": {
+          "body": {
+            "data": {
+              "breakdown": {
+                "base": 40,
+                "motion": 80,
+              },
+              "engine": "nodaro-pulse-flash",
+              "engineName": "Nodaro Pulse Flash",
+              "expectedCredits": 120,
+              "holdCredits": 120,
+            },
+          },
+          "status": 200,
+        },
+        "run": {
+          "body": {
+            "data": {
+              "jobId": "00000000-0000-4000-8000-0000000000j1",
+            },
+          },
+          "status": 202,
+        },
+        "sent": [
+          {
+            "body": {
+              "draft": false,
+              "engine": "nodaro-pulse-flash",
+              "postPrompt": "dance under the neon",
+              "preview": false,
+              "previewStart": 2,
+              "references": [],
+              "resolution": "720p",
+              "roles": [
+                {
+                  "body": "new",
+                  "hair": "new",
+                  "images": [
+                    "https://u.example/me.png",
+                  ],
+                  "kind": "person",
+                  "name": "the woman",
+                  "outfit": "new",
+                },
+              ],
+              "trendRun": {
+                "display": {
+                  "example": 1,
+                  "slots": [
+                    {
+                      "body": "new",
+                      "fromExample": false,
+                      "hair": "new",
+                      "images": [
+                        "https://u.example/me.png",
+                      ],
+                      "key": "lead",
+                      "kind": "person",
+                      "label": "Lead dancer",
+                      "outfit": "new",
+                    },
+                  ],
+                  "trend": {
+                    "id": "00000000-0000-4000-8000-0000000000a4",
+                    "name": "Neon Dance",
+                    "slug": "pulse-flash",
+                    "version": 1,
+                  },
+                },
+              },
+              "videoUrl": "https://cdn.example/trends/src.mp4",
+            },
+            "url": "/v1/cast-swap/estimate",
+          },
+          {
+            "body": {
+              "draft": false,
+              "engine": "nodaro-pulse-flash",
+              "postPrompt": "dance under the neon",
+              "preview": false,
+              "previewStart": 2,
+              "references": [],
+              "resolution": "720p",
+              "roles": [
+                {
+                  "body": "new",
+                  "hair": "new",
+                  "images": [
+                    "https://u.example/me.png",
+                  ],
+                  "kind": "person",
+                  "name": "the woman",
+                  "outfit": "new",
+                },
+              ],
+              "trendRun": {
+                "display": {
+                  "example": 1,
+                  "slots": [
+                    {
+                      "body": "new",
+                      "fromExample": false,
+                      "hair": "new",
+                      "images": [
+                        "https://u.example/me.png",
+                      ],
+                      "key": "lead",
+                      "kind": "person",
+                      "label": "Lead dancer",
+                      "outfit": "new",
+                    },
+                  ],
+                  "trend": {
+                    "id": "00000000-0000-4000-8000-0000000000a4",
+                    "name": "Neon Dance",
+                    "slug": "pulse-flash",
+                    "version": 1,
+                  },
+                },
+              },
+              "videoUrl": "https://cdn.example/trends/src.mp4",
+            },
+            "url": "/v1/cast-swap",
+          },
+        ],
+      },
+      "preview": {
+        "estimate": {
+          "body": {
+            "data": {
+              "breakdown": {
+                "base": 40,
+                "motion": 80,
+              },
+              "engine": "nodaro-pulse-flash",
+              "engineName": "Nodaro Pulse Flash",
+              "expectedCredits": 120,
+              "holdCredits": 120,
+            },
+          },
+          "status": 200,
+        },
+        "run": {
+          "body": {
+            "data": {
+              "jobId": "00000000-0000-4000-8000-0000000000j1",
+            },
+          },
+          "status": 202,
+        },
+        "sent": [
+          {
+            "body": {
+              "draft": false,
+              "engine": "nodaro-pulse-flash",
+              "postPrompt": "dance under the neon",
+              "preview": true,
+              "previewStart": 2,
+              "references": [],
+              "resolution": "720p",
+              "roles": [
+                {
+                  "body": "new",
+                  "hair": "new",
+                  "images": [
+                    "https://u.example/me.png",
+                  ],
+                  "kind": "person",
+                  "name": "the woman",
+                  "outfit": "new",
+                },
+              ],
+              "trendRun": {
+                "display": {
+                  "example": 1,
+                  "slots": [
+                    {
+                      "body": "new",
+                      "fromExample": false,
+                      "hair": "new",
+                      "images": [
+                        "https://u.example/me.png",
+                      ],
+                      "key": "lead",
+                      "kind": "person",
+                      "label": "Lead dancer",
+                      "outfit": "new",
+                    },
+                  ],
+                  "trend": {
+                    "id": "00000000-0000-4000-8000-0000000000a4",
+                    "name": "Neon Dance",
+                    "slug": "pulse-flash",
+                    "version": 1,
+                  },
+                },
+              },
+              "videoUrl": "https://cdn.example/trends/src.mp4",
+            },
+            "url": "/v1/cast-swap/estimate",
+          },
+          {
+            "body": {
+              "draft": false,
+              "engine": "nodaro-pulse-flash",
+              "postPrompt": "dance under the neon",
+              "preview": true,
+              "previewStart": 2,
+              "references": [],
+              "resolution": "720p",
+              "roles": [
+                {
+                  "body": "new",
+                  "hair": "new",
+                  "images": [
+                    "https://u.example/me.png",
+                  ],
+                  "kind": "person",
+                  "name": "the woman",
+                  "outfit": "new",
+                },
+              ],
+              "trendRun": {
+                "display": {
+                  "example": 1,
+                  "slots": [
+                    {
+                      "body": "new",
+                      "fromExample": false,
+                      "hair": "new",
+                      "images": [
+                        "https://u.example/me.png",
+                      ],
+                      "key": "lead",
+                      "kind": "person",
+                      "label": "Lead dancer",
+                      "outfit": "new",
+                    },
+                  ],
+                  "trend": {
+                    "id": "00000000-0000-4000-8000-0000000000a4",
+                    "name": "Neon Dance",
+                    "slug": "pulse-flash",
+                    "version": 1,
+                  },
+                },
+              },
+              "videoUrl": "https://cdn.example/trends/src.mp4",
+            },
+            "url": "/v1/cast-swap",
+          },
+        ],
+      },
+      "preview at 720p": {
+        "estimate": {
+          "body": {
+            "data": {
+              "breakdown": {
+                "base": 40,
+                "motion": 80,
+              },
+              "engine": "nodaro-pulse-flash",
+              "engineName": "Nodaro Pulse Flash",
+              "expectedCredits": 120,
+              "holdCredits": 120,
+            },
+          },
+          "status": 200,
+        },
+        "run": {
+          "body": {
+            "data": {
+              "jobId": "00000000-0000-4000-8000-0000000000j1",
+            },
+          },
+          "status": 202,
+        },
+        "sent": [
+          {
+            "body": {
+              "draft": false,
+              "engine": "nodaro-pulse-flash",
+              "postPrompt": "dance under the neon",
+              "preview": true,
+              "previewStart": 2,
+              "references": [],
+              "resolution": "720p",
+              "roles": [
+                {
+                  "body": "new",
+                  "hair": "new",
+                  "images": [
+                    "https://u.example/me.png",
+                  ],
+                  "kind": "person",
+                  "name": "the woman",
+                  "outfit": "new",
+                },
+              ],
+              "trendRun": {
+                "display": {
+                  "example": 1,
+                  "slots": [
+                    {
+                      "body": "new",
+                      "fromExample": false,
+                      "hair": "new",
+                      "images": [
+                        "https://u.example/me.png",
+                      ],
+                      "key": "lead",
+                      "kind": "person",
+                      "label": "Lead dancer",
+                      "outfit": "new",
+                    },
+                  ],
+                  "trend": {
+                    "id": "00000000-0000-4000-8000-0000000000a4",
+                    "name": "Neon Dance",
+                    "slug": "pulse-flash",
+                    "version": 1,
+                  },
+                },
+              },
+              "videoUrl": "https://cdn.example/trends/src.mp4",
+            },
+            "url": "/v1/cast-swap/estimate",
+          },
+          {
+            "body": {
+              "draft": false,
+              "engine": "nodaro-pulse-flash",
+              "postPrompt": "dance under the neon",
+              "preview": true,
+              "previewStart": 2,
+              "references": [],
+              "resolution": "720p",
+              "roles": [
+                {
+                  "body": "new",
+                  "hair": "new",
+                  "images": [
+                    "https://u.example/me.png",
+                  ],
+                  "kind": "person",
+                  "name": "the woman",
+                  "outfit": "new",
+                },
+              ],
+              "trendRun": {
+                "display": {
+                  "example": 1,
+                  "slots": [
+                    {
+                      "body": "new",
+                      "fromExample": false,
+                      "hair": "new",
+                      "images": [
+                        "https://u.example/me.png",
+                      ],
+                      "key": "lead",
+                      "kind": "person",
+                      "label": "Lead dancer",
+                      "outfit": "new",
+                    },
+                  ],
+                  "trend": {
+                    "id": "00000000-0000-4000-8000-0000000000a4",
+                    "name": "Neon Dance",
+                    "slug": "pulse-flash",
+                    "version": 1,
+                  },
+                },
+              },
+              "videoUrl": "https://cdn.example/trends/src.mp4",
+            },
+            "url": "/v1/cast-swap",
+          },
+        ],
+      },
+    },
+  },
+}
+`;

@@ -28,7 +28,12 @@
  * instead ("off" = the choice is not offered at that size; any target = it is,
  * delivered at the next size), so the admin page words the rows that way.
  * Each save writes an `admin_actions` row
- * (`update_nodaro_motion_precise_upscale`) with the setting before and after.
+ * (`update_nodaro_motion_precise_upscale`) with the setting before and after,
+ * and moves the trend catalog's stamp (ee/lib/trends/catalog-stamp.ts): a
+ * trend page read by the size delivered lists the sizes this setting leaves
+ * offered (ee/lib/trends/sizes.ts), so the guest answers kept from before it
+ * are dropped. Always, whatever this environment's engine: the setting is
+ * shared by every environment, whose guests may read either way.
  */
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
@@ -49,6 +54,7 @@ import { topazVideoDisabledHere } from "../../lib/topaz-video-availability.js"
 import { requireAdmin } from "../middleware/require-admin.js"
 import { defineNodaroMotionSettingsSection, sendRefusal } from "../lib/nodaro-motion-settings-section.js"
 import { audit } from "./admin-trends-lifecycle.js"
+import { trendCatalogChanged } from "../lib/trends/catalog-stamp.js"
 
 /** Every save of this deployment-wide setting is filed under this fixed id (its own, beside the other Video Remake settings'). */
 export const NODARO_MOTION_PRECISE_UPSCALE_AUDIT_TARGET = "00000000-0000-4000-8000-00000000a104"
@@ -124,6 +130,8 @@ export function registerNodaroMotionPreciseUpscaleRoutes(app: FastifyInstance): 
         before,
         after: preciseUpscale,
       })
+      // The trend pages' sizes follow this setting: kept guest answers go (never fails the save; logged when it could not).
+      await trendCatalogChanged()
       return { data: await view() }
     } catch (e) {
       return sendInternalError(reply, req, e, "Failed to save the Video Remake Precise upscale")

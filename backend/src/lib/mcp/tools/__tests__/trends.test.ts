@@ -183,6 +183,17 @@ describe("get_trend", () => {
     }
   })
 
+  it("says when its resolutions are the sizes delivered, and only then", async () => {
+    const delivered = { ...DETAIL, resolutions: ["720p", "1080p", "4k"], deliveredResolution: true }
+    const { fastify } = stubFastify({ "GET /v1/trends/dance-off": { statusCode: 200, body: { data: delivered } } })
+    expect((await callTool(serverWith(fastify), "get_trend", { slug: "dance-off" })).structuredContent).toEqual(delivered)
+    // Anything but true, or an older server's page without it: no such key.
+    for (const value of [undefined, false, "true"]) {
+      const { fastify: f2 } = stubFastify({ "GET /v1/trends/dance-off": { statusCode: 200, body: { data: { ...DETAIL, deliveredResolution: value } } } })
+      expect((await callTool(serverWith(f2), "get_trend", { slug: "dance-off" })).structuredContent).toEqual(DETAIL)
+    }
+  })
+
   it("hands back only the public fields, whatever else the body carries", async () => {
     const leaky = {
       ...DETAIL,
@@ -307,6 +318,13 @@ describe("estimate_trend", () => {
     expect(calls[0]!.payload).toEqual(body)
     expect(res.content[0]!.text).toContain("about 10 credits (up to 14 held while it runs)")
     expect(res.structuredContent).toEqual(QUOTE.data)
+  })
+
+  it("sends a 4K size as the route's resolution (the route decides whether the trend offers it)", async () => {
+    const { fastify, calls } = stubFastify({ "POST /v1/trends/dance-off/estimate": { statusCode: 200, body: QUOTE } })
+    const res = await callTool(serverWith(fastify), "estimate_trend", { slug: "dance-off", slots: {}, resolution: "4k" })
+    expect(res.isError).toBeFalsy()
+    expect(calls[0]!.payload).toMatchObject({ resolution: "4k" })
   })
 
   it("keeps only the breakdown's numeric entries", async () => {

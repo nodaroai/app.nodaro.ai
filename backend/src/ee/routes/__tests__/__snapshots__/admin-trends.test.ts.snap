@@ -1,0 +1,1196 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`a test run's sizes > without an engine that reads trend runs by the size delivered: as before (recorded) 1`] = `
+{
+  "prism": {
+    "page": {
+      "keys": [
+        "draft",
+        "faceMaskJob",
+        "faceMaskMarksSupported",
+        "faceMaskState",
+        "published",
+        "revision",
+        "sourceCrop",
+        "trend",
+        "upscaleJobs",
+      ],
+      "status": 200,
+    },
+    "runs": {
+      "1080p": {
+        "body": {
+          "data": {
+            "jobId": "00000000-0000-4000-8000-0000000000b1",
+          },
+        },
+        "sent": [
+          {
+            "draft": false,
+            "postPrompt": "DRAFT-PROMPT neon lights",
+            "preview": false,
+            "previewStart": 2,
+            "references": [],
+            "resolution": "1080p",
+            "roles": [
+              {
+                "body": "new",
+                "hair": "new",
+                "images": [
+                  "https://u.example/me.png",
+                ],
+                "kind": "person",
+                "name": "the woman on the left",
+                "outfit": "new",
+              },
+              {
+                "body": "new",
+                "coat": "new",
+                "images": [],
+                "kind": "pet",
+                "name": "the dog",
+              },
+            ],
+            "trendRun": {
+              "display": {
+                "example": 0,
+                "slots": [
+                  {
+                    "body": "new",
+                    "fromExample": false,
+                    "hair": "new",
+                    "images": [
+                      "https://u.example/me.png",
+                    ],
+                    "key": "lead",
+                    "kind": "person",
+                    "label": "Lead dancer",
+                    "outfit": "new",
+                  },
+                  {
+                    "body": "new",
+                    "coat": "new",
+                    "fromExample": false,
+                    "images": [],
+                    "key": "dog",
+                    "kind": "pet",
+                    "label": "Dog",
+                  },
+                ],
+                "trend": {
+                  "id": "00000000-0000-4000-8000-0000000000a1",
+                  "name": "Neon Dance",
+                  "slug": "neon-dance",
+                  "version": 1,
+                },
+              },
+            },
+            "videoUrl": "https://cdn.test/trends/00000000-0000-4000-8000-0000000000a1/src.mp4",
+          },
+        ],
+        "status": 202,
+      },
+      "480p": {
+        "body": {
+          "data": {
+            "jobId": "00000000-0000-4000-8000-0000000000b1",
+          },
+        },
+        "sent": [
+          {
+            "draft": false,
+            "postPrompt": "DRAFT-PROMPT neon lights",
+            "preview": false,
+            "previewStart": 2,
+            "references": [],
+            "resolution": "480p",
+            "roles": [
+              {
+                "body": "new",
+                "hair": "new",
+                "images": [
+                  "https://u.example/me.png",
+                ],
+                "kind": "person",
+                "name": "the woman on the left",
+                "outfit": "new",
+              },
+              {
+                "body": "new",
+                "coat": "new",
+                "images": [],
+                "kind": "pet",
+                "name": "the dog",
+              },
+            ],
+            "trendRun": {
+              "display": {
+                "example": 0,
+                "slots": [
+                  {
+                    "body": "new",
+                    "fromExample": false,
+                    "hair": "new",
+                    "images": [
+                      "https://u.example/me.png",
+                    ],
+                    "key": "lead",
+                    "kind": "person",
+                    "label": "Lead dancer",
+                    "outfit": "new",
+                  },
+                  {
+                    "body": "new",
+                    "coat": "new",
+                    "fromExample": false,
+                    "images": [],
+                    "key": "dog",
+                    "kind": "pet",
+                    "label": "Dog",
+                  },
+                ],
+                "trend": {
+                  "id": "00000000-0000-4000-8000-0000000000a1",
+                  "name": "Neon Dance",
+                  "slug": "neon-dance",
+                  "version": 1,
+                },
+              },
+            },
+            "videoUrl": "https://cdn.test/trends/00000000-0000-4000-8000-0000000000a1/src.mp4",
+          },
+        ],
+        "status": 202,
+      },
+      "4k": {
+        "body": {
+          "error": {
+            "code": "validation_error",
+            "issues": [
+              {
+                "message": "Invalid option: expected one of "480p"|"720p"|"1080p"",
+                "path": "resolution",
+              },
+            ],
+            "message": "resolution: Invalid option: expected one of "480p"|"720p"|"1080p"",
+          },
+        },
+        "sent": [],
+        "status": 400,
+      },
+      "draft": {
+        "body": {
+          "data": {
+            "jobId": "00000000-0000-4000-8000-0000000000b1",
+          },
+        },
+        "sent": [
+          {
+            "draft": true,
+            "postPrompt": "DRAFT-PROMPT neon lights",
+            "preview": false,
+            "previewStart": 2,
+            "references": [],
+            "resolution": "480p",
+            "roles": [
+              {
+                "body": "new",
+                "hair": "new",
+                "images": [
+                  "https://u.example/me.png",
+                ],
+                "kind": "person",
+                "name": "the woman on the left",
+                "outfit": "new",
+              },
+              {
+                "body": "new",
+                "coat": "new",
+                "images": [],
+                "kind": "pet",
+                "name": "the dog",
+              },
+            ],
+            "trendRun": {
+              "display": {
+                "example": 0,
+                "slots": [
+                  {
+                    "body": "new",
+                    "fromExample": false,
+                    "hair": "new",
+                    "images": [
+                      "https://u.example/me.png",
+                    ],
+                    "key": "lead",
+                    "kind": "person",
+                    "label": "Lead dancer",
+                    "outfit": "new",
+                  },
+                  {
+                    "body": "new",
+                    "coat": "new",
+                    "fromExample": false,
+                    "images": [],
+                    "key": "dog",
+                    "kind": "pet",
+                    "label": "Dog",
+                  },
+                ],
+                "trend": {
+                  "id": "00000000-0000-4000-8000-0000000000a1",
+                  "name": "Neon Dance",
+                  "slug": "neon-dance",
+                  "version": 1,
+                },
+              },
+            },
+            "videoUrl": "https://cdn.test/trends/00000000-0000-4000-8000-0000000000a1/src.mp4",
+          },
+        ],
+        "status": 202,
+      },
+      "draft at 720p": {
+        "body": {
+          "error": {
+            "code": "validation_error",
+            "message": "Draft is only available at 480p.",
+          },
+        },
+        "sent": [],
+        "status": 400,
+      },
+      "no size": {
+        "body": {
+          "data": {
+            "jobId": "00000000-0000-4000-8000-0000000000b1",
+          },
+        },
+        "sent": [
+          {
+            "draft": false,
+            "postPrompt": "DRAFT-PROMPT neon lights",
+            "preview": false,
+            "previewStart": 2,
+            "references": [],
+            "resolution": "480p",
+            "roles": [
+              {
+                "body": "new",
+                "hair": "new",
+                "images": [
+                  "https://u.example/me.png",
+                ],
+                "kind": "person",
+                "name": "the woman on the left",
+                "outfit": "new",
+              },
+              {
+                "body": "new",
+                "coat": "new",
+                "images": [],
+                "kind": "pet",
+                "name": "the dog",
+              },
+            ],
+            "trendRun": {
+              "display": {
+                "example": 0,
+                "slots": [
+                  {
+                    "body": "new",
+                    "fromExample": false,
+                    "hair": "new",
+                    "images": [
+                      "https://u.example/me.png",
+                    ],
+                    "key": "lead",
+                    "kind": "person",
+                    "label": "Lead dancer",
+                    "outfit": "new",
+                  },
+                  {
+                    "body": "new",
+                    "coat": "new",
+                    "fromExample": false,
+                    "images": [],
+                    "key": "dog",
+                    "kind": "pet",
+                    "label": "Dog",
+                  },
+                ],
+                "trend": {
+                  "id": "00000000-0000-4000-8000-0000000000a1",
+                  "name": "Neon Dance",
+                  "slug": "neon-dance",
+                  "version": 1,
+                },
+              },
+            },
+            "videoUrl": "https://cdn.test/trends/00000000-0000-4000-8000-0000000000a1/src.mp4",
+          },
+        ],
+        "status": 202,
+      },
+      "preview": {
+        "body": {
+          "data": {
+            "jobId": "00000000-0000-4000-8000-0000000000b1",
+          },
+        },
+        "sent": [
+          {
+            "draft": false,
+            "postPrompt": "DRAFT-PROMPT neon lights",
+            "preview": true,
+            "previewStart": 2,
+            "references": [],
+            "resolution": "480p",
+            "roles": [
+              {
+                "body": "new",
+                "hair": "new",
+                "images": [
+                  "https://u.example/me.png",
+                ],
+                "kind": "person",
+                "name": "the woman on the left",
+                "outfit": "new",
+              },
+              {
+                "body": "new",
+                "coat": "new",
+                "images": [],
+                "kind": "pet",
+                "name": "the dog",
+              },
+            ],
+            "trendRun": {
+              "display": {
+                "example": 0,
+                "slots": [
+                  {
+                    "body": "new",
+                    "fromExample": false,
+                    "hair": "new",
+                    "images": [
+                      "https://u.example/me.png",
+                    ],
+                    "key": "lead",
+                    "kind": "person",
+                    "label": "Lead dancer",
+                    "outfit": "new",
+                  },
+                  {
+                    "body": "new",
+                    "coat": "new",
+                    "fromExample": false,
+                    "images": [],
+                    "key": "dog",
+                    "kind": "pet",
+                    "label": "Dog",
+                  },
+                ],
+                "trend": {
+                  "id": "00000000-0000-4000-8000-0000000000a1",
+                  "name": "Neon Dance",
+                  "slug": "neon-dance",
+                  "version": 1,
+                },
+              },
+            },
+            "videoUrl": "https://cdn.test/trends/00000000-0000-4000-8000-0000000000a1/src.mp4",
+          },
+        ],
+        "status": 202,
+      },
+    },
+  },
+  "prism-flash": {
+    "page": {
+      "keys": [
+        "draft",
+        "faceMaskJob",
+        "faceMaskMarksSupported",
+        "faceMaskState",
+        "published",
+        "revision",
+        "sourceCrop",
+        "trend",
+        "upscaleJobs",
+      ],
+      "status": 200,
+    },
+    "runs": {
+      "1080p": {
+        "body": {
+          "error": {
+            "code": "resolution_unsupported",
+            "message": "This trend runs at 480p or 720p, not 1080p.",
+          },
+        },
+        "sent": [],
+        "status": 400,
+      },
+      "480p": {
+        "body": {
+          "data": {
+            "jobId": "00000000-0000-4000-8000-0000000000b1",
+          },
+        },
+        "sent": [
+          {
+            "draft": false,
+            "engine": "nodaro-prism-flash",
+            "postPrompt": "DRAFT-PROMPT neon lights",
+            "preview": false,
+            "previewStart": 2,
+            "references": [],
+            "resolution": "480p",
+            "roles": [
+              {
+                "body": "new",
+                "hair": "new",
+                "images": [
+                  "https://u.example/me.png",
+                ],
+                "kind": "person",
+                "name": "the woman on the left",
+                "outfit": "new",
+              },
+              {
+                "body": "new",
+                "coat": "new",
+                "images": [],
+                "kind": "pet",
+                "name": "the dog",
+              },
+            ],
+            "trendRun": {
+              "display": {
+                "example": 0,
+                "slots": [
+                  {
+                    "body": "new",
+                    "fromExample": false,
+                    "hair": "new",
+                    "images": [
+                      "https://u.example/me.png",
+                    ],
+                    "key": "lead",
+                    "kind": "person",
+                    "label": "Lead dancer",
+                    "outfit": "new",
+                  },
+                  {
+                    "body": "new",
+                    "coat": "new",
+                    "fromExample": false,
+                    "images": [],
+                    "key": "dog",
+                    "kind": "pet",
+                    "label": "Dog",
+                  },
+                ],
+                "trend": {
+                  "id": "00000000-0000-4000-8000-0000000000a1",
+                  "name": "Neon Dance",
+                  "slug": "neon-dance",
+                  "version": 1,
+                },
+              },
+            },
+            "videoUrl": "https://cdn.test/trends/00000000-0000-4000-8000-0000000000a1/src.mp4",
+          },
+        ],
+        "status": 202,
+      },
+      "4k": {
+        "body": {
+          "error": {
+            "code": "validation_error",
+            "issues": [
+              {
+                "message": "Invalid option: expected one of "480p"|"720p"|"1080p"",
+                "path": "resolution",
+              },
+            ],
+            "message": "resolution: Invalid option: expected one of "480p"|"720p"|"1080p"",
+          },
+        },
+        "sent": [],
+        "status": 400,
+      },
+      "draft": {
+        "body": {
+          "error": {
+            "code": "draft_unsupported",
+            "message": "This trend has no draft: run it at 720p or 1080p.",
+          },
+        },
+        "sent": [],
+        "status": 400,
+      },
+      "draft at 720p": {
+        "body": {
+          "error": {
+            "code": "draft_unsupported",
+            "message": "This trend has no draft: run it at 720p or 1080p.",
+          },
+        },
+        "sent": [],
+        "status": 400,
+      },
+      "no size": {
+        "body": {
+          "data": {
+            "jobId": "00000000-0000-4000-8000-0000000000b1",
+          },
+        },
+        "sent": [
+          {
+            "draft": false,
+            "engine": "nodaro-prism-flash",
+            "postPrompt": "DRAFT-PROMPT neon lights",
+            "preview": false,
+            "previewStart": 2,
+            "references": [],
+            "resolution": "480p",
+            "roles": [
+              {
+                "body": "new",
+                "hair": "new",
+                "images": [
+                  "https://u.example/me.png",
+                ],
+                "kind": "person",
+                "name": "the woman on the left",
+                "outfit": "new",
+              },
+              {
+                "body": "new",
+                "coat": "new",
+                "images": [],
+                "kind": "pet",
+                "name": "the dog",
+              },
+            ],
+            "trendRun": {
+              "display": {
+                "example": 0,
+                "slots": [
+                  {
+                    "body": "new",
+                    "fromExample": false,
+                    "hair": "new",
+                    "images": [
+                      "https://u.example/me.png",
+                    ],
+                    "key": "lead",
+                    "kind": "person",
+                    "label": "Lead dancer",
+                    "outfit": "new",
+                  },
+                  {
+                    "body": "new",
+                    "coat": "new",
+                    "fromExample": false,
+                    "images": [],
+                    "key": "dog",
+                    "kind": "pet",
+                    "label": "Dog",
+                  },
+                ],
+                "trend": {
+                  "id": "00000000-0000-4000-8000-0000000000a1",
+                  "name": "Neon Dance",
+                  "slug": "neon-dance",
+                  "version": 1,
+                },
+              },
+            },
+            "videoUrl": "https://cdn.test/trends/00000000-0000-4000-8000-0000000000a1/src.mp4",
+          },
+        ],
+        "status": 202,
+      },
+      "preview": {
+        "body": {
+          "data": {
+            "jobId": "00000000-0000-4000-8000-0000000000b1",
+          },
+        },
+        "sent": [
+          {
+            "draft": false,
+            "engine": "nodaro-prism-flash",
+            "postPrompt": "DRAFT-PROMPT neon lights",
+            "preview": true,
+            "previewStart": 2,
+            "references": [],
+            "resolution": "480p",
+            "roles": [
+              {
+                "body": "new",
+                "hair": "new",
+                "images": [
+                  "https://u.example/me.png",
+                ],
+                "kind": "person",
+                "name": "the woman on the left",
+                "outfit": "new",
+              },
+              {
+                "body": "new",
+                "coat": "new",
+                "images": [],
+                "kind": "pet",
+                "name": "the dog",
+              },
+            ],
+            "trendRun": {
+              "display": {
+                "example": 0,
+                "slots": [
+                  {
+                    "body": "new",
+                    "fromExample": false,
+                    "hair": "new",
+                    "images": [
+                      "https://u.example/me.png",
+                    ],
+                    "key": "lead",
+                    "kind": "person",
+                    "label": "Lead dancer",
+                    "outfit": "new",
+                  },
+                  {
+                    "body": "new",
+                    "coat": "new",
+                    "fromExample": false,
+                    "images": [],
+                    "key": "dog",
+                    "kind": "pet",
+                    "label": "Dog",
+                  },
+                ],
+                "trend": {
+                  "id": "00000000-0000-4000-8000-0000000000a1",
+                  "name": "Neon Dance",
+                  "slug": "neon-dance",
+                  "version": 1,
+                },
+              },
+            },
+            "videoUrl": "https://cdn.test/trends/00000000-0000-4000-8000-0000000000a1/src.mp4",
+          },
+        ],
+        "status": 202,
+      },
+    },
+  },
+  "pulse": {
+    "page": {
+      "keys": [
+        "draft",
+        "faceMaskJob",
+        "faceMaskMarksSupported",
+        "faceMaskState",
+        "published",
+        "revision",
+        "sourceCrop",
+        "trend",
+        "upscaleJobs",
+      ],
+      "status": 200,
+    },
+    "runs": {
+      "1080p": {
+        "body": {
+          "data": {
+            "jobId": "00000000-0000-4000-8000-0000000000b1",
+          },
+        },
+        "sent": [
+          {
+            "draft": false,
+            "engine": "kling-4",
+            "postPrompt": "DRAFT-PROMPT neon lights",
+            "preview": false,
+            "previewStart": 2,
+            "references": [],
+            "resolution": "1080p",
+            "roles": [
+              {
+                "body": "new",
+                "hair": "new",
+                "images": [
+                  "https://u.example/me.png",
+                ],
+                "kind": "person",
+                "name": "the woman on the left",
+                "outfit": "new",
+              },
+              {
+                "body": "new",
+                "coat": "new",
+                "images": [],
+                "kind": "pet",
+                "name": "the dog",
+              },
+            ],
+            "trendRun": {
+              "display": {
+                "example": 0,
+                "slots": [
+                  {
+                    "body": "new",
+                    "fromExample": false,
+                    "hair": "new",
+                    "images": [
+                      "https://u.example/me.png",
+                    ],
+                    "key": "lead",
+                    "kind": "person",
+                    "label": "Lead dancer",
+                    "outfit": "new",
+                  },
+                  {
+                    "body": "new",
+                    "coat": "new",
+                    "fromExample": false,
+                    "images": [],
+                    "key": "dog",
+                    "kind": "pet",
+                    "label": "Dog",
+                  },
+                ],
+                "trend": {
+                  "id": "00000000-0000-4000-8000-0000000000a1",
+                  "name": "Neon Dance",
+                  "slug": "neon-dance",
+                  "version": 1,
+                },
+              },
+            },
+            "videoUrl": "https://cdn.test/trends/00000000-0000-4000-8000-0000000000a1/src.mp4",
+          },
+        ],
+        "status": 202,
+      },
+      "480p": {
+        "body": {
+          "error": {
+            "code": "resolution_unsupported",
+            "message": "This trend runs at 720p or 1080p, not 480p.",
+          },
+        },
+        "sent": [],
+        "status": 400,
+      },
+      "4k": {
+        "body": {
+          "error": {
+            "code": "validation_error",
+            "issues": [
+              {
+                "message": "Invalid option: expected one of "480p"|"720p"|"1080p"",
+                "path": "resolution",
+              },
+            ],
+            "message": "resolution: Invalid option: expected one of "480p"|"720p"|"1080p"",
+          },
+        },
+        "sent": [],
+        "status": 400,
+      },
+      "draft": {
+        "body": {
+          "error": {
+            "code": "draft_unsupported",
+            "message": "This trend has no draft: run it at 720p or 1080p.",
+          },
+        },
+        "sent": [],
+        "status": 400,
+      },
+      "draft at 720p": {
+        "body": {
+          "error": {
+            "code": "draft_unsupported",
+            "message": "This trend has no draft: run it at 720p or 1080p.",
+          },
+        },
+        "sent": [],
+        "status": 400,
+      },
+      "no size": {
+        "body": {
+          "data": {
+            "jobId": "00000000-0000-4000-8000-0000000000b1",
+          },
+        },
+        "sent": [
+          {
+            "draft": false,
+            "engine": "kling-4",
+            "postPrompt": "DRAFT-PROMPT neon lights",
+            "preview": false,
+            "previewStart": 2,
+            "references": [],
+            "resolution": "720p",
+            "roles": [
+              {
+                "body": "new",
+                "hair": "new",
+                "images": [
+                  "https://u.example/me.png",
+                ],
+                "kind": "person",
+                "name": "the woman on the left",
+                "outfit": "new",
+              },
+              {
+                "body": "new",
+                "coat": "new",
+                "images": [],
+                "kind": "pet",
+                "name": "the dog",
+              },
+            ],
+            "trendRun": {
+              "display": {
+                "example": 0,
+                "slots": [
+                  {
+                    "body": "new",
+                    "fromExample": false,
+                    "hair": "new",
+                    "images": [
+                      "https://u.example/me.png",
+                    ],
+                    "key": "lead",
+                    "kind": "person",
+                    "label": "Lead dancer",
+                    "outfit": "new",
+                  },
+                  {
+                    "body": "new",
+                    "coat": "new",
+                    "fromExample": false,
+                    "images": [],
+                    "key": "dog",
+                    "kind": "pet",
+                    "label": "Dog",
+                  },
+                ],
+                "trend": {
+                  "id": "00000000-0000-4000-8000-0000000000a1",
+                  "name": "Neon Dance",
+                  "slug": "neon-dance",
+                  "version": 1,
+                },
+              },
+            },
+            "videoUrl": "https://cdn.test/trends/00000000-0000-4000-8000-0000000000a1/src.mp4",
+          },
+        ],
+        "status": 202,
+      },
+      "preview": {
+        "body": {
+          "data": {
+            "jobId": "00000000-0000-4000-8000-0000000000b1",
+          },
+        },
+        "sent": [
+          {
+            "draft": false,
+            "engine": "kling-4",
+            "postPrompt": "DRAFT-PROMPT neon lights",
+            "preview": true,
+            "previewStart": 2,
+            "references": [],
+            "resolution": "720p",
+            "roles": [
+              {
+                "body": "new",
+                "hair": "new",
+                "images": [
+                  "https://u.example/me.png",
+                ],
+                "kind": "person",
+                "name": "the woman on the left",
+                "outfit": "new",
+              },
+              {
+                "body": "new",
+                "coat": "new",
+                "images": [],
+                "kind": "pet",
+                "name": "the dog",
+              },
+            ],
+            "trendRun": {
+              "display": {
+                "example": 0,
+                "slots": [
+                  {
+                    "body": "new",
+                    "fromExample": false,
+                    "hair": "new",
+                    "images": [
+                      "https://u.example/me.png",
+                    ],
+                    "key": "lead",
+                    "kind": "person",
+                    "label": "Lead dancer",
+                    "outfit": "new",
+                  },
+                  {
+                    "body": "new",
+                    "coat": "new",
+                    "fromExample": false,
+                    "images": [],
+                    "key": "dog",
+                    "kind": "pet",
+                    "label": "Dog",
+                  },
+                ],
+                "trend": {
+                  "id": "00000000-0000-4000-8000-0000000000a1",
+                  "name": "Neon Dance",
+                  "slug": "neon-dance",
+                  "version": 1,
+                },
+              },
+            },
+            "videoUrl": "https://cdn.test/trends/00000000-0000-4000-8000-0000000000a1/src.mp4",
+          },
+        ],
+        "status": 202,
+      },
+    },
+  },
+  "pulse-flash": {
+    "page": {
+      "keys": [
+        "draft",
+        "faceMaskJob",
+        "faceMaskMarksSupported",
+        "faceMaskState",
+        "published",
+        "revision",
+        "sourceCrop",
+        "trend",
+        "upscaleJobs",
+      ],
+      "status": 200,
+    },
+    "runs": {
+      "1080p": {
+        "body": {
+          "error": {
+            "code": "resolution_unsupported",
+            "message": "This trend runs at 720p, not 1080p.",
+          },
+        },
+        "sent": [],
+        "status": 400,
+      },
+      "480p": {
+        "body": {
+          "error": {
+            "code": "resolution_unsupported",
+            "message": "This trend runs at 720p, not 480p.",
+          },
+        },
+        "sent": [],
+        "status": 400,
+      },
+      "4k": {
+        "body": {
+          "error": {
+            "code": "validation_error",
+            "issues": [
+              {
+                "message": "Invalid option: expected one of "480p"|"720p"|"1080p"",
+                "path": "resolution",
+              },
+            ],
+            "message": "resolution: Invalid option: expected one of "480p"|"720p"|"1080p"",
+          },
+        },
+        "sent": [],
+        "status": 400,
+      },
+      "draft": {
+        "body": {
+          "error": {
+            "code": "draft_unsupported",
+            "message": "This trend has no draft: run it at 720p or 1080p.",
+          },
+        },
+        "sent": [],
+        "status": 400,
+      },
+      "draft at 720p": {
+        "body": {
+          "error": {
+            "code": "draft_unsupported",
+            "message": "This trend has no draft: run it at 720p or 1080p.",
+          },
+        },
+        "sent": [],
+        "status": 400,
+      },
+      "no size": {
+        "body": {
+          "data": {
+            "jobId": "00000000-0000-4000-8000-0000000000b1",
+          },
+        },
+        "sent": [
+          {
+            "draft": false,
+            "engine": "nodaro-pulse-flash",
+            "postPrompt": "DRAFT-PROMPT neon lights",
+            "preview": false,
+            "previewStart": 2,
+            "references": [],
+            "resolution": "720p",
+            "roles": [
+              {
+                "body": "new",
+                "hair": "new",
+                "images": [
+                  "https://u.example/me.png",
+                ],
+                "kind": "person",
+                "name": "the woman on the left",
+                "outfit": "new",
+              },
+              {
+                "body": "new",
+                "coat": "new",
+                "images": [],
+                "kind": "pet",
+                "name": "the dog",
+              },
+            ],
+            "trendRun": {
+              "display": {
+                "example": 0,
+                "slots": [
+                  {
+                    "body": "new",
+                    "fromExample": false,
+                    "hair": "new",
+                    "images": [
+                      "https://u.example/me.png",
+                    ],
+                    "key": "lead",
+                    "kind": "person",
+                    "label": "Lead dancer",
+                    "outfit": "new",
+                  },
+                  {
+                    "body": "new",
+                    "coat": "new",
+                    "fromExample": false,
+                    "images": [],
+                    "key": "dog",
+                    "kind": "pet",
+                    "label": "Dog",
+                  },
+                ],
+                "trend": {
+                  "id": "00000000-0000-4000-8000-0000000000a1",
+                  "name": "Neon Dance",
+                  "slug": "neon-dance",
+                  "version": 1,
+                },
+              },
+            },
+            "videoUrl": "https://cdn.test/trends/00000000-0000-4000-8000-0000000000a1/src.mp4",
+          },
+        ],
+        "status": 202,
+      },
+      "preview": {
+        "body": {
+          "data": {
+            "jobId": "00000000-0000-4000-8000-0000000000b1",
+          },
+        },
+        "sent": [
+          {
+            "draft": false,
+            "engine": "nodaro-pulse-flash",
+            "postPrompt": "DRAFT-PROMPT neon lights",
+            "preview": true,
+            "previewStart": 2,
+            "references": [],
+            "resolution": "720p",
+            "roles": [
+              {
+                "body": "new",
+                "hair": "new",
+                "images": [
+                  "https://u.example/me.png",
+                ],
+                "kind": "person",
+                "name": "the woman on the left",
+                "outfit": "new",
+              },
+              {
+                "body": "new",
+                "coat": "new",
+                "images": [],
+                "kind": "pet",
+                "name": "the dog",
+              },
+            ],
+            "trendRun": {
+              "display": {
+                "example": 0,
+                "slots": [
+                  {
+                    "body": "new",
+                    "fromExample": false,
+                    "hair": "new",
+                    "images": [
+                      "https://u.example/me.png",
+                    ],
+                    "key": "lead",
+                    "kind": "person",
+                    "label": "Lead dancer",
+                    "outfit": "new",
+                  },
+                  {
+                    "body": "new",
+                    "coat": "new",
+                    "fromExample": false,
+                    "images": [],
+                    "key": "dog",
+                    "kind": "pet",
+                    "label": "Dog",
+                  },
+                ],
+                "trend": {
+                  "id": "00000000-0000-4000-8000-0000000000a1",
+                  "name": "Neon Dance",
+                  "slug": "neon-dance",
+                  "version": 1,
+                },
+              },
+            },
+            "videoUrl": "https://cdn.test/trends/00000000-0000-4000-8000-0000000000a1/src.mp4",
+          },
+        ],
+        "status": 202,
+      },
+    },
+  },
+}
+`;

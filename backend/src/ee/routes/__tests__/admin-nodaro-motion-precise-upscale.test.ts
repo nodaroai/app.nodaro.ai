@@ -10,7 +10,9 @@ import Fastify, { type FastifyInstance } from "fastify"
  *    whether this environment's engine runs the step;
  *  - PUT is strict per resolution (1080p takes no 720p target);
  *  - any value saves whatever the engines (an engine without the flag never reads the row): no 409;
- *  - a save clears the settings cache and leaves an `admin_actions` row under an id of its own.
+ *  - a save clears the settings cache and leaves an `admin_actions` row under an id of its own;
+ *  - a save moves the trend catalog's stamp (a trend page read by the size delivered lists the sizes it leaves offered),
+ *    whatever this environment's engine; a refused one does not.
  */
 const h = vi.hoisted(() => ({
   row: null as { value: unknown; updated_at: string } | null,
@@ -19,6 +21,7 @@ const h = vi.hoisted(() => ({
   admin: true,
   invalidated: 0,
   topazDisabled: false,
+  stampMoves: 0,
 }))
 
 vi.mock("@/lib/supabase.js", () => ({
@@ -47,6 +50,7 @@ vi.mock("@/lib/supabase.js", () => ({
 vi.mock("@/lib/app-settings.js", () => ({ invalidateSettingsCache: () => void h.invalidated++ }))
 vi.mock("@/lib/topaz-video-availability.js", () => ({ topazVideoDisabledHere: () => h.topazDisabled }))
 vi.mock("@/lib/admin-check.js", () => ({ warmAdminCache: vi.fn(), checkIsAdmin: async () => h.admin }))
+vi.mock("@/ee/lib/trends/catalog-stamp.js", () => ({ trendCatalogChanged: async () => (h.stampMoves++, true) }))
 
 const { adminNodaroMotionRoutes, NODARO_MOTION_MASKING_AUDIT_TARGET } = await import("../admin-nodaro-motion.js")
 const { NODARO_MOTION_PRECISE_STYLE_ROUTE_AUDIT_TARGET } = await import("../admin-nodaro-motion-precise-style-route.js")
@@ -69,6 +73,7 @@ beforeEach(async () => {
   h.admin = true
   h.invalidated = 0
   h.topazDisabled = false
+  h.stampMoves = 0
   _resetPluginSupportsForTests()
   app = Fastify({ logger: false })
   app.addHook("preHandler", async (req) => {
@@ -142,6 +147,18 @@ describe("PUT /v1/admin/video-remake/precise-upscale", () => {
       }),
     ])
     expect(new Set([NODARO_MOTION_PRECISE_UPSCALE_AUDIT_TARGET, NODARO_MOTION_PRECISE_STYLE_ROUTE_AUDIT_TARGET, NODARO_MOTION_MASKING_AUDIT_TARGET]).size).toBe(3)
+  })
+
+  it("moves the trend catalog's stamp on every save, whatever this environment's engine; never on a refused one", async () => {
+    expect((await put({ "1080p": "off" })).statusCode).toBe(200)
+    expect(h.stampMoves).toBe(1)
+    setPluginSupports({ castSwap: { ...CS, deliveredResolution: true, trendDeliveredResolution: true, preciseUpscale: true } } as never)
+    expect((await put({ "1080p": "4k" })).statusCode).toBe(200)
+    expect(h.stampMoves).toBe(2)
+    expect((await put({ "480p": "2k" })).statusCode).toBe(400)
+    h.admin = false
+    expect((await put({ "480p": "off" })).statusCode).toBe(403)
+    expect(h.stampMoves).toBe(2)
   })
 
   it("saves each resolution a PUT leaves out at its default, so what is stored is what runs", async () => {

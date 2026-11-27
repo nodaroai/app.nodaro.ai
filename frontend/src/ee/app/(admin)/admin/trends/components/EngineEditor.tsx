@@ -1,6 +1,10 @@
 // The video model every run of the trend uses: Seedance 2.5 (the default, and
 // every trend saved before the choice) or Kling 4. People running the trend
-// never choose it; the trend's page offers the resolutions it renders. A draft
+// never choose it; the trend's page offers the resolutions it renders, or,
+// where this environment's engine reads trend runs by the size delivered
+// (`deliveredSizes`), the sizes a run is delivered at (each made one size below
+// and stepped up where Admin, Video Remake's Precise upscale offers that step;
+// the Test section lists them). A draft
 // that names none keeps no `engine`, so loading one is no change; choosing
 // Seedance 2.5 on it writes the choice.
 //
@@ -44,16 +48,20 @@ import { PulseAudioSelect } from "./PulseAudioSelect"
 import { PrismReferenceAudioSelect } from "./PrismReferenceAudioSelect"
 import { PulseReferenceAudioSelect } from "./PulseReferenceAudioSelect"
 
-const ENGINES: ReadonlyArray<{ value: AdminTrendEngine; label: string; hint: string }> = [
+const ENGINES: ReadonlyArray<{ value: AdminTrendEngine; label: string; hint: string; deliveredHint: string }> = [
   {
     value: "seedance-2-5",
     label: "Nodaro Prism (Seedance 2.5, default)",
     hint: "Edits the clip itself. Runs at 480p, 720p or 1080p; a 480p draft (\"1080p, preview first\") can be finished as the same take at 1080p with Full Quality.",
+    deliveredHint:
+      "Edits the clip itself. Delivered at 720p, 1080p or 4K, each made one size below and stepped up where Admin, Video Remake's Precise upscale offers that step (the Test section lists this environment's sizes); a 480p draft (\"1080p, preview first\") can be finished as the same take at 1080p with Full Quality.",
   },
   {
     value: "kling-4",
     label: "Nodaro Pulse (Kling 4)",
     hint: "Makes a new take guided by the clip and the pictures. Runs at 720p or 1080p, with no draft and no Full Quality.",
+    deliveredHint:
+      "Makes a new take guided by the clip and the pictures. Delivered at 720p (as it makes it), 1080p or 4K (made one size below and stepped up), with no draft and no Full Quality.",
   },
 ]
 
@@ -87,6 +95,8 @@ interface Props {
   readonly envs?: readonly TrendEngineEnvironment[]
   /** The environments could not be read: said in words, naming none. */
   readonly envsUnreadable?: boolean
+  /** This environment's engine reads trend runs by the size delivered (the trend's `runSizes`): the hints say so. */
+  readonly deliveredSizes?: boolean
 }
 
 export function EngineEditor({
@@ -104,9 +114,11 @@ export function EngineEditor({
   onPulseReferenceAudioChange,
   envs,
   envsUnreadable,
+  deliveredSizes,
 }: Props) {
   const engine = engineOfForm({ engine: value })
-  const hint = ENGINES.find((e) => e.value === engine)?.hint
+  const chosen = ENGINES.find((e) => e.value === engine)
+  const hint = deliveredSizes ? chosen?.deliveredHint : chosen?.hint
   const id = useId()
   const selectId = `${id}-engine`
   const hintId = `${id}-hint`

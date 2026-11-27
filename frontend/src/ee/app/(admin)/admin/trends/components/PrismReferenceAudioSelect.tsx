@@ -38,7 +38,7 @@ export const PRISM_REFERENCE_AUDIO_MODE_HINTS: Readonly<Partial<Record<CastSwapP
 }
 
 export const PRISM_REFERENCE_AUDIO_HINT =
-  "What the engine hears in the reference video, per output resolution. The original audio always goes back on the result."
+  "What the engine hears in the reference video, per size the video model makes it at (a run delivered one size larger reads the row of the size it is made at). The original audio always goes back on the result."
 
 export const PRISM_REFERENCE_AUDIO_PITCH_LABEL = "Pitch shift (semitones)"
 export const PRISM_REFERENCE_AUDIO_PITCH_HINT = "0 = no pitch shift"

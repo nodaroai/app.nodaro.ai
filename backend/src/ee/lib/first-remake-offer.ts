@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify"
 import { castSwapEngineFrom } from "@nodaro/shared/models"
 import { supabase } from "../../lib/supabase.js"
 import { castSwapSpelling } from "../../lib/video-remake-paths.js"
-import { loadedEngineDeliversResolution } from "../../lib/video-remake-delivered-resolution.js"
+import { loadedEngineDeliversResolution, loadedEngineDeliversTrendResolution } from "../../lib/video-remake-delivered-resolution.js"
 import { invalidateBalanceCache } from "../billing/balance-cache.js"
 import type { BillingContext } from "../../lib/billing-context.js"
 
@@ -163,7 +163,10 @@ export function resetFirstRemakeSchemaCheck(): void {
  * reads it: the engine in any vocabulary (`castSwapEngineFrom`; absent =
  * Nodaro Prism), its resolution (absent = the engine's default: 480p on
  * Prism, 720p on Pulse; a draft is 480p, and the legacy `quality: "draft"`
- * means 480p draft), and a preview. Everything else in the body is allowed.
+ * means 480p draft; read by the size delivered, `readsDeliveredResolution`:
+ * Prism's 720p, or its 480p where no step is offered), and a preview.
+ * Everything else in the body is allowed. A trend run is judged the same way:
+ * its injected body is the one the engine reads.
  */
 export function firstRemakeRunAllowed(body: unknown): boolean {
   if (!isRecord(body)) return false
@@ -187,12 +190,15 @@ export function firstRemakeRunAllowed(body: unknown): boolean {
 
 /**
  * Whether the loaded engine reads this body's `resolution` as the size delivered, as the engine decides it: it
- * declares `castSwap.deliveredResolution`, and the body is a direct run (no `trendRun`) that is no draft (`draft:
- * true`, the legacy `quality: "draft"`) and carries no `upscale` key.
+ * declares `castSwap.deliveredResolution`, and the body is no draft (`draft: true`, the legacy `quality: "draft"`),
+ * carries no `upscale` key, and is a direct run (no `trendRun`) or a trend run that says so (`trendRun.delivered:
+ * true`, ee/lib/trends/sizes.ts) on an engine that reads trend runs that way (`castSwap.trendDeliveredResolution`).
  */
 export function readsDeliveredResolution(body: Record<string, unknown>): boolean {
   if (!loadedEngineDeliversResolution()) return false
-  return !Object.hasOwn(body, "upscale") && body.trendRun === undefined && body.draft !== true && body.quality !== "draft"
+  if (Object.hasOwn(body, "upscale") || body.draft === true || body.quality === "draft") return false
+  if (body.trendRun === undefined) return true
+  return isRecord(body.trendRun) && body.trendRun.delivered === true && loadedEngineDeliversTrendResolution()
 }
 
 /** Whether the request is a Video Remake RUN (either prefix), the one route the offer admits. */
