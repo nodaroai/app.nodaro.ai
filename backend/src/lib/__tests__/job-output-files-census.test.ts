@@ -124,6 +124,8 @@ const OUTSIDE_A_JOB_FAMILY: Readonly<Record<string, string>> = {
     `${NOT_A_JOB} (the preview input clip's cut of the trend's stored face mask, \`trends/<trendId>/<uuid>.mp4\`: the trend owns it, never a job)`,
   "lib/audio-soundtrack.ts :: args.key":
     `${CACHE} (a Kling 4.0 soundtrack clip, \`uploads/video/<userId>/soundtrack-<digest>.mp4\`, keyed by the audio, frame and length it is made of: a quote and its run, or a run done again, read one copy)`,
+  "ee/lib/trend-radar/stills.ts :: stillKey(post)":
+    `${NOT_A_JOB} (a Trend Radar post's still, \`trend-radar/stills/<hash of the post link>.jpg\`, kept for the admin review page because the platform's own still link expires: the radar owns it, never a job; one copy per post, reused by every later read)`,
   "lib/character-lora.ts :: key": `${NOT_A_JOB} (a character's LoRA training zip)`,
   "lib/large-upload-storage.ts :: key": `${UPLOAD} (the large-upload lane's multipart object, \`uploads/<kind>s/<uuid>.<ext>\`)`,
   "lib/media-import.ts :: r2Key": UPLOAD,

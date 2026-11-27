@@ -15,7 +15,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import { formatDay, formatPlays, formatSeconds, platformName } from "./format"
 import { Card, ReadingsChart, StatusPill } from "./parts"
-import { radarUnavailable, safeHref, useApproveCandidate, useRadarCandidate, useRejectCandidate, useRightsDeclaration, useWatchCandidate } from "./use-trend-radar"
+import { useApproveFlow } from "./approve-flow"
+import { radarUnavailable, safeHref, useRadarCandidate, useRejectCandidate, useWatchCandidate } from "./use-trend-radar"
 
 function Chip({ children }: { children: React.ReactNode }) {
   return <span className="inline-flex items-center rounded-full bg-muted px-2.5 py-0.5 text-xs">{children}</span>
@@ -25,17 +26,15 @@ export default function AdminTrendCandidatePage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { data: c, isLoading, error } = useRadarCandidate(id)
-  const approve = useApproveCandidate()
   const watch = useWatchCandidate()
   const reject = useRejectCandidate()
   const [rejecting, setRejecting] = useState(false)
   const [reason, setReason] = useState("")
   // The declaration the admin confirms for the top post's link before its
   // clip is downloaded into the draft: the box starts unticked, every time.
-  const [rightsConfirmed, setRightsConfirmed] = useState(false)
-  const openForApproval = !!c && !(c.status === "approved" && c.trendId) && c.status !== "rejected" && c.status !== "archived"
-  const { data: declaration, error: declarationError, refetch: reloadDeclaration } = useRightsDeclaration(openForApproval && !!c?.topPost)
-  const busy = approve.isPending || watch.isPending || reject.isPending
+  const approve = useApproveFlow(c)
+  const { rightsConfirmed, setRightsConfirmed, declaration, declarationError, reloadDeclaration } = approve
+  const busy = approve.pending || watch.isPending || reject.isPending
 
   if (isLoading && !c) {
     return <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" aria-label="Loading" /></div>
@@ -55,10 +54,8 @@ export default function AdminTrendCandidatePage() {
 
   // With a top post the clip is downloaded: the admin confirms the declaration
   // for its link first, and the confirmation rides into the download.
-  const needsRights = !!top
   const onApprove = () => {
-    if (needsRights && !(rightsConfirmed && declaration)) return
-    approve.mutate({ id: c.id, ...(needsRights && declaration ? { confirm: { url: top.url, declarationVersion: declaration.version } } : {}) }, {
+    approve.run({
       onSuccess: ({ trendId, clip }) => {
         toast.success(clip === "attaching" ? "Draft trend created; the top post's clip is being added." : "Draft trend created.")
         navigate(`/admin/trends/${trendId}`)
@@ -119,8 +116,8 @@ export default function AdminTrendCandidatePage() {
               {c.status !== "watching" && (
                 <Button variant="outline" onClick={onWatch} disabled={busy}>Keep watching</Button>
               )}
-              <Button onClick={onApprove} disabled={busy || decided || (needsRights && !(rightsConfirmed && declaration))}>
-                {approve.isPending ? <Loader2 className="h-4 w-4 me-2 animate-spin" /> : <Plus className="h-4 w-4 me-2" />}
+              <Button onClick={onApprove} disabled={busy || decided || !approve.ready}>
+                {approve.pending ? <Loader2 className="h-4 w-4 me-2 animate-spin" /> : <Plus className="h-4 w-4 me-2" />}
                 Open as draft trend
               </Button>
             </>
@@ -128,7 +125,7 @@ export default function AdminTrendCandidatePage() {
         </div>
       </div>
 
-      {openForApproval && top && (
+      {approve.open && top && (
         <Card title="Before the clip is downloaded">
           <label className="flex items-start gap-3 text-sm cursor-pointer">
             <Checkbox

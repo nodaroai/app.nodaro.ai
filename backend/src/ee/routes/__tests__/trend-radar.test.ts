@@ -46,6 +46,9 @@ vi.mock("../../lib/trends/store.js", () => ({
 vi.mock("../../lib/trends/schemas.js", () => ({
   trendVersionDataSchema: { safeParse: (v: unknown) => ({ success: true, data: v }) },
 }))
+vi.mock("../../lib/trend-radar/reading-cost.js", () => ({
+  readingCost: vi.fn(async (runner: string | null) => ({ searchesPerRead: 3, creditsPerRead: 140, runnerCredits: runner ? 5000 : null, maxSearchesPerDay: 5000, deepSearchesMax: 4, creditsPerDeepSearch: 66 })),
+}))
 vi.mock("../../lib/trend-radar/attach-clip.js", () => ({
   attachTopPostClip: vi.fn(async (input: unknown) => {
     state.attached.push(input)
@@ -70,7 +73,7 @@ vi.mock("../../lib/trend-radar/store.js", () => {
   return {
     TrendRadarUnavailableError: class TrendRadarUnavailableError extends Error {},
     toCard: card,
-    readSummary: vi.fn(async () => ({ lastRun: null, counts: { candidates: 1, watching: 0, slowing: 0 }, searchesToday: 0, dailySearchBudget: 60 })),
+    readSummary: vi.fn(async () => ({ lastRun: null, counts: { candidates: 1, watching: 0, slowing: 0 }, searchesToday: 0, dailySearchBudget: 60, runnerUserId: "runner-1" })),
     listCandidates: vi.fn(async (params: unknown) => ({ data: [{ params }], next: null })),
     readSettings: vi.fn(async () => ({ thresholds: { minCreators: 5, windowDays: 21, risingPct: 15, slowingPct: 1, maxClipSec: 30, dailySearchBudget: 60 }, runnerUserId: null, runAt: "06:00", lastRunDate: null })),
     readCandidate: vi.fn(async (id: string) => (state.candidates.has(id) ? { ...card(state.candidates.get(id)!), posts: [], readings: [] } : null)),
@@ -154,9 +157,18 @@ describe("the queue and one candidate", () => {
     expect((await app.inject({ method: "GET", url: "/v1/trend-radar/candidates/0f1d6c9a-7b1e-4c7a-9b1c-2f6b1a8d2e02", headers: asAdmin })).statusCode).toBe(404)
   })
 
+  it("sorts by plays", async () => {
+    const list = await app.inject({ method: "GET", url: "/v1/trend-radar/candidates?sort=plays", headers: asAdmin })
+    expect(list.statusCode).toBe(200)
+    expect(list.json().data[0].params).toEqual({ sort: "plays" })
+  })
+
   it("summary answers the counts", async () => {
     const res = await app.inject({ method: "GET", url: "/v1/trend-radar/summary", headers: asAdmin })
     expect(res.json().data.counts).toEqual({ candidates: 1, watching: 0, slowing: 0 })
+    // What reading costs, priced for the runner; the runner's id itself stays on the server.
+    expect(res.json().data.reading).toEqual({ searchesPerRead: 3, creditsPerRead: 140, runnerCredits: 5000, maxSearchesPerDay: 5000, deepSearchesMax: 4, creditsPerDeepSearch: 66 })
+    expect(res.json().data).not.toHaveProperty("runnerUserId")
   })
 })
 
@@ -243,6 +255,14 @@ describe("settings and the run", () => {
     expect(state.audits[0]).toEqual(["update_trend_radar_settings", "trend_radar_settings", "1", { keys: ["runAt", "sources", "thresholds"] }])
     const http = await app.inject({ method: "PUT", url: "/v1/trend-radar/settings", headers: asAdmin, payload: { sources: [{ name: "Site A", kind: "sitemap", url: "http://a.test/sitemap.xml", enabled: true }] } })
     expect(http.statusCode).toBe(400)
+  })
+
+  it("a daily search budget runs up to 5,000 (a candidate read is three searches)", async () => {
+    const ok = await app.inject({ method: "PUT", url: "/v1/trend-radar/settings", headers: asAdmin, payload: { thresholds: { dailySearchBudget: 5000 } } })
+    expect(ok.statusCode).toBe(200)
+    expect(state.settingsPatches).toEqual([{ thresholds: { dailySearchBudget: 5000 }, runnerUserId: USER }])
+    const over = await app.inject({ method: "PUT", url: "/v1/trend-radar/settings", headers: asAdmin, payload: { thresholds: { dailySearchBudget: 5001 } } })
+    expect(over.statusCode).toBe(400)
   })
 
   it("Run now answers 202, names the runner and starts one run", async () => {

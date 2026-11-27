@@ -41,8 +41,9 @@ import {
 } from "../lib/trend-radar/store.js"
 import { makeSearch, runDue, runTrendRadar } from "../lib/trend-radar/run.js"
 import { attachTopPostClip } from "../lib/trend-radar/attach-clip.js"
+import { readingCost } from "../lib/trend-radar/reading-cost.js"
 import { isImportRefusal, requireImportAllowed } from "../../lib/import-gate.js"
-import { TREND_CANDIDATE_SORTS, TREND_CANDIDATE_STATUSES, TREND_RADAR_SOURCE_KINDS } from "../lib/trend-radar/types.js"
+import { DAILY_SEARCH_BUDGET_MAX, TREND_CANDIDATE_SORTS, TREND_CANDIDATE_STATUSES, TREND_RADAR_SOURCE_KINDS } from "../lib/trend-radar/types.js"
 
 const SESSION_ONLY_MSG = "Trend Radar answers a signed-in admin session only"
 
@@ -77,7 +78,7 @@ const settingsBody = z.strictObject({
       risingPct: z.number().min(0).max(1000).optional(),
       slowingPct: z.number().min(0).max(100).optional(),
       maxClipSec: z.int().min(1).max(120).optional(),
-      dailySearchBudget: z.int().min(0).max(1000).optional(),
+      dailySearchBudget: z.int().min(0).max(DAILY_SEARCH_BUDGET_MAX).optional(),
     })
     .optional(),
   alerts: z.strictObject({ slackNewCandidate: z.boolean().optional(), slackDailySummary: z.boolean().optional() }).optional(),
@@ -133,7 +134,8 @@ export async function trendRadarRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/v1/trend-radar/summary", { preHandler: adminSession }, async (req, reply) => {
     try {
-      return { data: await readSummary() }
+      const { runnerUserId, ...summary } = await readSummary()
+      return { data: { ...summary, reading: await readingCost(runnerUserId) } }
     } catch (e) {
       return failed(reply, req, e, "Failed to read the radar summary")
     }

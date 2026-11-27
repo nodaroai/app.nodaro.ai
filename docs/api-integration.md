@@ -7433,9 +7433,9 @@ whose storage does not have the radar yet answers `503 not_available`.
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/v1/trend-radar/summary` | `{ data: { lastRun, counts: { candidates, watching, slowing }, searchesToday, dailySearchBudget } }`. |
-| `GET` | `/v1/trend-radar/candidates` | `{ data: TrendCandidateCard[], next }`. Query: `status` (`watching`, `candidate`, `slowing`, `approved`, `rejected`, `archived`; left out = everything but the last two), `sort` (`creators` default, `dayChange`, `firstSeen`), `cursor`, `limit` 1–200. |
-| `GET` | `/v1/trend-radar/candidates/:id` | `{ data: TrendCandidate }`: the card plus `posts`, `readings` (one per day, oldest first), `templatesElsewhere`, `search`, `history`, `checklist` and `rejectReason`. `404 not_found`. |
+| `GET` | `/v1/trend-radar/summary` | `{ data: { lastRun, counts: { candidates, watching, slowing }, searchesToday, dailySearchBudget, reading } }`. `reading` is `{ searchesPerRead, creditsPerRead, runnerCredits, maxSearchesPerDay, deepSearchesMax, creditsPerDeepSearch }`: the searches one candidate's reading takes (one per platform), the credits that reading is charged at the search's current charged price (`null` when a price cannot be read), what the account the run searches as holds now (`null` before a runner is set), the highest daily search budget the settings take, and the deeper count: a platform whose search came back full is searched again in other orders so a big trend's people are counted past one search's ceiling, at most `deepSearchesMax` extra searches per candidate, each charged `creditsPerDeepSearch`, out of the same daily budget — enough to set the budget in candidates per day and see what a day costs. `lastRun.stoppedEarly` says why the last run stopped before reading every candidate it could afford (the account it searches as ran out of credits; it stops at the first refused search and leaves the rest for the next run), `null` or absent when it did not. |
+| `GET` | `/v1/trend-radar/candidates` | `{ data: TrendCandidateCard[], next }`. Query: `status` (`watching`, `candidate`, `slowing`, `approved`, `rejected`, `archived`; left out = everything but the last two), `sort` (`creators` default, `dayChange`, `firstSeen`, `plays`), `cursor`, `limit` 1–200. |
+| `GET` | `/v1/trend-radar/candidates/:id` | `{ data: TrendCandidate }`: the card plus `posts` (up to 8: each platform's most-played post, then the most-played overall), `readings` (one per day, oldest first: `{ date, creators, plays, posts, growthPct }`), `templatesElsewhere`, `search`, `history`, `checklist` and `rejectReason`. `404 not_found`. |
 | `POST` | `/v1/trend-radar/candidates/:id/approve` | Creates a draft trend named after the candidate and marks it `approved`: `{ data: { trendId, clip } }`. `clip` is `"attaching"` when the top post is being downloaded (as the approving admin) and stored as the draft's source clip in the background — the candidate's `history` then gains `source_attached`, or `source_failed` with why — else `"none"`. Approving again answers the same trend. `409 slug_taken` when no free slug was found. |
 | `POST` | `/v1/trend-radar/candidates/:id/watch` | Back to `watching`: `{ data: TrendCandidateCard }`. |
 | `POST` | `/v1/trend-radar/candidates/:id/reject` | Body `{ reason }` (1–500 characters). `rejected`: `{ data: TrendCandidateCard }`. |
@@ -7444,12 +7444,43 @@ whose storage does not have the radar yet answers `503 not_available`.
 | `POST` | `/v1/trend-radar/run` | Starts today's run now: `202 { data: { runId, startedAt } }`. One run at a time. |
 
 A card: `{ id, name, slug, status, label, soundName, durationSec, creators,
-plays, dayChangePct, firstSeen: { kind, name, url, firstSeenAt }, topPost,
-passedAt, trendId, createdAt, updatedAt }`. A post: `{ platform, url, author,
-postedAt, plays, likes, soundName, stillUrl, embedUrl, durationSec }` — on
-Instagram `plays` is `null` (views are hidden to a logged-out reader) and
-`likes` is the count to show. Labels: `new`, `watching`, `rising`, `hot`,
-`slowing`.
+creatorsCapped, plays, dayChangePct, firstSeen: { kind, name, url, firstSeenAt },
+topPost, platforms, firstPostedAt, lastReadAt, passedAt, trendId, createdAt,
+updatedAt }`. A post: `{ platform, url, author, postedAt, plays, likes,
+soundName, stillUrl, embedUrl, durationSec }` — on Instagram `plays` is `null`
+(views are hidden to a logged-out reader) and `likes` is the count to show.
+`stillUrl` is a small copy the read kept on this deployment's storage (the
+platforms' own stills stop answering within hours), or, when no copy could be
+made, the platform's own short-lived link. Kept stills are for the admin's
+review only.
+Labels: `new`, `watching`, `rising`, `hot`, `slowing`.
+
+**How a candidate is read.** Each read searches the candidate's name plus
+"ai" on TikTok, Instagram and YouTube (Shorts): three searches against the
+daily search budget (`thresholds.dailySearchBudget`, default 900: every open
+candidate read every day), for up to
+60 posts on TikTok and Instagram and 20 on YouTube. A candidate is read only
+when the day's budget still covers all three; candidates never read come
+first (newest first), then the ones read longest ago, so every open candidate
+gets its turn. A platform whose search fails is skipped for that read and the
+others are kept.
+
+- `creators` counts distinct accounts across the platforms (the same handle on
+  two platforms counts twice). `creatorsCapped` is `true` when a platform's
+  search returned as many posts as it may: more creators likely posted it, so
+  show the count as "n+".
+- `platforms` holds each platform the last read found posts on:
+  `{ posts, creators, plays, capped, top }`, `top` being its most-played post.
+- `firstPostedAt` is the earliest post date any read saw (how old the trend
+  is); `lastReadAt` is when the run last read the candidate.
+- `growthPct` on a reading is the plays growth per day, in percent, over the
+  posts that reading and the previous one both saw — the same posts, so a
+  search that answers different posts on another day does not move it. Over
+  a gap of several days it is the daily rate, compounded. It is `null` on the
+  first reading, when no post was seen twice, and on readings from before it
+  was measured. `dayChangePct` on the card is the latest reading's
+  `growthPct`; when that is `null`, it is the change in summed plays from the
+  previous reading. The labels read the same figure.
 
 ## 13i. Content rights (import confirmations)
 
