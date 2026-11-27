@@ -1,5 +1,7 @@
+import { markVideoSendStarted } from "../../lib/video-send-start.js"
 // @reads-none reads only the media it renders or extracts into work dirs
 import { dirname } from "node:path"
+import { supabase } from "../../lib/supabase.js"
 import {
   IMAGE_TO_VIDEO_DEFAULT_PROVIDER, LIP_SYNC_DEFAULT_PROVIDER, MOTION_TRANSFER_DEFAULT_PROVIDER, TEXT_TO_VIDEO_DEFAULT_PROVIDER,
   VIDEO_RETAKE_MODEL, QUEUED_VIDEO_TO_VIDEO_PROVIDER, VIDEO_UPSCALE_DEFAULT_PROVIDER, VOICED_VIDEO_DEFAULT_PROVIDER,
@@ -97,6 +99,8 @@ import { isFinalAttemptOfRunningJob, JobCancelledError } from "../../lib/job-can
 import { discardFailedRunCopies } from "../../lib/discard-job-copies.js"
 import { seedance25OutputFormat } from "../../providers/kie/video.js"
 import { runSeedanceDraftFinalize } from "../../providers/kie/seedance-draft.js"
+import { finalizeRoutedDraft } from "../../lib/alternate-route.js"
+import { ALTERNATE_ROUTE_REF_PREFIX } from "../../lib/alternate-route-request.js"
 import { seedance25CostUsd, seedance25FlashCostUsd } from "../../providers/kie/seedance-cost.js"
 import { kling4CostUsd } from "../../providers/kie/kling4-cost.js"
 import { measureSeedanceDraftRenderSec, draftRenderOutputData, positiveSeconds, seedanceDraftFinalizeQueuedBilledSec } from "../../lib/seedance-draft-finalize.js"
@@ -376,6 +380,17 @@ function withMeasuredRenderCost<R extends { cost: number | null; routedVia?: str
  */
 function withRouteProvider<R extends { routedVia?: string; providerUsed: string }>(result: R): R {
   return result.routedVia ? { ...result, providerUsed: ALTERNATE_ROUTE_PROVIDER_USED } : result
+}
+
+/**
+ * THE provider cost a lane records for a result: a routed run's (it carries
+ * `routedVia`) is the route's own billed figure, untouched — settlement
+ * charges from it and factors rise from it; any other result's is `derive()`,
+ * the default supplier's rates. Every lane that rewrites a result's cost goes
+ * through here (`__tests__/routed-provider-cost.test.ts`).
+ */
+function laneProviderCost(result: { cost?: number | null; routedVia?: string }, derive: () => number | null): number | null {
+  return result.routedVia ? (result.cost ?? null) : derive()
 }
 
 /** `jobs.provider` of a run an alternate route made. */
@@ -944,7 +959,8 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
       if (allowContentPolicyRewrite === false) throw err
       const rewritten = await rewriteForContentPolicy(prompt)
       if (!rewritten) throw err
-      result = await textToVideo(rewritten, resolvedT2vProvider, duration, aspectRatio, t2vOpts, t2vReconcile)
+      // A second send of this job: on a routed job it runs on the same route, freshly quoted.
+      result = await textToVideo(rewritten, resolvedT2vProvider, duration, aspectRatio, t2vOpts, { ...t2vReconcile, routeJob: { ...t2vReconcile.routeJob, send: 2 } })
       contentPolicyRewrite = { original: prompt, rewritten }
     }
   } finally {
@@ -1198,7 +1214,7 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
       duration,
       undefined,
       { audioToVideo: true, referenceAudioUrls: [referenceAudioUrls[0]], resolution, ...(typeof seed === "number" ? { seed } : {}) },
-      { onTaskCreated: lipSyncOnTaskCreated },
+      { onTaskCreated: lipSyncOnTaskCreated, routeJob: { jobId: ctx.jobId, jobType: "lip-sync" } },
     )
     resultUrl = result.url
     // What the runner records: the rate on the seconds sent.
@@ -1222,7 +1238,7 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
       imageUrl,
       resolvedProvider,
       prompt || "A person speaking naturally",
-      8, // duration — seedance can pick 4-15s; we reserve credits at 8s
+      SEEDANCE_LIP_SYNC_SECONDS, // the length its price id names (seedanceLipSyncCreditId), and what a routed quote is made on
       undefined, // endFrameUrl — not used in lip-sync mode
       {
         referenceAudioUrls: [audioUrl],
@@ -1241,14 +1257,15 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
         // (`addVoiceLineIfSilent`, decided 2026-11-17).
         generateAudio: false,
       },
-      { onTaskCreated: lipSyncOnTaskCreated },
+      // `routeJob`: this job may run on the route the admin chose (lib/alternate-route.ts).
+      { onTaskCreated: lipSyncOnTaskCreated, routeJob: { jobId: ctx.jobId, jobType: "lip-sync" } },
     )
     resultUrl = result.url
     // Seedance 2.5 and 2.5 Flash: what KIE bills an 8-second run with no
     // reference video, at the resolution sent (the adapter reports a nominal
     // figure). The Seedance 2.0 models have no cost helper yet and keep it.
-    resultCost = seedanceLipSyncProviderCost(result.cost, resolvedProvider, seedanceLipSyncSentResolution)
-    resultProviderUsed = result.providerUsed
+    resultCost = laneProviderCost(result, () => seedanceLipSyncProviderCost(result.cost, resolvedProvider, seedanceLipSyncSentResolution))
+    resultProviderUsed = result.routedVia ? ALTERNATE_ROUTE_PROVIDER_USED : result.providerUsed
     resultMeta = result
   } else if (FAL_LIP_SYNC_PROVIDERS.has(resolvedProvider as never)) {
     // fal.ai path (sync-lipsync-v3) — video+audio → video dubbing via the fal
@@ -1710,6 +1727,14 @@ const handleVideoUpscale: HandlerFn = async function handleVideoUpscale(job, ctx
           console.warn(`[worker] video-upscale ${ctx.jobId}: could not read the finalize's billed seconds; no provider cost is recorded:`, err)
           return undefined
         })
+        // A draft the alternate route made is finalized on that route, by the
+        // job's signed decision (lib/alternate-route.ts) — never sent here.
+        if (kieTaskId.startsWith(ALTERNATE_ROUTE_REF_PREFIX)) {
+          const routed = await finalizeRoutedDraft(ctx.jobId)
+          finalizeMeta = { url: routed.url, ...(typeof routed.cost === "number" ? { cost: routed.cost } : {}) }
+          return routed.url
+        }
+        await markVideoSendStarted(ctx.jobId)
         const result = await runSeedanceDraftFinalize(kieTaskId, {
           onProgress,
           reconcile: { onTaskCreated: makeOnTaskCreated(ctx.jobId, "kie-seedance-draft") },
@@ -2140,7 +2165,7 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
             referenceVideoUrls: [referenceVideoUrl],
             aspectRatio,
             ...(outputFormat === "mov" ? { outputFormat } : {}),
-          })
+          }, { routeJob: { jobId: ctx.jobId, jobType: "extend-video" } })
         } else {
           // No start image: the reference task type the recipe declares, through
           // the platform's one resolver — `extend` keeps the set length and
@@ -2164,7 +2189,7 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
             aspectRatio: task.aspectRatio,
             ...(task.taskType ? { referenceTaskType: task.taskType } : {}),
             ...(outputFormat === "mov" ? { outputFormat } : {}),
-          })
+          }, { routeJob: { jobId: ctx.jobId, jobType: "extend-video" } })
         }
       } finally {
         seedanceRamp.stop()
@@ -2347,11 +2372,11 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
       // Gemini Omni Flash 1.2's fal bill, by the rates measured on its
       // endpoint (the queue client does not surface fal's billable units):
       // the seconds added at its resolution, the clip sent, its thinking.
-      const providerCost = genModel === "seedance-2-5-flash" && typeof gen.cost === "number"
+      const providerCost = laneProviderCost(gen, () => genModel === "seedance-2-5-flash" && typeof gen.cost === "number"
         ? seedance25FlashCostUsd({ resolution: genResolution, hasVideoRef: true, inputSec: sentSec, outputSec: extSeconds })
         : recipe.transport === "fal"
           ? falGeminiOmniExtendCostUsd({ resolution: ranResolution, sentSec: sentPictureSec ?? sentSec, addedSec: ranAddedSec })
-          : gen.cost ?? null
+          : gen.cost ?? null)
       const { ok: seedanceOk } = await finalizeJobWithMedia({
         jobId: ctx.jobId,
         jobType: "extend-video",
@@ -2950,6 +2975,32 @@ async function mergeVoiceTrackToR2(
  * with the proxy itself. A single voice stays on direct TTS: it honours the
  * voice's own `ttsProvider` (turbo/multilingual/v3/v4).
  */
+/** The `jobs.output_data` key a voiced run keeps its synthesised track under until it completes (a re-pick reuses it). */
+const VOICED_TRACK_CHECKPOINT_KEY = "voicedTrackUrl"
+
+/** The voiced track this job already made (an earlier attempt), or undefined. A read that fails makes none (it is made again). */
+async function savedVoicedTrack(jobId: string): Promise<string | undefined> {
+  try {
+    const { data } = await supabase.from("jobs").select("output_data").eq("id", jobId).maybeSingle()
+    const url = ((data as { output_data?: Record<string, unknown> | null } | null)?.output_data ?? {})[VOICED_TRACK_CHECKPOINT_KEY]
+    return typeof url === "string" && url.length > 0 ? url : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** Saves the synthesised track on the live row (merge onto its output_data; best effort). */
+async function saveVoicedTrack(jobId: string, url: string): Promise<void> {
+  try {
+    const { data, error } = await supabase.from("jobs").select("output_data").eq("id", jobId).maybeSingle()
+    if (error) return
+    const existing = ((data as { output_data?: Record<string, unknown> | null } | null)?.output_data) ?? {}
+    await supabase.from("jobs").update({ output_data: { ...existing, [VOICED_TRACK_CHECKPOINT_KEY]: url } }).eq("id", jobId).in("status", ["pending", "processing"])
+  } catch {
+    // A re-pick then makes it again.
+  }
+}
+
 async function synthesizeDialogueTrack(
   ctx: Parameters<HandlerFn>[1],
   resolved: ResolvedDialogueVoiceLine[],
@@ -3053,16 +3104,25 @@ const handleVoicedVideo: HandlerFn = async function handleVoicedVideo(job, ctx) 
   // its 1080p finalize re-applies the same mux.
   let voiceTrackMux: DraftAudioMux | undefined
 
+  // `routeJob`: this job may run on the route the admin chose (lib/alternate-route.ts).
+  const voicedRoute = { routeJob: { jobId: ctx.jobId, jobType: "voiced-video" as const } }
   if (mode === "audio_driven" && resolved.length > 0) {
     // Synthesise the dialogue track (voiceType-aware) -> reference audio -> lip-sync.
     // Any failure in this chain degrades to a plain silent clip below rather than
     // hard-failing the job (the Studio-reported contract violation).
     try {
-      const trackUrl = await withProgressRamp(job, ctx.jobId, { start: 5, cap: 30 },
-        () => synthesizeDialogueTrack(ctx, resolved, voices, d.languageCode, d.dialogueProvider))
+      // A re-picked job reuses the track it already paid for (saved on the row
+      // once made), never synthesising — and billing — the speech a second time.
+      const trackUrl = (await savedVoicedTrack(ctx.jobId)) ?? await withProgressRamp(job, ctx.jobId, { start: 5, cap: 30 },
+        async () => {
+          const made = await synthesizeDialogueTrack(ctx, resolved, voices, d.languageCode, d.dialogueProvider)
+          await saveVoicedTrack(ctx.jobId, made)
+          return made
+        })
       result = await withProgressRamp(job, ctx.jobId, { start: 30, cap: 85 },
         () => imageToVideo(d.imageUrl, provider, d.prompt, d.duration, undefined,
-          { referenceAudioUrls: [trackUrl], generateAudio: false, draft: d.draft, ...taskTypeOption, resolution: d.resolution, aspectRatio: d.aspectRatio, seed: d.seed, negativePrompt: d.negativePrompt, referenceImageUrls: d.referenceImageUrls, referenceVideoUrls: d.referenceVideoUrls }))
+          { referenceAudioUrls: [trackUrl], generateAudio: false, draft: d.draft, ...taskTypeOption, resolution: d.resolution, aspectRatio: d.aspectRatio, seed: d.seed, negativePrompt: d.negativePrompt, referenceImageUrls: d.referenceImageUrls, referenceVideoUrls: d.referenceVideoUrls },
+          voicedRoute))
       // Seedance 2 ran with generate_audio:false → the clip is SILENT; the
       // reference audio only drove lip motion. Mux the SAME synthesised track in
       // so the delivered video actually carries the voice (a bare upload of
@@ -3074,6 +3134,7 @@ const handleVoicedVideo: HandlerFn = async function handleVoicedVideo(job, ctx) 
       voiceApplied = true
       voiceTrackMux = voiceTrackMuxRecipe(trackUrl)
     } catch (err) {
+      if (err && typeof err === "object" && ("routedFailure" in err || ["AlternateRoutePendingError", "DrainAbortError", "JobCancelledError", "JobStopRequestedError"].includes((err as Error).name))) throw err
       console.warn(`[worker] voiced-video ${ctx.jobId}: audio_driven voice chain failed — falling back to a silent clip: ${err instanceof Error ? err.message : String(err)}`)
       voiceWarning = "voice_chain_failed"
       result = undefined
@@ -3087,7 +3148,8 @@ const handleVoicedVideo: HandlerFn = async function handleVoicedVideo(job, ctx) 
     const veoPrompt = spoken ? `${(d.prompt ?? "").trim()}\n\nSpoken dialogue: "${spoken}"`.trim() : (d.prompt ?? "")
     result = await withProgressRamp(job, ctx.jobId, { start: 5, cap: 55 },
       () => imageToVideo(d.imageUrl, provider, veoPrompt, d.duration, undefined,
-        { generateAudio: true, draft: d.draft, ...taskTypeOption, resolution: d.resolution, aspectRatio: d.aspectRatio, seed: d.seed, negativePrompt: d.negativePrompt, referenceImageUrls: d.referenceImageUrls, referenceVideoUrls: d.referenceVideoUrls, referenceAudioUrls: d.referenceAudioUrls }))
+        { generateAudio: true, draft: d.draft, ...taskTypeOption, resolution: d.resolution, aspectRatio: d.aspectRatio, seed: d.seed, negativePrompt: d.negativePrompt, referenceImageUrls: d.referenceImageUrls, referenceVideoUrls: d.referenceVideoUrls, referenceAudioUrls: d.referenceAudioUrls },
+        voicedRoute))
     try {
       finalVideo = await revoiceClipToR2(job, ctx, result.url, primaryVoiceId)
       voiceApplied = true
@@ -3107,7 +3169,9 @@ const handleVoicedVideo: HandlerFn = async function handleVoicedVideo(job, ctx) 
     }
     result = await withProgressRamp(job, ctx.jobId, { start: 30, cap: 90 },
       () => imageToVideo(d.imageUrl, provider, d.prompt, d.duration, undefined,
-        { generateAudio: d.generateAudio, sound: d.sound, draft: d.draft, ...taskTypeOption, resolution: d.resolution, aspectRatio: d.aspectRatio, seed: d.seed, negativePrompt: d.negativePrompt, referenceImageUrls: d.referenceImageUrls, referenceVideoUrls: d.referenceVideoUrls, referenceAudioUrls: d.referenceAudioUrls }))
+        { generateAudio: d.generateAudio, sound: d.sound, draft: d.draft, ...taskTypeOption, resolution: d.resolution, aspectRatio: d.aspectRatio, seed: d.seed, negativePrompt: d.negativePrompt, referenceImageUrls: d.referenceImageUrls, referenceVideoUrls: d.referenceVideoUrls, referenceAudioUrls: d.referenceAudioUrls },
+        // A second send of this job (the plain clip): on a routed job, the same route, freshly quoted.
+        { routeJob: { ...voicedRoute.routeJob, send: 2 } }))
     finalVideo = await uploadVideoMaybeWatermark(result.url, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
     voiceApplied = false
   }

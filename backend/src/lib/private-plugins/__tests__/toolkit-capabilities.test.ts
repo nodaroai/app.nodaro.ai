@@ -13,11 +13,8 @@ import { CONTRACT_VERSION, type NodaroPrivatePlugin, type PrivatePluginsModule }
  * 2026-10-06: ship capability markers, leave the version alone.
  */
 describe("tk.capabilities", () => {
-  // Flipped to true only by the change that makes the host honour the second
-  // version of the alternate route (per-model routing, route prices, no fallback):
-  // a plugin must never see a host that claims it before it delivers it.
-  it("does not advertise the second version of the alternate route yet", () => {
-    expect(buildToolkit().capabilities?.alternateRouteV2).toBeUndefined()
+  it("advertises the second version of the alternate route (per-model routing, quoted holds, no fallback)", () => {
+    expect(buildToolkit().capabilities?.alternateRouteV2).toBe(true)
   })
 
   it("advertises mix-audio ducking", () => {
@@ -142,5 +139,10 @@ describe("tk.capabilities", () => {
     expect(CONTRACT_VERSION).toBe(1)
     const mod: PrivatePluginsModule = { contractVersion: 1, plugins: [] }
     expect(mod.contractVersion).toBe(CONTRACT_VERSION)
+  })
+
+  it("advertises the stop rule and the unassembled delivery a plugin gates on", () => {
+    expect(buildToolkit().capabilities?.proStopFinishesSegment).toBe(true)
+    expect(buildToolkit().capabilities?.proDeliveryFallback).toBe(true)
   })
 })

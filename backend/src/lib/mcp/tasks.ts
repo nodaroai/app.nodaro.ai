@@ -122,13 +122,57 @@ export function completeTask(taskId: string): void {
 export async function cancelTask(taskId: string, userId: string): Promise<boolean> {
   const t = REGISTRY.get(taskId)
   if (!t || t.userId !== userId) return false
+  // The stop rule first, before anything is aborted: a video the provider is already making is
+  // not cancelled. It stays registered and running, and this answers false (nothing was cancelled).
+  const stop = await cancelUnderStopRule(taskId, userId)
+  if (stop === "left-running") return false
+  // Any other job is cancelled first, and only then is the task dropped: when the shared cancel
+  // finds it cannot be cancelled now (work already in flight that it leaves to finish), nothing
+  // was cancelled, the task stays registered and running, and this answers false.
+  if (stop === "not-a-video-run" && (await markJobCancelled(taskId, userId)) === "left-running") return false
   t.abortController.abort()
   REGISTRY.delete(taskId)
-  await markJobCancelled(taskId, userId)
   return true
 }
 
-async function markJobCancelled(jobId: string, userId: string): Promise<void> {
+/** The cancel could not tell whether the job's video already started; nothing was cancelled. Try again. */
+export class TaskCancelUnavailableError extends Error {
+  readonly retryable = true
+  constructor() {
+    super("This task cannot be cancelled right now. Try again in a moment.")
+    this.name = "TaskCancelUnavailableError"
+  }
+}
+
+/**
+ * The stop rule (lib/stop-rule.ts) for an MCP cancel. A followed video run, or
+ * a segmented one, is cancelled only through the shared cancel, which leaves a
+ * video whose task already started to finish (it is delivered and charged) and
+ * never releases what a run already billed. Any other job is not this
+ * function's: the caller flips it as before.
+ *
+ * A read that FAILS cancels nothing: flipping a row whose send may have
+ * started would throw away a paid video, so the cancel is refused (retryable).
+ * A database that does not have the send marker yet is not a failure: no send
+ * is marked there, and the job is cancelled as it always was.
+ */
+async function cancelUnderStopRule(jobId: string, userId: string): Promise<"not-a-video-run" | "cancelled" | "left-running"> {
+  const { supabase } = await import("../supabase.js")
+  const { STOP_RULE_COLUMNS, followedLane, finishesWhenStopped, stopsAtSegmentBoundary } = await import("../stop-rule.js")
+  const { isMissingColumnError } = await import("../postgrest-errors.js")
+  // trash-read: a cancel acts on the caller's running job wherever it is filed; nothing is answered from it
+  const stop = await supabase.from("jobs").select(`status, ${STOP_RULE_COLUMNS}`).eq("id", jobId).eq("user_id", userId).maybeSingle()
+  if (stop.error) {
+    if (isMissingColumnError(stop.error)) return "not-a-video-run"
+    throw new TaskCancelUnavailableError()
+  }
+  if (!stop.data || !(stopsAtSegmentBoundary(stop.data) || followedLane(stop.data) || finishesWhenStopped(stop.data))) return "not-a-video-run"
+  const { cancelOwnedJob } = await import("../cancel-job.js")
+  const result = await cancelOwnedJob(jobId, userId)
+  return result.kind === "in_flight" ? "left-running" : "cancelled"
+}
+
+async function markJobCancelled(jobId: string, userId: string): Promise<"cancelled" | "left-running"> {
   const { supabase } = await import("../supabase.js")
   // Fast path, unchanged: a job still on a worker is cancelled by flipping the
   // row — the worker's own pickup / completion CAS then no-ops and refunds.
@@ -168,7 +212,7 @@ async function markJobCancelled(jobId: string, userId: string): Promise<void> {
     const analysisJobId = typeof input?.analysisJobId === "string" ? input.analysisJobId : null
     const { cancelRunningChildJobs } = await import("../cancel-job.js")
     await cancelRunningChildJobs(jobId, userId, { analysisJobId })
-    return
+    return "cancelled"
   }
 
   // Nothing flipped: the row is either already terminal (nothing to do), a
@@ -190,6 +234,7 @@ async function markJobCancelled(jobId: string, userId: string): Promise<void> {
   if (result.kind === "cancelled") {
     await cancelRunningChildJobs(jobId, userId, { analysisJobId: result.analysisJobId })
   }
+  return result.kind === "in_flight" ? "left-running" : "cancelled"
 }
 
 /**

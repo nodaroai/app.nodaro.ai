@@ -30,6 +30,8 @@ const SRC = join(__dirname, "..")
 const HOLD_READERS: Record<string, string> = {
   "ee/billing/credits.ts": "reservation and settlement mechanics: refunds and commits move the hold",
   "workers/shared.ts": "settlement: the hold is the ceiling a measured or metered actual is clamped to",
+  "ee/billing/video-route-settlement.ts": "settlement: a routed run's billed charge is compared with its hold to alert when the route billed more than it quoted",
+  "ee/billing/managed-job-settlement.ts": "settlement: the managed check's one read of the log also hands the routed settlement the hold it compares its billed charge with (no second read)",
   "lib/deferred-child-settlement.ts": "settlement: a held engine step shows what its settle will commit, which for a fixed price is the hold itself (and the ceiling a measured charge is clamped to)",
   "ee/billing/commit-at-charged-price.ts": "settlement: the hold is the ceiling a fallback's charged price is clamped to",
   "ee/billing/llm-billing-impl.ts": "settlement: a metered call whose cost cannot be computed commits its hold whole, and records that hold as credits_actual; an already-committed log's uncollected_overrun anomaly records the hold it is about",

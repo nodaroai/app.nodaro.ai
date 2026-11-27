@@ -24,6 +24,9 @@ export interface NodeOutput {
    *  platform, routed to the `variant:<platformId>` source handles. */
   variants?: ReadonlyArray<{ id: string; label?: string; url: string; width?: number; height?: number }>
   videoUrl?: string
+  /** Playable delivery copies, also kept after background assembly succeeds. */
+  unassembledClips?: ReadonlyArray<{ segment: number; url: string }>
+  clipJobId?: string
   audioUrl?: string
   /** Multi-variant URLs from a single job. Primary at index 0. Singular
    *  `imageUrl`/`audioUrl` stays populated for downstream chaining. */

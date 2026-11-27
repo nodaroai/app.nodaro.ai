@@ -2,6 +2,9 @@
 
 > Unified AI video producer. Drives by connection — text-only mode, image-to-video mode, first+last frame mode, or reference mode, all from one node. Subsumes the legacy Image to Video and Text to Video nodes (auto-migrated on workflow load).
 
+
+For Seedance 2.x, the editor requests the price of the configured run, including prompt-only generation. A start frame, dialogue or reference clip can change the route used for that job and the amount shown on Run.
+
 ## Overview
 
 The Generate Video node is a single, mode-aware video generation node that replaces the legacy `image-to-video` and `text-to-video` nodes. The same node handles:
@@ -607,6 +610,8 @@ rest of the node, which is deliberate: a preset should carry its look.
 Some models deliver video a browser cannot show correctly, such as HEVC in 10-bit or an HDR (HLG or PQ) picture. Nodaro keeps the model's file untouched as the result's **original** and plays and passes on a browser-safe H.264 copy. An HDR original's copy is tone-mapped to SDR. The original is in the job's output as `originalVideoUrl` (API, SDK and MCP). A file that is already H.264 8-bit is kept as it is, and a watermarked run keeps only the watermarked file. If the copy cannot be made, the result is the original alone, and the player offers Download if your browser cannot play it. See [Video originals and previews](../../design/video-original-and-preview.md).
 
 ## Credit pricing
+
+> **Seedance 2.x on a deployment's alternate route.** A deployment can run a Seedance model on another provider it operates ([Video route](../../features/video-route.md)). The price shown in the app, in run estimates and by `/v1/quote` is always the live one for the route chosen at that moment. The Seedance figures below are the default provider's, so a run on the alternate route can cost less or more.
 
 Pricing is computed at credit-reservation time via `buildVideoCreditModelIdentifier(provider, duration, sound, mode, videoSize, resolution, hasVideoRef)` in `@nodaro/shared/credit-identifiers`. With a wired [Settings input](#settings-input), `provider` and `duration` are the wired model and the fitted duration. The `mode` argument is the dispatched mode (`"image-to-video"` or `"text-to-video"`), so T2V and I2V prices can differ per provider (via `T2V_CREDIT_OVERRIDES`).
 

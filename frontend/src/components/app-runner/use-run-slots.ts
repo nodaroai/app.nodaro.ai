@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from "react"
 import { useAppRunnerStore, createBridgedRun } from "@/hooks/use-app-runner-store"
+import { useRepairedVideoSlots } from "@/hooks/use-repaired-video"
 import { usePresentationStore } from "@/hooks/use-presentation-store"
 import { getInputNodes, getOutputNodes } from "@/lib/presentation-utils"
 import { useT } from "@/lib/i18n"
@@ -157,10 +158,10 @@ export function useRunSlots({ slug, user, persistRuns, initialRunId, initialSide
   }, [app, inputNodes, outputNodes, t])
 
   // Merge original slot (always first) with user slots
-  const allSlots = useMemo(() => {
+  const allSlots = useRepairedVideoSlots(useMemo(() => {
     if (!originalSlot) return slots
     return [originalSlot, ...slots]
-  }, [originalSlot, slots])
+  }, [originalSlot, slots]))
 
   const activeSlot = useMemo(() => allSlots.find((s) => s.id === activeSlotId), [allSlots, activeSlotId])
 

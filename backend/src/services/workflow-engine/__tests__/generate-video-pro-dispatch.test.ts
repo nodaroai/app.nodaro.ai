@@ -58,7 +58,7 @@ const {
 // ---------------------------------------------------------------------------
 
 vi.mock("@/lib/config.js", () => ({
-  config: { EDITION: "cloud", PORT: 8000 },
+  config: { EDITION: "cloud", PORT: 8000, INTERNAL_ORCHESTRATOR_SECRET: "test-only-video-route".repeat(3) },
   hasCredits: () => true,
   isCloud: () => true,
   isCommunity: () => false,
@@ -69,7 +69,7 @@ vi.mock("@/lib/config.js", () => ({
 vi.mock("@/lib/supabase.js", () => {
   const eqFn = vi.fn().mockResolvedValue({ error: null })
   const updateFn = vi.fn().mockReturnValue({ eq: eqFn })
-  const deleteEqFn = vi.fn().mockResolvedValue({ error: null })
+  const deleteEqFn = vi.fn().mockReturnValue({ is: vi.fn().mockResolvedValue({ error: null }) })
   const deleteFn = vi.fn().mockReturnValue({ eq: deleteEqFn })
   const singleFn = vi.fn().mockResolvedValue({ data: { id: "test-job-id" }, error: null })
   const selectFn = vi.fn().mockReturnValue({ single: singleFn })
@@ -106,6 +106,10 @@ vi.mock("@/lib/app-settings.js", () => ({ getAppSettings: mockGetAppSettings }))
 vi.mock("@/ee/billing/generate-video-pro-credits.js", () => ({
   computeGenerateVideoProPricing: mockComputeGvpPricing,
 }))
+
+// The routed pricing (not routed unless a test says so).
+const mockRoutedRunPricing = vi.fn(async (_plan: unknown, _request: unknown, _anywhere: boolean) => undefined as unknown)
+vi.mock("@/ee/billing/video-route-planned.js", () => ({ routedGenerateVideoProPricing: mockRoutedRunPricing }))
 
 // ---------------------------------------------------------------------------
 // Import SUT after mocks
@@ -305,6 +309,22 @@ describe("payload-builder: generate-video-pro dispatch", () => {
 describe("computeGenerateVideoProCreditOverride", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+  })
+
+  it("routed for Generate Video Pro: holds the routed price and stamps the route beside the plan; a plan-only run does not ask", async () => {
+    mockGetAppSettings.mockResolvedValue({ cost_markup_percent: 30 })
+    const plan = { mode: "multi", clampedDurationSec: 18, segmentCount: 2, totalRawSec: 18.3, segmentDurations: [10, 9], feeBase: 10, noRefPerSec: 6.25, refPerSec: 7.5, tailSec: 2, reserveBase: 160, resolution: "720p" }
+    mockComputeGvpPricing.mockResolvedValue(plan)
+    const route = { quote: "q", segmentChargedCredits: [60, 60], feeChargedCredits: 13, reserveChargedCredits: 133 }
+    mockRoutedRunPricing.mockResolvedValueOnce(route)
+    const payload: Record<string, unknown> = { type: "generate-video-pro", provider: "seedance-2-5", resolution: "720p", duration: 18, generateAudio: false }
+    const result = await computeGenerateVideoProCreditOverride(payload)
+    expect(result?.override).toBe(133)
+    expect(payload.proPricing).toEqual({ ...plan, route })
+    expect(mockRoutedRunPricing).toHaveBeenCalledWith(plan, { provider: "seedance-2-5", resolution: "720p", generateAudio: false, renderMethod: "extend" }, true)
+    mockRoutedRunPricing.mockClear()
+    await computeGenerateVideoProCreditOverride({ type: "generate-video-pro", provider: "seedance-2-5", duration: 18, planOnly: true })
+    expect(mockRoutedRunPricing).not.toHaveBeenCalled()
   })
 
   it("returns undefined for a payload that isn't a generate-video-pro dispatch", async () => {
@@ -595,6 +615,22 @@ describe("node-executor — generate-video-pro credit override wiring (Task 10)"
     expect(resJobId).toBe("test-job-id")
     expect(resModelId).toBe("generate-video-pro")
     expect(resOptions?.creditOverride).toBe(628)
+  })
+
+  it("reserves a routed plan atomically and dispatches with the signed token returned by the hold on replay", async () => {
+    const { bindRowlessRouteToken, rowlessRouteToken, rowlessRunTokenFor } = await import("../../../lib/video-route-decision.js")
+    const shape = { model: "seedance-2", service: "generate-video-pro", feeId: "generate-video-pro", feeChargedCredits: 13, reserveChargedCredits: 133 }
+    const quote = rowlessRouteToken({ ...shape, routeId: "fresh" })
+    const firstToken = bindRowlessRouteToken(rowlessRouteToken({ ...shape, routeId: "original" }), { parentJobId: "test-job-id", userId: "user-1" })
+    mockRoutedRunPricing.mockResolvedValueOnce({ quote, segmentChargedCredits: [120], feeChargedCredits: 13, reserveChargedCredits: 133 })
+    mockReserveCredits.mockResolvedValueOnce({ usageLogId: "ul-1", creditsReserved: 133, watermark: false, routedRunToken: firstToken })
+    mockVideoQueueAdd.mockRejectedValueOnce(new Error("queued"))
+    const node: SimpleNode = { id: "n1", type: "generate-video-pro", data: { provider: "seedance-2", prompt: "A bird taking flight", duration: 10 } }
+    await expect(executeNode(node, {}, [], [], {}, makeCtx())).rejects.toThrow("queued")
+    const options = mockReserveCredits.mock.calls[0]![5]
+    expect(options).toMatchObject({ oncePerJob: true, creditOverride: 133 })
+    expect(rowlessRunTokenFor(options.routedRun.token, "test-job-id")).toMatchObject({ routeId: "fresh", userId: "user-1" })
+    expect(mockVideoQueueAdd.mock.calls[0]?.[1]).toMatchObject({ usageLogId: "ul-1", proPricing: { route: { token: firstToken } } })
   })
 
   it("pins the clamped payload to the enqueued job — resolveCredits succeeds → queue.add receives duration:120 + proPricing", async () => {

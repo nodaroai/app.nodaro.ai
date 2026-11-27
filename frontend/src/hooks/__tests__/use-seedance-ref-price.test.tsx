@@ -33,10 +33,10 @@ beforeEach(() => {
 })
 
 describe("useNodeVideoPrice", () => {
-  it("no reference video: the row price", () => {
+  it("a concrete run without a reference video uses its own service quote", () => {
     setGraph(false)
     const { result } = renderHook(() => useNodeVideoPrice("gv", 760))
-    expect(result.current).toEqual({ credits: 760, creditsRange: undefined, runCredits: 760, quoted: false })
+    expect(result.current).toEqual({ credits: undefined, creditsRange: undefined, runCredits: 0, quoted: true })
   })
 
   it("quote loading: no figure rather than the row price", () => {

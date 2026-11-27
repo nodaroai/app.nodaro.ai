@@ -1,3 +1,4 @@
+import { startVideoAssemblyRecovery } from "./lib/video-assembly-recovery.js"
 import { createVideoWorker } from "./workers/video-worker.js"
 import { logFfmpegVersion } from "./providers/video/ffmpeg-utils.js"
 import { beginWorkerDrain, inFlightDrainDeadlineMs } from "./lib/worker-drain.js"
@@ -39,6 +40,7 @@ useProviderSafetySettings()
 const stopLaneParking = await startLaneParking(["video-generation"])
 
 const worker = createVideoWorker()
+const stopVideoAssemblyRecovery = startVideoAssemblyRecovery()
 // This process's share of the video pool, published every 5 s for the Live usage page. Stopped on shutdown.
 const stopServerOccupancy = startServerOccupancyPublisher()
 
@@ -83,5 +85,5 @@ const shutdown = createWorkerShutdown({
   beginDrain: beginWorkerDrain,
   exit: (code) => process.exit(code),
 })
-process.on("SIGTERM", () => { stopLaneParking(); stopServerOccupancy(); stopShortageWatch(); void shutdown("SIGTERM") })
-process.on("SIGINT", () => { stopLaneParking(); stopServerOccupancy(); stopShortageWatch(); void shutdown("SIGINT") })
+process.on("SIGTERM", () => { stopLaneParking(); stopServerOccupancy(); stopVideoAssemblyRecovery(); stopShortageWatch(); void shutdown("SIGTERM") })
+process.on("SIGINT", () => { stopLaneParking(); stopServerOccupancy(); stopVideoAssemblyRecovery(); stopShortageWatch(); void shutdown("SIGINT") })

@@ -1,4 +1,4 @@
-import type { WorkflowNode, WorkflowEdge, GenerateVideoProNodeData, EditVideoProNodeData, ProbedVideoInfo } from "@/types/nodes";
+import type { GeneratedResult, WorkflowNode, WorkflowEdge, GenerateVideoProNodeData, EditVideoProNodeData, ProbedVideoInfo } from "@/types/nodes";
 import { StorageExceededError, SubscriptionRequiredError } from "@/lib/api";
 import { promptCreditsShortfall, type CreditsShortfall } from "./credits-shortfall";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
@@ -464,11 +464,9 @@ function gvpExplicitSplit(requestedSec: number, segmentDurations: number[]): Gvp
  *  math beyond) instead of a fixed single-segment approximation. Honors the
  *  same split-selection precedence as the backend: explicit `segmentDurations`
  *  > `preferredSegmentSec` > classic pack-to-cap. */
-export function estimateGenerateVideoProCredits(data: GenerateVideoProNodeData): number {
-  if (data.segmentMode) {
-    const quoted=getCachedVideoProCredits(data)
-    if (quoted!==undefined) return quoted
-  }
+export function estimateGenerateVideoProCredits(data: GenerateVideoProNodeData, hasOpeningVideo = false): number {
+  const quoted = getCachedVideoProCredits(data, hasOpeningVideo)
+  if (quoted !== undefined) return quoted
   const provider = data.provider || "seedance-2"
   // The tier the run renders and is billed at (the pro pricing's own rule): a
   // stored tier the model renders as another (Vidu Q4's 540p, a 360p written
@@ -646,7 +644,7 @@ export function estimateNodeCredits(
     return getCachedCredits(PRO3D_RENDER_CREDIT_ID) ?? 0
   }
   if (nodeType === "generate-video-pro" && node.data) {
-    return estimateGenerateVideoProCredits(node.data as GenerateVideoProNodeData)
+    return estimateGenerateVideoProCredits(node.data as GenerateVideoProNodeData, edges?.some(edge => edge.target === node.id && edge.targetHandle === "videoReferences"))
   }
   if (nodeType === "edit-video-pro" && node.data) {
     return estimateEditVideoProCredits(node.data as EditVideoProNodeData)
@@ -1351,6 +1349,8 @@ export interface RunConfirmInfo {
 }
 
 export interface ExecutionContext {
+  /** The take this fan-out iteration landed, before the batch reorders its rows. */
+  onMediaTake?: (nodeId: string, take: GeneratedResult) => void;
   userId: string | undefined;
   projectId: string | undefined;
   /**

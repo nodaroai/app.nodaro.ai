@@ -127,6 +127,7 @@ export type LlmSideHoldRefusalCode =
   /** Bad arguments (an unknown feature, a malformed payer). */
   | "invalid_request"
   /** A refusal the reserve RPC raised (workspace budget, member cap, allowance, blocked account …). */
+  | "routed_balance_due"
   | "budget_exceeded"
   | "member_cap_exceeded"
   | "workspace_archived"

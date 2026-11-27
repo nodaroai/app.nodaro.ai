@@ -11,6 +11,7 @@ import { isPostProcessingError } from "../lib/post-processing-error.js"
 import { isHouseModelRunError, isHouseModelRunPending } from "../lib/house-model-failure.js"
 import { isProviderRunPending } from "../lib/provider-run-pending.js"
 import { isAlternateRoutePending } from "../lib/alternate-route.js"
+import { ALTERNATE_ROUTE_PROVIDER_KIND, alternateRouteRecordOf } from "../lib/alternate-route-request.js"
 import { isDeterministicJobError } from "../lib/deterministic-job-error.js"
 import { declaredJobBudgetMs } from "../lib/job-budget.js"
 import { providerDetailOf } from "../lib/provider-error-detail.js"
@@ -88,6 +89,20 @@ import type { ReleaseOutcome } from "../lib/concurrency-lanes/gate.js"
  *  branch below. Exported for the liveness guard: a handed-back row keeps its
  *  last `pre-task` stamp through this delay, so it must stay far below the
  *  sweep threshold. */
+/**
+ * A routed run of a lane that finishes the provider's clip itself (an extend
+ * stitches it, voiced video and lip-sync lay the voice on it, entity motion
+ * attaches it) re-attaches to its held route task when it is picked again:
+ * its handler runs, and `runRouted` reads the task it holds instead of
+ * starting another (lib/alternate-route.ts) — so a clip the route billed is
+ * finished, never handed to a generic recovery that would deliver it raw.
+ */
+function resumesRoutedTask(row: { provider_kind?: unknown; provider_task_id?: unknown; input_data?: unknown } | null | undefined, jobName: string): boolean {
+  if (!row || row.provider_kind !== ALTERNATE_ROUTE_PROVIDER_KIND || typeof row.provider_task_id !== "string") return false
+  if (jobName === "image-to-video" || jobName === "text-to-video") return false
+  return alternateRouteRecordOf(row.input_data)?.routed === true
+}
+
 export const DRAIN_REQUEUE_DELAY_MS = 2_000
 
 const allHandlers: Record<string, HandlerFn> = {
@@ -238,7 +253,7 @@ export function createVideoWorker() {
     // A handler that re-attaches to its saved task itself (the background
     // scrapes: the plan to settle with is in its payload, which the inline
     // reconcile never sees) is run instead, below — never a second task.
-    const resumesTask = HANDLER_FLAGS.resuming.has(job.name)
+    const resumesTask = HANDLER_FLAGS.resuming.has(job.name) || resumesRoutedTask(jobRecord, job.name)
     if (jobRecord?.provider_task_id && !resumesTask) {
       await tryInlineReconcile({
         id: jobId,

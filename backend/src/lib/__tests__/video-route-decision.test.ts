@@ -79,14 +79,14 @@ describe("decideVideoRoute — totality", () => {
     expect(decideVideoRoute(policy, yesView(), { model: "seedance-2-fast", service: "cast-swap", request: request() }).route).toBe("default")
   })
 
-  it("stays on the default route where this process's route cannot take it", () => {
+  it("refuses a selected route that cannot take the request", () => {
     const policy = routed({ "seedance-2-5": { route: "alternate" } })
     const ask = { model: "seedance-2-5", service: "image-to-video", request: request() }
-    expect(decideVideoRoute(policy, null, ask)).toEqual({ route: "default", why: "no-route" })
-    expect(decideVideoRoute(policy, yesView({ v2: false }), ask)).toEqual({ route: "default", why: "route-v1" })
-    expect(decideVideoRoute(policy, yesView({ capable: () => false }), ask)).toEqual({ route: "default", why: "not-capable" })
-    expect(decideVideoRoute(policy, yesView({ accepts: () => null }), ask)).toEqual({ route: "default", why: "not-accepted" })
-    expect(decideVideoRoute(policy, yesView({ accepts: () => ({ routeId: "" }) }), ask)).toEqual({ route: "default", why: "not-accepted" })
+    expect(decideVideoRoute(policy, null, ask)).toEqual({ route: "refused", why: "no-route" })
+    expect(decideVideoRoute(policy, yesView({ v2: false }), ask)).toEqual({ route: "refused", why: "route-v1" })
+    expect(decideVideoRoute(policy, yesView({ capable: () => false }), ask)).toEqual({ route: "refused", why: "not-capable" })
+    expect(decideVideoRoute(policy, yesView({ accepts: () => null }), ask)).toEqual({ route: "refused", why: "not-accepted" })
+    expect(decideVideoRoute(policy, yesView({ accepts: () => ({ routeId: "" }) }), ask)).toEqual({ route: "refused", why: "not-accepted" })
   })
 
   it("asks accepts with the service and kind set (the admin-routed consult)", () => {

@@ -2657,6 +2657,7 @@ function executeNodeCore(
         gvpDeliveredSegments: typeof pro.deliveredSegments === "number" ? pro.deliveredSegments : undefined,
         gvpSegmentCount: typeof segCount === "number" ? segCount : undefined,
         contentPolicyRewrites,
+        ...runResultIdentity("generate-video-pro", outputData),
       };
     };
     // CONTINUE mode (set by the node's Continue affordance): resume a
@@ -2961,6 +2962,9 @@ function executeNodeCore(
       "generatedVideoUrl",
       "Edit Video",
       ctx,
+      undefined,
+      undefined,
+      { resultFields: (output) => runResultIdentity("edit-video-pro", output) },
     );
   }
 

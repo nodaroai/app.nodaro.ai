@@ -12,6 +12,11 @@ export const SEEDANCE_REF_QUOTE_PREFIX = "seedance-ref-quote:"
 export function seedanceRefQuoteKey(request: SeedanceRefEstimateRequest): string {
   return SEEDANCE_REF_QUOTE_PREFIX + JSON.stringify({
     provider: request.provider,
+    runQuote: request.runQuote,
+    routeService: request.routeService,
+    seed: request.seed,
+    generateAudio: request.generateAudio,
+    unsupportedSettings: request.unsupportedSettings,
     resolution: request.resolution,
     duration: request.duration,
     draft: request.draft,

@@ -1,3 +1,4 @@
+import { useNodeVideoPrice } from "@/hooks/use-seedance-ref-price"
 "use client"
 
 import { useT } from "@/lib/i18n"
@@ -184,7 +185,8 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
   // A saved node on a model retired from Lip Sync: no price (it does not run),
   // and the node says so until the person picks another model.
   const retiredModel = retiredLipSyncProviderName(nodeData.provider)
-  const shownCredits = retiredModel === undefined ? credits : undefined
+  const price = useNodeVideoPrice(id, credits ?? 0)
+  const shownCredits = retiredModel === undefined ? (price.quoted ? price.credits : credits) : undefined
   const retiredNotice = retiredModel === undefined ? null : (
     <p role="alert" className="px-3 pt-2 text-[11px] text-center text-red-400">
       {t("audiocfg.retiredLipSyncModel", { model: retiredModel })}

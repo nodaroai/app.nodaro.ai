@@ -1,0 +1,181 @@
+import { beforeEach, describe, expect, it, vi } from "vitest"
+const h = vi.hoisted(() => ({ upsert: vi.fn(), readBack: vi.fn(), table: null as null | (() => unknown) }))
+vi.mock("../supabase.js", () => ({
+  supabase: { from: () => {
+    // (A test can put a whole table in place: the settle row below.)
+    if (h.table) return h.table()
+    const chain = { eq: () => chain, select: () => chain, maybeSingle: h.readBack }
+    return { update: () => chain, upsert: h.upsert }
+  } },
+}))
+const { decideRouteSettleHold, holdRouteSettle, patchRouteSettle, recordRouteStartRef, recordRouteSettle, recordRouteTask, routeCostBasisOf, verifiedReportedUsd, verifiedTaskUsd } = await import("../video-route-ledger.js")
+const { getRuntimeEnv } = await import("../runtime-env.js")
+beforeEach(() => {
+  vi.resetAllMocks()
+  h.table = null
+})
+
+describe("routed task evidence", () => {
+  it("records a bill with its basis, an estimate beside it, and a bill of zero as no bill", async () => {
+    h.upsert.mockResolvedValue({ error: null })
+    await recordRouteTask("job", 1, "task", 0.5, "segment", 0.4)
+    expect(h.upsert).toHaveBeenCalledWith(expect.objectContaining({ billed_usd: 0.5, estimated_usd: 0.4, cost_basis: "receipt" }), expect.objectContaining({ ignoreDuplicates: false }))
+    // Zero (or less) is not a bill: recorded as none, so the settlement is pending, never a free run.
+    await recordRouteTask("job", 1, "task", 0, "segment", 0.4)
+    expect(h.upsert).toHaveBeenLastCalledWith(expect.objectContaining({ billed_usd: null }), expect.objectContaining({ ignoreDuplicates: true }))
+    // Billed seconds at the agreed rate: a verified bill, recorded with its basis.
+    await recordRouteTask("job", 1, "task", 0.4, "segment", undefined, "billed-seconds")
+    expect(h.upsert).toHaveBeenLastCalledWith(expect.objectContaining({ billed_usd: 0.4, cost_basis: "billed-seconds" }), expect.objectContaining({ ignoreDuplicates: false }))
+    // An estimate alone is recorded as an estimate: no bill, no basis, and it never overwrites a row that has a bill.
+    await recordRouteTask("job", 1, "task", null, "segment", 0.4, "billed-seconds")
+    expect(h.upsert).toHaveBeenLastCalledWith(expect.objectContaining({ billed_usd: null, estimated_usd: 0.4 }), expect.objectContaining({ ignoreDuplicates: true }))
+    expect(h.upsert.mock.calls.at(-1)![0]).not.toHaveProperty("cost_basis")
+  })
+
+  it("only a reported bill is a verified cost, whatever its basis; an estimate never is", () => {
+    expect(routeCostBasisOf({ providerCostUsd: 0.5, costBasis: "receipt" })).toBe("receipt")
+    expect(routeCostBasisOf({ providerCostUsd: 0.5, costBasis: "billed-seconds" })).toBe("billed-seconds")
+    // A route that predates the field: a reported bill reads as a receipt.
+    expect(routeCostBasisOf({ providerCostUsd: 0.5 })).toBe("receipt")
+    expect(routeCostBasisOf({ costBasis: "billed-seconds" })).toBeUndefined()
+    expect(routeCostBasisOf({ estimatedCostUsd: 0.4, billedSec: 8 } as never)).toBeUndefined()
+    expect(verifiedReportedUsd({ providerCostUsd: 0.5 })).toBe(0.5)
+    for (const none of [{ providerCostUsd: 0 }, {}, { estimatedCostUsd: 0.4 }, { estimatedCostUsd: 0.4, billedSec: 8 }, { providerCostUsd: NaN, estimatedCostUsd: 0.4 }, { providerCostUsd: -1, estimatedCostUsd: 0.4 }]) {
+      expect(verifiedReportedUsd(none as never)).toBeNull()
+    }
+    // As stored: the bill column alone decides; the estimate column is never read.
+    expect(verifiedTaskUsd({ billed_usd: "0.500000", estimated_usd: "0.400000" } as never)).toBe(0.5)
+    expect(verifiedTaskUsd({ billed_usd: 0, estimated_usd: 0.4 } as never)).toBeNull()
+    expect(verifiedTaskUsd({ billed_usd: "0.000000" })).toBeNull()
+    expect(verifiedTaskUsd({ billed_usd: null, estimated_usd: "0.400000", cost_basis: "billed-seconds" } as never)).toBeNull()
+  })
+
+  it("refuses to publish a completed task when neither ledger write succeeded", async () => {
+    h.upsert.mockResolvedValue({ error: { message: "unavailable" } })
+    await expect(recordRouteTask("job", 1, "task", 1)).rejects.toThrow(/could not record/)
+    expect(h.upsert).toHaveBeenCalledTimes(2)
+  })
+
+  it("cannot acknowledge a missing start or a failed settlement write", async () => {
+    h.readBack.mockResolvedValue({ data: null, error: null })
+    await expect(recordRouteStartRef("job", 1, "k", "t")).rejects.toThrow(/task reference/)
+    expect(h.readBack).toHaveBeenCalledTimes(2)
+    h.upsert.mockResolvedValue({ error: { message: "unavailable" } })
+    await expect(recordRouteSettle("job", "retry")).rejects.toThrow(/unavailable/)
+  })
+})
+
+describe("the settle row's kept detail", () => {
+  type Row = Record<string, unknown> & { id: number; detail: Record<string, unknown> | null; updated_at: string }
+  /** One settle row, written as the store writes it: an update lands only on the rows every filter matches. */
+  function settleRow(row: Row | null, opts: { beforeWrite?: (row: Row, attempt: number) => void; insertError?: { code: string; message: string }; readError?: { message: string }; updateError?: { message: string } } = {}) {
+    const state = { row, reads: 0, writes: 0, updates: [] as Array<Record<string, unknown>> }
+    h.table = () => {
+      const where: Array<[string, unknown]> = []
+      const anyOf: Array<[string, unknown[]]> = []
+      let patch: Record<string, unknown> | null = null
+      const hit = () => (state.row && where.every(([c, v]) => (state.row![c] ?? null) === v) && anyOf.every(([c, vs]) => vs.includes(state.row![c] ?? null)) ? [state.row] : [])
+      const write = () => {
+        state.updates.push(patch!)
+        const rows = hit()
+        for (const r of rows) Object.assign(r, patch)
+        return rows
+      }
+      const q: Record<string, unknown> = {}
+      q.eq = (c: string, v: unknown) => (where.push([c, v]), q)
+      q.is = (c: string, v: unknown) => (where.push([c, v]), q)
+      q.in = (c: string, vs: unknown[]) => (anyOf.push([c, vs]), q)
+      q.insert = async () => ({ error: opts.insertError ?? null })
+      q.update = (p: Record<string, unknown>) => ((patch = p), q)
+      q.limit = async () => (state.reads++, opts.readError ? { data: null, error: opts.readError } : { data: hit().map((r) => structuredClone(r)), error: null })
+      q.select = () => {
+        if (!patch) return q
+        if (opts.updateError) return Promise.resolve({ data: null, error: opts.updateError })
+        if (state.row && "detail" in patch) opts.beforeWrite?.(state.row, ++state.writes)
+        return Promise.resolve({ data: write().map((r) => ({ id: r.id })), error: null })
+      }
+      q.then = (ok: (v: unknown) => unknown) => (patch ? write() : undefined, Promise.resolve({ error: null }).then(ok))
+      return q
+    }
+    return state
+  }
+  const row = (over: Record<string, unknown> = {}): Row => ({ id: 7, job_id: "job", env: getRuntimeEnv(), kind: "settle", state: "hold", decision: null, detail: { watchUntil: "w" }, updated_at: "2026-11-25T00:00:00.000Z", ...over })
+
+  it("merges into what is kept, sets the columns beside it, and moves the row's stamp", async () => {
+    const t = settleRow(row())
+    expect(await patchRouteSettle("job", { firstAttemptAt: "a" }, { next_attempt_at: "n" })).toBe(true)
+    expect(t.row).toMatchObject({ detail: { watchUntil: "w", firstAttemptAt: "a" }, next_attempt_at: "n" })
+    expect(t.row!.updated_at).not.toBe("2026-11-25T00:00:00.000Z")
+    expect(t.reads).toBe(1)
+  })
+
+  it("never loses what another writer kept meanwhile: a write over a stale read does not land, and is tried again on a fresh read", async () => {
+    // Between this call's read and its write, another writer keeps a late bill on the row.
+    const t = settleRow(row(), { beforeWrite: (r, attempt) => { if (attempt === 1) Object.assign(r, { detail: { ...r.detail, lateBill: { knownCredits: 260 } }, updated_at: "2026-11-25T00:00:01.000Z" }) } })
+    expect(await patchRouteSettle("job", { firstAttemptAt: "a" })).toBe(true)
+    expect(t.row!.detail).toEqual({ watchUntil: "w", lateBill: { knownCredits: 260 }, firstAttemptAt: "a" })
+    expect(t.reads).toBe(2)
+  })
+
+  it("gives up after a few tries, and says so; a row that is not there is not written", async () => {
+    let n = 0
+    const t = settleRow(row(), { beforeWrite: (r) => { r.updated_at = `moved-${++n}` } })
+    expect(await patchRouteSettle("job", { firstAttemptAt: "a" })).toBe(false)
+    expect(t.reads).toBe(4)
+    expect(t.row!.detail).toEqual({ watchUntil: "w" })
+    const none = settleRow(null)
+    expect(await patchRouteSettle("job", { firstAttemptAt: "a" })).toBe(false)
+    expect(none.updates).toEqual([])
+  })
+
+  it("a decision keeps the total it was made for beside it (and that a quote was chosen), in the one write that decides", async () => {
+    const t = settleRow(row())
+    expect(await decideRouteSettleHold("job", "confirmed", "admin-1", "anomaly", 905)).toBe(true)
+    expect(t.row).toMatchObject({ state: "retry", decision: "confirmed", decided_by: "admin-1", detail: { watchUntil: "w", decidedForCredits: 905 } })
+    // One write: the decision and what it was made for land together, or not at all.
+    expect(t.updates).toHaveLength(1)
+    const u = settleRow(row({ state: "unbilled" }))
+    expect(await decideRouteSettleHold("job", "quote", "admin-1", "unbilled", 100)).toBe(true)
+    expect(u.row).toMatchObject({ state: "retry", decision: "quote", detail: { watchUntil: "w", atQuote: true, decidedForCredits: 100 } })
+    // A release names no total: what was kept stays as it was.
+    const r = settleRow(row())
+    expect(await decideRouteSettleHold("job", "rejected", "admin-1")).toBe(true)
+    expect(r.row).toMatchObject({ decision: "rejected" })
+    expect(r.row!.detail).toEqual({ watchUntil: "w" })
+  })
+
+  it("a click that loses the race changes nothing: the winner's decision and its kept total stay", async () => {
+    // Decided already, for 900.
+    const decided = settleRow(row({ state: "retry", decision: "confirmed", decided_by: "admin-1", detail: { decidedForCredits: 900 } }))
+    expect(await decideRouteSettleHold("job", "confirmed", "admin-2", "anomaly", 1500)).toBe(false)
+    expect(await decideRouteSettleHold("job", "rejected", "admin-2")).toBe(false)
+    expect(decided.row).toMatchObject({ state: "retry", decision: "confirmed", decided_by: "admin-1", detail: { decidedForCredits: 900 } })
+    // Decided by another click between this one's read and its write.
+    const racing = settleRow(row(), { beforeWrite: (r) => { Object.assign(r, { state: "retry", decision: "confirmed", decided_by: "admin-1", detail: { ...r.detail, decidedForCredits: 900 } }) } })
+    expect(await decideRouteSettleHold("job", "confirmed", "admin-2", "anomaly", 1500)).toBe(false)
+    expect(racing.row).toMatchObject({ state: "retry", decision: "confirmed", decided_by: "admin-1", detail: { watchUntil: "w", decidedForCredits: 900 } })
+    // A row that changed kind since the admin looked is not decided by this click either.
+    const moved = settleRow(row({ state: "unbilled" }))
+    expect(await decideRouteSettleHold("job", "confirmed", "admin-2", "anomaly", 1500)).toBe(false)
+    expect(moved.row).toMatchObject({ state: "unbilled", decision: null, detail: { watchUntil: "w" } })
+  })
+
+  it("a decision is not made when the row cannot be read or written, and says so", async () => {
+    const unread = settleRow(row(), { readError: { message: "unavailable" } })
+    await expect(decideRouteSettleHold("job", "confirmed", "admin-1", "anomaly", 905)).rejects.toThrow(/could not read its held settlement/)
+    expect(unread.updates).toEqual([])
+    expect(unread.row).toMatchObject({ state: "hold", decision: null })
+    settleRow(row(), { updateError: { message: "unavailable" } })
+    await expect(decideRouteSettleHold("job", "confirmed", "admin-1", "anomaly", 905)).rejects.toThrow(/could not record the decision/)
+  })
+
+  it.each(["quote", "confirmed"] as const)("a %s decision whose total is then held is spent: the hold waits for a decision of its own", async (decision) => {
+    const t = settleRow(row({ state: "retry", decision, detail: { decidedForCredits: 900 } }), { insertError: { code: "23505", message: "duplicate" } })
+    expect(await holdRouteSettle("job", { credits: 1500, billedUsd: 3, quotedUsd: 0.2, note: "15x" })).toBe(true)
+    expect(t.row).toMatchObject({ state: "hold", decision: null, credits: 1500 })
+    // A release is never spent: its settlement is not held over it.
+    const rejected = settleRow(row({ state: "retry", decision: "rejected" }), { insertError: { code: "23505", message: "duplicate" } })
+    expect(await holdRouteSettle("job", { credits: 1500, billedUsd: 3, quotedUsd: 0.2, note: "15x" })).toBe(false)
+    expect(rejected.row).toMatchObject({ state: "retry", decision: "rejected" })
+  })
+})

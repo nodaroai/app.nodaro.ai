@@ -91,6 +91,8 @@ export function ChatView({
   // The result viewer (a frozen run + the clicked node). Opened from a message.
   const [viewer, setViewer] = useState<{ slot: RunSlot; nodeId: string } | null>(null)
 
+  const viewerSlot = viewer && (slots.find(slot => slot.id === viewer.slot.id) ?? viewer.slot)
+
   // Auto-scroll when a NEW run message appears (not on every progress tick —
   // that would fight a user who scrolled up to read an earlier run mid-stream).
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -198,7 +200,7 @@ export function ChatView({
         </div>
       </div>
 
-      {viewer && (
+      {viewer && viewerSlot && (
         <FullscreenView
           asOverlay
           orderedInputNodes={orderedInputNodes}
@@ -206,10 +208,10 @@ export function ChatView({
           getNodeStatus={() => "completed"}
           getResult={() => ({})}
           getCardTitle={getNodeLabel}
-          resolveResult={(nodeId) => resolveSlotResult(viewer.slot, nodeId)}
+          resolveResult={(nodeId) => resolveSlotResult(viewerSlot, nodeId)}
           isPreview={(nodeId, url) => {
             const node = [...orderedInputNodes, ...orderedOutputNodes].find((n) => n.id === nodeId)
-            const out = viewer.slot.nodeStates[nodeId]?.output as Record<string, unknown> | undefined
+            const out = viewerSlot.nodeStates[nodeId]?.output as Record<string, unknown> | undefined
             return outputIsPreview(node?.type, undefined, out, url)
           }}
           initialNodeId={viewer.nodeId}
@@ -352,6 +354,7 @@ function ChatMessage({
                   text={out?.text as string | undefined}
                   onOpenMedia={u ? openResult : undefined}
                   progress={isRunning ? combinedProgress[node.id] : undefined}
+                  clipOutput={out}
                   preview={outputIsPreview(node.type, undefined, out as Record<string, unknown> | undefined)}
                 />
               )
@@ -408,6 +411,7 @@ function ChatMessage({
                     url={u}
                     text={out?.text as string | undefined}
                     onOpenMedia={u ? openResult : undefined}
+                    clipOutput={out}
                     preview={outputIsPreview(node?.type, undefined, out as Record<string, unknown> | undefined)}
                   />
                 )

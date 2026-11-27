@@ -11,6 +11,8 @@ import {
 
 const taskDb = vi.hoisted(() => ({
   row: null as Record<string, unknown> | null,
+  /** An error the job read answers with (null: it reads `row`). */
+  rowError: null as { code: string; message: string } | null,
   /** The `.in("status", [...])` guard markJobCancelled's fast CAS applies. */
   cancelStatusFilter: null as ReturnType<typeof vi.fn> | null,
   /** The `.or(provider …)` filter that keeps use-case wrappers off the fast CAS. */
@@ -50,7 +52,7 @@ vi.mock("../../supabase.js", () => {
   const eq = vi.fn().mockReturnValue({ in: inFn })
   const update = vi.fn().mockReturnValue({ eq })
   taskDb.cancelStatusFilter = inFn
-  const maybeSingle = vi.fn().mockImplementation(async () => ({ data: taskDb.row, error: null }))
+  const maybeSingle = vi.fn().mockImplementation(async () => (taskDb.rowError ? { data: null, error: taskDb.rowError } : { data: taskDb.row, error: null }))
   let selectChain: Record<string, unknown>
   selectChain = new Proxy({}, {
     get(_target, prop) {
@@ -218,6 +220,85 @@ describe("task lifecycle", () => {
    * is orphaned. The whole D17 sequence (flip + refund + owned-object delete +
    * a `withdrawn` decision) lives in `cancelOwnedJob`; MCP must delegate.
    */
+  // The stop rule (lib/stop-rule.ts): a Seedance 2.x video whose task already started, or a
+  // segmented video run, is never flipped to cancelled and refunded from here. It goes through
+  // the shared cancel, which leaves a started video to finish (delivered and charged).
+  it.each([
+    ["a started Seedance 2.x video", { status: "processing", job_type: "image-to-video", provider_task_id: "task-1", video_send_started_at: null, model: "seedance-2-5", inputType: "image-to-video" }],
+    ["a Seedance 2.x video marked started before its task id is saved", { status: "processing", job_type: "text-to-video", provider_task_id: null, video_send_started_at: "2026-11-27T00:00:00Z", model: "seedance-2", inputType: "text-to-video" }],
+    ["a segmented video run", { status: "processing", job_type: "generate-video-pro", provider_task_id: null, video_send_started_at: null, model: "seedance-2-5", inputType: "generate-video-pro" }],
+  ])("%s is cancelled only through the shared cancel, never the bare flip", async (_name, row) => {
+    const before = taskDb.row
+    taskDb.row = row as never
+    registerTask({ taskId: "j-video", userId: "u1", kind: "video" })
+    const flips = taskDb.cancelStatusFilter!.mock.calls.length
+    const withdrawals = lanes.withdrawFromLane.mock.calls.length
+    try {
+      expect(await cancelTask("j-video", "u1")).toBe(true)
+      expect(taskDb.cancelOwnedJob).toHaveBeenCalledWith("j-video", "u1")
+      // The bare flip (and what follows it) never ran for this job.
+      expect(taskDb.cancelStatusFilter!.mock.calls.length).toBe(flips)
+      expect(lanes.withdrawFromLane.mock.calls.length).toBe(withdrawals)
+    } finally {
+      taskDb.row = before
+    }
+  })
+
+  it("a started video the shared cancel leaves running is NOT reported cancelled, and its task stays registered and un-aborted", async () => {
+    const before = taskDb.row
+    taskDb.row = { status: "processing", job_type: "image-to-video", provider_task_id: "task-1", video_send_started_at: null, model: "seedance-2-5", inputType: "image-to-video" } as never
+    taskDb.cancelOwnedJob.mockResolvedValue({ kind: "in_flight" })
+    const task = registerTask({ taskId: "j-running", userId: "u1", kind: "video" })
+    try {
+      expect(await cancelTask("j-running", "u1")).toBe(false)
+      expect(task.abortController.signal.aborted).toBe(false)
+      expect(getTask("j-running")).not.toBeNull()
+    } finally {
+      taskDb.row = before
+    }
+  })
+
+  it("a stop read that fails cancels nothing: the cancel is refused (retryable), never the bare flip", async () => {
+    const flips = taskDb.cancelStatusFilter!.mock.calls.length
+    taskDb.rowError = { code: "57014", message: "statement timeout" }
+    const task = registerTask({ taskId: "j-unknown", userId: "u1", kind: "video" })
+    try {
+      await expect(cancelTask("j-unknown", "u1")).rejects.toMatchObject({ name: "TaskCancelUnavailableError", retryable: true })
+      expect(taskDb.cancelStatusFilter!.mock.calls.length).toBe(flips)
+      expect(taskDb.cancelOwnedJob).not.toHaveBeenCalled()
+      expect(task.abortController.signal.aborted).toBe(false)
+    } finally {
+      taskDb.rowError = null
+    }
+  })
+
+  it("a database without the send marker (its schema not applied yet) cancels as it always did", async () => {
+    taskDb.rowError = { code: "42703", message: 'column jobs.video_send_started_at does not exist' }
+    taskDb.cancelFlipped = [{ id: "j-old-schema", input_data: {} }] as never
+    const flips = taskDb.cancelStatusFilter!.mock.calls.length
+    registerTask({ taskId: "j-old-schema", userId: "u1", kind: "video" })
+    try {
+      expect(await cancelTask("j-old-schema", "u1")).toBe(true)
+      expect(taskDb.cancelStatusFilter!.mock.calls.length).toBe(flips + 1)
+    } finally {
+      taskDb.rowError = null
+    }
+  })
+
+  it("any other job keeps the fast flip", async () => {
+    const before = taskDb.row
+    taskDb.row = { status: "processing", job_type: "generate-image", provider_task_id: "task-1", video_send_started_at: null, model: "flux-pro", inputType: "generate-image" } as never
+    taskDb.cancelFlipped = [{ id: "j-img", input_data: {} }] as never
+    registerTask({ taskId: "j-img", userId: "u1", kind: "image" })
+    try {
+      await cancelTask("j-img", "u1")
+      expect(taskDb.cancelStatusFilter).toHaveBeenCalledWith("status", ["pending", "processing"])
+      expect(taskDb.cancelOwnedJob).not.toHaveBeenCalled()
+    } finally {
+      taskDb.row = before
+    }
+  })
+
   it("delegates a cancel the fast CAS could not flip to cancelOwnedJob (the held-job path)", async () => {
     // The narrow CAS matches nothing — the row is not pending/processing.
     taskDb.cancelFlipped = []
@@ -256,6 +337,18 @@ describe("task lifecycle", () => {
 
     expect(taskDb.cancelStatusFilter).toHaveBeenCalledWith("status", ["pending", "processing"])
     expect(taskDb.cancelOwnedJob).toHaveBeenCalledWith("j-queued", "u1")
+  })
+
+  it("answers false, and keeps the task running, when the shared cancel leaves the job in flight", async () => {
+    taskDb.cancelFlipped = [] // the fast CAS does not match
+    taskDb.cancelOwnedJob.mockResolvedValueOnce({ kind: "in_flight" })
+    const task = registerTask({ taskId: "j-in-flight", userId: "u1", kind: "video" })
+
+    expect(await cancelTask("j-in-flight", "u1")).toBe(false)
+
+    // Nothing was cancelled: the task is still registered, and nobody waiting on it was told otherwise.
+    expect(task.abortController.signal.aborted).toBe(false)
+    expect(getTask("j-in-flight")).not.toBeNull()
   })
 
   it("a job the fast CAS cancelled leaves its concurrency lane", async () => {

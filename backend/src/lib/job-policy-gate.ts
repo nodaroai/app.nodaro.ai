@@ -526,6 +526,8 @@ export interface ResultGateOptions {
    * same stored verdict. The policy and the parked payload still get `fields`.
    */
   readonly hashSubject?: Record<string, unknown>
+  /** A replacement primary on a completed job: withhold the candidate on refusal. */
+  readonly replacement?: boolean
 }
 
 /**
@@ -558,12 +560,15 @@ export async function applyResultGate(
   const reused = await findReusableDecision(jobId, "result", payloadHash)
   if (reused) {
     if (reused.verdict === "block" || reused.verdict === "hold") {
+      if (opts.replacement) return "blocked"
       return await reapplyStoredVerdict(jobId, fields, commitReplay, reused)
     }
     return "allow"
   }
 
   const read = await loadGateRow(jobId)
+  if (opts.replacement && read.kind === "failed") throw new Error("Replacement policy context unavailable")
+  if (opts.replacement && (read.kind !== "row" || read.row.status !== "completed")) return "blocked"
   if (read.kind === "missing") {
     // A CONFIRMED absent row: nothing to gate and nothing to hold, and the
     // caller's own CAS will miss too.
@@ -642,6 +647,8 @@ export async function applyResultGate(
   })
 
   if (decision.verdict === "allow" || decision.verdict === "flag") return "allow"
+
+  if (opts.replacement) return "blocked"
 
   if (decision.verdict === "hold") {
     // A relayed output's key stem is the FAR job's id, so without this the

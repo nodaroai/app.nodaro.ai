@@ -4,6 +4,7 @@ import { heldCommitArgs, type HeldCommitReplay } from "./job-policy.js"
 import { coveredMarkOf } from "./covered-step.js"
 import { getAppSettings } from "./app-settings.js"
 import { commitJobCredits, refundLoopTrimAddon } from "../workers/shared.js"
+import { routedSettleCandidate } from "./video-route-policy.js"
 import { DEFER_SETTLEMENT_INPUT_KEY, DELIVERED_HELD_CHILDREN_OUTPUT_KEY, storedDeferRule, type DeferSettlementRule } from "./deferred-child-request.js"
 import { refundUsageLogConfirmed } from "./credits-job-lifecycle.js"
 import { IN_FLIGHT_JOB_STATUSES } from "./job-status.js"
@@ -166,6 +167,8 @@ export async function plannedCommitCredits(
   commit: HeldCommitReplay,
   providerCost: number | null,
   workflowExecutionId: string | null,
+  /** The child job: a routed one shows its routed settle. */
+  jobId?: string,
 ): Promise<number | undefined> {
   const { data: log, error } = await supabase
     .from("usage_logs")
@@ -178,6 +181,14 @@ export async function plannedCommitCredits(
   const action = typeof row.action === "string" ? row.action : ""
   if (isRecord(row.metadata) && row.metadata.reservation_mode === "job-once") return undefined
   if (coveredMarkOf(row.metadata)) return 0
+  // A routed child settles by the one routed settlement (ee/billing/video-route-settlement.ts),
+  // from its own decision and ledger: shown the same, before any default-route branch.
+  if (jobId && routedSettleCandidate(action)) {
+    const { plannedRoutedCredits } = await import("../ee/billing/video-route-settlement.js")
+    const routed = await plannedRoutedCredits({ jobId, log: { action, credits_used: reserved ?? null, job_id: null }, addonsBase: commit.extraNonProviderCredits ?? 0 })
+    if (routed.kind === "confirmed") return routed.credits
+    if (routed.kind === "pending") return undefined
+  }
   const loopTrimRefund = commit.loopTrimAddonRefundCredits ?? 0
   if (commit.meteredBaseCredits == null && loopTrimRefund > 0 && !workflowExecutionId) {
     return reserved === undefined ? undefined : Math.max(0, reserved - loopTrimRefund)
@@ -207,6 +218,8 @@ export async function deferredCompletionFields(args: {
   workflowExecutionId: string | null
   /** The job's stored rule (`storedDeferRule` of its `input_data`); absent or null: an engine take. */
   rule?: DeferSettlementRule | null
+  /** The child job itself (a routed child shows its routed settle). */
+  jobId?: string
 }): Promise<Record<string, unknown>> {
   const record: DeferredSettlementRecord = {
     version: 1,
@@ -219,7 +232,7 @@ export async function deferredCompletionFields(args: {
   }
   let planned: number | undefined
   try {
-    planned = await plannedCommitCredits(args.usageLogId, args.commit, args.providerCost, args.workflowExecutionId)
+    planned = await plannedCommitCredits(args.usageLogId, args.commit, args.providerCost, args.workflowExecutionId, args.jobId)
   } catch (err) {
     console.warn(`[deferred-settlement] could not tell what log ${args.usageLogId} will cost: ${err instanceof Error ? err.message : String(err)}`)
   }

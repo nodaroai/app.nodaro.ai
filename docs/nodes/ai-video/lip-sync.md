@@ -2,6 +2,9 @@
 
 > Sync audio to a character's face to create a talking head video.
 
+
+For Seedance 2.x, the editor quotes the connected portrait and audio on the route selected for Lip Sync. The price appears when the server returns the reservation for those inputs.
+
 ## Overview
 
 The Lip Sync node takes a portrait image and an audio track (speech/voiceover) and generates a video where the character's lips move in sync with the audio. Supports optional motion prompts for head and expression movements.

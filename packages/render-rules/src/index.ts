@@ -11,6 +11,7 @@
  * and which audio a Suno Separate run separates. In-repo workspace package under the root license;
  * never published to npm.
  */
+export { deliveredVideoClips, videoRepairSource, savedVideoSources, repairedCanvasTake, replacementVideoUrl, type DeliveredVideoClip, type VideoRepair, type VideoRepairSource } from "./pro-video-delivery"
 // A Teleport pair passes on exactly what entered it: both engines and the canvas read the bypassed graph.
 export {
   bypassTeleports,

@@ -2,6 +2,8 @@ import { config, hasAdmin, hasCredits, isMultiUser } from "./lib/config.js"
 import { buildApp } from "./app.js"
 import { startCommunityReaperCron } from "./ee/services/community/reaper.js"
 import { startCleanupCron } from "./ee/billing/cleanup-cron.js"
+// Registers the routed-node estimators the price table prices a routed node with (every process that estimates).
+import "./ee/billing/video-route-admission.js"
 import { startReconcileCron } from "./lib/reconcile/start.js"
 import { startAppReportSweepCron } from "./lib/app-report-sweep.js"
 import { startScene3DArtifactCleanup } from "./lib/scene3d-artifact-cleanup.js"

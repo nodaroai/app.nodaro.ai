@@ -77,9 +77,6 @@ const KEPT_JOB_COLUMNS = [
   "metadata",
   "video_route_addons_base",
   "video_send_started_at",
-  // Added by the schema ahead of the code that uses it: nothing writes it yet. The
-  // change that fills it erases it instead.
-  "video_assembly_recovery",
   "id",
   "user_id",
   "job_type",
@@ -294,6 +291,7 @@ describe("what expunge erases", () => {
       output_data: null,
       held_output_data: null,
       restricted_output_data: null,
+      video_assembly_recovery: null,
       error_message: null,
       error_detail: null,
       input_fingerprint: null,

@@ -589,7 +589,7 @@ function voiceSpecPresent(b: { characterVoices?: unknown; dialogue?: unknown }):
  * reservation must agree with the dispatch, so both read this one predicate;
  * the provider resolves the way the credit guard resolves it.
  */
-function dispatchesVoicedVideo(b: Record<string, unknown>): boolean {
+export function dispatchesVoicedVideo(b: Record<string, unknown>): boolean {
   const provider = applyDefaultVideoSelection({
     provider: b.provider as string | undefined,
     duration: b.duration as number | string | undefined,
@@ -1006,6 +1006,10 @@ export const generateVideoPricing: RoutePricing = {
     )
   },
   opts: {
+    routedVideoInput: (body, req) => {
+      const parsed = generateVideoBody.safeParse(body)
+      return parsed.success ? { input: parsed.data, jobType: dispatchesVoicedVideo(videoRequestAsRun(parsed.data, req.videoNorm)) ? "voiced-video" : "image-to-video" } : null
+    },
     runModel: videoRunModel,
     // The HDR add-on (Kling 4.0) is its own line on top of whatever base and
     // add-ons this prices (`withVideoHdrAddon`).
@@ -1629,7 +1633,8 @@ export async function generateVideoRoutes(app: FastifyInstance) {
     // spoken one never slips through. Not voiced (the model cannot carry
     // dialogue): no voice is sent, nothing to judge. No lock: nothing is loaded
     // or read (`judgeVoicesUnderLock` imports the resolver only under a lock).
-    if (dispatchesVoicedVideo(parsed.data)) {
+    const isVoiced = dispatchesVoicedVideo(parsed.data)
+    if (isVoiced) {
       const voiceVerdict = await judgeVoicesUnderLock(
         voicesTheVoicedVideoSends({ prompt, dialogue, characterVoices, dialogueProvider: voicedDialogueProvider(characterVoices) }, provider),
         { userId },
@@ -1641,7 +1646,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
 
     // A voiced run commits its audio add-on through its own lane, so it is
     // never deferred (the settle replays finalize's commit only).
-    const deferSettlement = deferSettlementRequested && !dispatchesVoicedVideo(parsed.data) && await deferSettlementHonoured(req)
+    const deferSettlement = deferSettlementRequested && !isVoiced && await deferSettlementHonoured(req)
     const mcpClient = extractMcpClient(req.body)
     // job_type is required for the reconcile cron to finalise the job
     // correctly — `lib/reconcile/replicate.ts` reads job_type to dispatch
@@ -1663,7 +1668,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
           node_id: extractNodeId(req.body),
           force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
-          job_type: "image-to-video",
+          job_type: isVoiced ? "voiced-video" : "image-to-video",
           status: "pending",
           // R26: the normalized values are passed in rather than written back
           // onto `parsed.data` — the handler destructured above, so a mutation
@@ -1734,7 +1739,6 @@ export async function generateVideoRoutes(app: FastifyInstance) {
     const canVoice = videoModelCanSpeakDialogue(provider)
     // The SAME predicate `computeCredits` read, so a run reserved as a plain
     // composite (+ audio add-on) is exactly the run sent down this lane.
-    const isVoiced = dispatchesVoicedVideo(parsed.data)
     // Credit addon the worker commits on top of the video provider cost (mirrors
     // loop-trim's extraNonProviderCredits). Computed here so the route owns all
     // billing math — the SAME amount the guard reserved, from the same function

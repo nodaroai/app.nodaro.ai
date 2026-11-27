@@ -1,5 +1,7 @@
 "use client"
 
+import { ProClipDownloads } from "../nodes/pro-clip-downloads"
+import type { DeliveredVideoClip } from "@/lib/run-result-identity"
 import { seekSlider } from "@/lib/seek-slider"
 import { useState, useEffect, useCallback, useRef } from "react"
 import { createPortal } from "react-dom"
@@ -19,6 +21,7 @@ interface MediaPreviewModalProps {
   /** What the take on show was rendered at ("proxy" is a Preview, labelled).
    *  Only a render has one: a caller that shows an Apply EDL take passes the
    *  take's own stamped quality; a list caller (a node's own results) passes none. */
+  readonly clips?: readonly DeliveredVideoClip[]
   readonly quality?: string
   /** All results for internal prev/next navigation (overrides currentIndex/totalCount/onPrev/onNext) */
   readonly results?: ReadonlyArray<{ url?: string; text?: string; type?: "image" | "video" | "audio" | "text" }>
@@ -48,7 +51,7 @@ function formatTime(seconds: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`
 }
 
-export function MediaPreviewModal({ isOpen, onClose, type, url, quality, results, initialIndex, onIndexChange, currentIndex, totalCount, onPrev, onNext, onVideoStateChange, initialVideoPlayState, initialPausedAtTime }: MediaPreviewModalProps) {
+export function MediaPreviewModal({ isOpen, onClose, type, url, quality, clips, results, initialIndex, onIndexChange, currentIndex, totalCount, onPrev, onNext, onVideoStateChange, initialVideoPlayState, initialPausedAtTime }: MediaPreviewModalProps) {
   const t = useT()
   const isRtl = useAppDir() === "rtl"
   // Internal navigation state when results array is provided
@@ -247,6 +250,7 @@ export function MediaPreviewModal({ isOpen, onClose, type, url, quality, results
         className="relative w-[95vw] max-h-[95vh] flex items-center justify-center"
         onClick={(e) => e.stopPropagation()}
       >
+        <ProClipDownloads clips={clips} />
         {/* Close button */}
         <button
           type="button"

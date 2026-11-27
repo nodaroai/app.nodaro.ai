@@ -7,6 +7,7 @@ import { sendInternalError } from "../../lib/http-errors.js"
 import { rateLimitAddressKey } from "../../lib/client-address.js"
 import { probeAndCheckRefVideoDurations, probeRefVideoDurations } from "../../lib/ref-video-probe.js"
 import { resolveSeedanceDraftFinalize } from "../../lib/seedance-draft-finalize.js"
+import { routedFinalizeCredits } from "../billing/video-route-admission.js"
 import { mayUseChildJobAsSource } from "../../lib/job-submission-context.js"
 import { handlePriceNotConfigured } from "../lib/credit-guard-impl.js"
 import {
@@ -161,7 +162,9 @@ export function registerSeedanceHdEstimate(app: FastifyInstance): void {
       if (!resolved.ok) {
         return reply.status(resolved.status).send({ error: { code: resolved.code, message: resolved.message } })
       }
-      return { data: { credits: await seedanceDraftFinalizeChargedCredits(resolved), minimum: false } }
+      // A draft the alternate route made is finalized there: shown at the route's quote, the hold.
+      const routed = await routedFinalizeCredits(resolved)
+      return { data: { credits: routed ?? (await seedanceDraftFinalizeChargedCredits(resolved)), minimum: false } }
     } catch (err) {
       if (handlePriceNotConfigured(err, reply, ROUTE)) return reply
       return sendInternalError(reply, req, err, "Failed to estimate the finalize credits")

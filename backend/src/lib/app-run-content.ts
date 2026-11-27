@@ -109,6 +109,7 @@ export function jobContentRedaction(): {
   output_data: null
   held_output_data: null
   restricted_output_data: null
+  video_assembly_recovery: null
   error_message: null
   error_detail: null
   input_fingerprint: null
@@ -121,6 +122,7 @@ export function jobContentRedaction(): {
     output_data: null,
     held_output_data: null,
     restricted_output_data: null,
+    video_assembly_recovery: null,
     error_message: null,
     error_detail: null,
     input_fingerprint: null,

@@ -210,6 +210,7 @@ import { trendRadarRoutes } from "./ee/routes/trend-radar.js"
 import { adminNodaroMotionRoutes } from "./ee/routes/admin-nodaro-motion.js"
 import { adminVideoRouteRoutes } from "./ee/routes/admin-video-route.js"
 import { publishRouteListing } from "./ee/billing/video-route-listing-publish.js"
+import { videoRouteInternalRoutes } from "./ee/routes/video-route-internal.js"
 import { adminProviderSafetyRoutes } from "./ee/routes/admin-provider-safety.js"
 import { providerSafetyLocksRoutes } from "./routes/provider-safety-locks.js"
 import { motionTransferRoutes } from "./routes/motion-transfer.js"
@@ -867,6 +868,8 @@ export async function buildApp() {
 if (hasAdmin() && hasCredits()) await app.register(adminNodaroMotionRoutes)
 // Admin → Video route: per-model routing of the Seedance 2.x family (ee/routes/admin-video-route.ts).
 if (hasAdmin() && hasCredits()) await app.register(adminVideoRouteRoutes)
+// The standalone orchestrator admits a routable video job through this process (it loads no plugin).
+if (hasCredits()) await app.register(videoRouteInternalRoutes)
   // Provider content filters, per model (admin read; platform operator write).
   if (hasAdmin()) await app.register(adminProviderSafetyRoutes)
   // Which models an admin forced the filter on for: the node checkbox shows it.

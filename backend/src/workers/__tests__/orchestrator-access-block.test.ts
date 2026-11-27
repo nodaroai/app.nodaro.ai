@@ -153,7 +153,7 @@ describe("orchestrator — a blocked account's run stops at pickup", () => {
     await processWorkflowExecution(makeJob(OWNER))
     expect(mocks.executeNodeCalls).toEqual([])
     expect(failedWrite()?.error_message).toBe("This account is blocked.")
-    expect(mocks.cancelInFlightChildJobs).toHaveBeenCalledWith("exec-1", OWNER)
+    expect(mocks.cancelInFlightChildJobs).toHaveBeenCalledWith("exec-1", OWNER, { punitive: true })
     // Cancelled BEFORE the run is failed.
     const cancelAt = mocks.cancelInFlightChildJobs.mock.invocationCallOrder[0]!
     const failAt = mocks.updateExecutionWithRetry.mock.invocationCallOrder.find(
@@ -168,7 +168,7 @@ describe("orchestrator — a blocked account's run stops at pickup", () => {
     expect(mocks.executeNodeCalls).toEqual([])
     expect(failedWrite()?.error_message).toBe("This workflow is unavailable.")
     // The run's children are the RUNNER's (the execution is theirs), not the owner's.
-    expect(mocks.cancelInFlightChildJobs).toHaveBeenCalledWith("exec-1", RUNNER)
+    expect(mocks.cancelInFlightChildJobs).toHaveBeenCalledWith("exec-1", RUNNER, { punitive: true })
   })
 
   it("nobody blocked: the run goes ahead", async () => {

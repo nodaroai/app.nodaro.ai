@@ -2,8 +2,9 @@
 
 An **alternate route** lets a deployment run a fully prepared video generation
 through another upstream it operates, instead of the platform's default one.
-The person sees the same node, the same options and the same price; only where
-the work runs changes. The deployment supplies the route through a private
+The person sees the same node and options. Legacy routing preserves the default
+price; explicit per-model routing uses the selected route's quote and verified
+bill, as described below. The deployment supplies the route through a private
 plugin, and the public platform never names it.
 
 The core module is `backend/src/lib/alternate-route.ts`; its recovery is
@@ -60,6 +61,10 @@ only when a service exists, because the plugin's rule may depend on them.
 
 ## Fallback
 
+These fallback rules apply to legacy routing, before an admin has saved a
+routing policy. An explicit alternate-route selection never silently switches
+to the default upstream.
+
 | What happened | What the platform does |
 |---|---|
 | `start` refused before a task existed (`created: "none"`) | falls back |
@@ -106,7 +111,7 @@ The reconcile cron and the worker's stall re-pick dispatch the kind to
 
 ## Money
 
-The person's charge is unchanged: it is settled from the delivered clip exactly
+For legacy routing, the person's charge is unchanged: it is settled from the delivered clip exactly
 as on the default route. The recorded provider cost is the route's own figure
 (`ProviderResult.routedVia` marks such a result, so no handler re-derives the
 default upstream's rates), and `jobs.provider` records a generic value. The
@@ -118,8 +123,9 @@ mistakes it for one.
 A deployment can also put whole models on the route: an admin chooses, per
 routable model (the Seedance 2.x family) and optionally per service, the
 default route or the alternate one (`video_route_policy`, Admin → Video
-route; `lib/video-route-policy.ts`). With nothing saved every model stays on
-the default route, and everything above applies unchanged.
+route; `lib/video-route-policy.ts`). Before the first policy is saved, existing
+legacy routing and pricing remain unchanged. After a policy is saved, a default
+selection suppresses legacy routing for that model or service.
 
 - **One decision, at admission.** `decideVideoRoute`
   (`lib/video-route-decision.ts`) reads the policy first, so a model left on
@@ -128,29 +134,39 @@ the default route, and everything above applies unchanged.
   model (`capable`), and takes the request (`accepts`, called with `service`
   and `kind` set). The answer is stored on the job (`input_data.__videoRoute`,
   server-only), and the run obeys it. A change in Admin affects only new jobs.
+- **Unavailable selections refuse the run.** If the selected alternate route
+  is unavailable or refuses the request, the run does not use the default
+  upstream. Unreadable routing settings also refuse new submissions for
+  routable video models.
 - **A "service"** is the parent job's type for a plugin's child job, else the
   job's own type.
-- **Shared settings.** Environments that share a database share the setting.
-  An environment whose route cannot take a model runs it on the default
-  route, at the default price.
-- **Price.** A routed run is held from the route's `quote` for the request,
-  times the model's correction factor, and settled from what the task billed.
-  Both are turned into credits by one rule: the cost at the credit's value,
-  rounded up to the next 10, the rule behind the default video prices. The
-  result is then marked up at the platform's own price id exactly as the
-  default price of that id is, with the same on/off switch and tier gates. When
-  the route gives no quote, the request is refused (`price_not_configured`).
-  It is never priced at the default. Listings of a routed model show the
-  route's `prices()` (USD per id) through the same rule; an id the route does
-  not list is refused, never priced at the default or as zero. A listing has
-  no service, so model lists show the model-level route; a node's estimate
-  and a quote price the request itself. The API publishes what its route
-  lists, so a process without the plugin lists the same prices.
+- **Settings are per environment.** Staging and production keep separate
+  routing policies, price corrections, alerts and reconciliation records,
+  even when they share a database.
+- **Price.** Admission reserves the selected route's credit quote. Final
+  settlement charges the route's verified bill, which can exceed the
+  reservation: the amount the route reports for the task, or, when it
+  reports the seconds it billed instead, those seconds at the agreed rate.
+  The route says which it is (`costBasis`), and the ledger keeps it. A task
+  with neither leaves the settlement pending for operator attention; a
+  planned figure or an estimate never substitutes for either. A bill more than the
+  policy's multiple of its quote (`billAnomalyMultiple`, default
+  `ROUTE_BILL_ANOMALY_MULTIPLE_DEFAULT`) is held for an admin to confirm or
+  reject; the result is delivered meanwhile. A part of a charge the payer
+  could not cover is recorded and alerted; it blocks nothing and is repaid
+  from nothing unless the policy's `enforceUnpaidCharges` is on (default
+  off). A missing quote refuses the
+  request (`price_not_configured`). Model listings use the model-level
+  route; a node estimate or request quote also accounts for its service and
+  inputs. Subscription and availability checks still apply.
 - **One switch.** A build lists a routed price, or lets an admin put a model
   on the route, only when it also admits, runs and settles a routed job.
 - **Correction factors** (`video_route_price_factors`) are kept per model,
   resolution, reference video and kind. They only ever rise automatically,
   one capped step at a time, with an alert, and an admin can set or reset
   them.
+- **Admin alerts** appear in Admin → Video route. Price changes, pending
+  settlement, low balances and reconciliation differences never send
+  customer notifications.
 - **Drafts.** A draft the route made holds the route's own reference. It is
   never finalized on the default upstream.

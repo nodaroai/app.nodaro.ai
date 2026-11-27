@@ -128,6 +128,7 @@ export const MEDIA_MEMBER_LANES: SectionLanes<PluginMediaToolkit> = {
   mergeVideoAudio: local(),
   applyAudioFx: local(),
   applyImageWatermark: local(),
+  storeProDeliveryClip: local(),
   uploadVideoMaybeWatermark: local(),
   storeVideoResult: local(),
   withMemorySlot: { exempt: "the plugin's own in-process picture work, already held by the box's memory admission; it calls no host member that takes a slot" },

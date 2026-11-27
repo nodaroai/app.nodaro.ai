@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock("@/lib/supabase.js", () => ({
-  supabase: { from: vi.fn().mockReturnValue({ update: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ data: null, error: null }) }) }) },
+  supabase: { from: vi.fn().mockReturnValue({ update: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ in: vi.fn().mockReturnValue({ select: vi.fn().mockResolvedValue({ data: [{ id: "job-hd" }], error: null }) }), then: (ok: (v: unknown) => unknown) => Promise.resolve({ data: null, error: null }).then(ok) }) }) }) },
 }))
 vi.mock("../../../providers/kie/seedance-draft.js", () => ({ runSeedanceDraftFinalize: mocks.finalize }))
 vi.mock("../../../lib/seedance-draft-audio-apply.js", async (importOriginal) => ({

@@ -1,8 +1,19 @@
-import { describe, it, expect, vi } from "vitest"
+import { afterEach, it, expect, vi } from "vitest"
 import Fastify from "fastify"
-const pricing=vi.hoisted(()=>vi.fn())
+import { CREDIT_BASE_USD } from "@nodaro/shared/models"
+import { defaultVideoRoutePolicy } from "../../../lib/video-route-policy.js"
+import { _resetPluginServicesForTests, setPluginServices } from "../../../lib/private-plugins/services-registry.js"
+
+const { pricing, settings } = vi.hoisted(() => ({
+  pricing: vi.fn(),
+  settings: { cost_markup_percent: 10 } as Record<string, unknown>,
+}))
+afterEach(() => {
+  delete settings.video_route_policy
+  _resetPluginServicesForTests()
+})
 vi.mock("../../billing/generate-video-pro-credits.js",()=>({computeGenerateVideoProPricing:pricing}))
-vi.mock("../../../lib/app-settings.js",()=>({getAppSettings:async()=>({cost_markup_percent:10})}))
+vi.mock("../../../lib/app-settings.js",()=>({getAppSettings:async()=>settings}))
 import { registerVideoProEstimate } from "../video-pro-estimate.js"
 it("quotes the same upper reservation with markup once and without creating a job",async()=>{
   pricing.mockResolvedValue({reserveBase:600,feeBase:100,segmentPlanning:{mode:"short"}})
@@ -31,4 +42,34 @@ it("passes the run's audio to the pricing, which reads it where the model's pric
   }
   await app.inject({method:"POST",url:"/v1/credits/video-pro-estimate",payload:{provider:"pixverse-v6-max",duration:23,renderMethod:"keyframes"}})
   expect(pricing.mock.lastCall?.[0]?.generateAudio).toBeUndefined()
+})
+
+it("prices the editor run using its audio and each segment's actual planned reference seconds", async () => {
+  settings.video_route_policy = {
+    ...defaultVideoRoutePolicy(),
+    models: { "seedance-2-5": { route: "default", services: { "generate-video-pro": "alternate" } } },
+  }
+  pricing.mockResolvedValue({ segmentDurations: [10, 9], tailSec: 3, reserveBase: 600, feeBase: 10, resolution: "720p" })
+  setPluginServices({
+    alternateRoutes: {
+      accepts: () => null,
+      start: async () => { throw new Error("A read-only estimate cannot start a job") },
+      poll: async () => ({ state: "running" }),
+      quotePlan: (plan) => {
+        if (plan.model !== "seedance-2-5" || plan.service !== "generate-video-pro"
+          || plan.resolution !== "720p" || plan.generateAudio !== false) return null
+        if (plan.outputSec === 10 && !plan.referenceVideoDurationsSec.length) return { routeId: "first", usd: 10 * CREDIT_BASE_USD, billedSeconds: 10 }
+        if (plan.outputSec === 9 && plan.referenceVideoDurationsSec.join() === "3") return { routeId: "next", usd: 20 * CREDIT_BASE_USD, billedSeconds: 12 }
+        return null
+      },
+    },
+  })
+  const app = Fastify()
+  registerVideoProEstimate(app)
+  const body = { provider: "seedance-2-5", duration: 18, renderMethod: "extend", generateAudio: false }
+  const call = (payload: typeof body & { planOnly?: boolean }) => app.inject({ method: "POST", url: "/v1/credits/video-pro-estimate", payload })
+  expect((await call(body)).json()).toEqual({ data: { credits: 44, upperBound: false } })
+  expect((await call({ ...body, generateAudio: true })).statusCode).toBe(503)
+  expect((await call({ ...body, planOnly: true })).json()).toEqual({ data: { credits: 11, upperBound: false } })
+  await app.close()
 })

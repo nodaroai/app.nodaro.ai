@@ -1,3 +1,5 @@
+import { ProClipDownloads } from "../nodes/pro-clip-downloads"
+import { deliveredVideoClips } from "@/lib/run-result-identity"
 import { memo } from "react"
 import { ImageOutputCard } from "./output-cards/image-output-card"
 import { VideoOutputCard } from "./output-cards/video-output-card"
@@ -50,6 +52,7 @@ export interface OutputCardProps {
   /** Action callbacks for share/edit/hide */
   actions?: OutputCardActions
   /** The output is a Preview — a render at proxy quality (F1, `outputIsPreview`). */
+  clipOutput?: unknown
   preview?: boolean
   /** The app run this card shows, where a surface lists several (the chat
    *  thread). Absent: the run on show. Only that run's cards carry Render final. */
@@ -76,6 +79,7 @@ function OutputCardImpl({
   fieldBadges,
   actions,
   preview: runPreview,
+  clipOutput,
   runId,
 }: OutputCardProps) {
   const t = useT()
@@ -88,6 +92,9 @@ function OutputCardImpl({
   const url = showingPreview ? (review.previewUrl ?? runUrl) : runUrl
   const preview = showingPreview || runPreview
   const reviewBar = review ? <AppRenderReviewBar review={review} /> : null
+  const clips = outputType === "video" ? deliveredVideoClips(clipOutput) : []
+  const stamps = (clipOutput as { listResultStamps?: unknown[] } | undefined)?.listResultStamps
+  const galleryClips = outputType === "video" && Array.isArray(stamps) ? stamps.map(deliveredVideoClips) : [clips]
   const showProgress = status === "running" || status === "waiting"
   const progressValue = progress ?? 0
   const badgeRow = fieldBadges && fieldBadges.length > 0 ? (
@@ -138,6 +145,7 @@ function OutputCardImpl({
           onOpenMedia={onOpenMedia ? () => onOpenMedia(nodeId) : undefined}
           columns={columns}
         />
+        {galleryClips.map((parts, i) => parts.length > 0 && <ProClipDownloads key={i} clips={parts} inline />)}
         {badgeRow}
         {reviewBar}
         {showProgress && (
@@ -169,11 +177,12 @@ function OutputCardImpl({
     }
   })()
 
-  if (!showProgress && !badgeRow && !reviewBar) return card
+  if (!showProgress && !badgeRow && !reviewBar && !clips.length) return card
 
   return (
     <div className="flex flex-col gap-2">
       {card}
+      <ProClipDownloads clips={clips} inline />
       {badgeRow}
       {reviewBar}
       {showProgress && (

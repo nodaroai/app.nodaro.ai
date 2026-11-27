@@ -187,6 +187,24 @@ export function trendRunErrorText(
   return masked.error_message
 }
 
+/** Routing receipts are server-only. This projection is also applied before
+ * the worker writes any checkpoint into authenticated-readable output_data. */
+export function withoutVideoRouteSecrets(output: Record<string, unknown>): Record<string, unknown> {
+  const clean = { ...output }
+  delete clean.routeToken
+  for (const key of ["pricing", "proPricing"] as const) {
+    const pricing = clean[key]
+    if (pricing && typeof pricing === "object" && !Array.isArray(pricing) && "route" in pricing) {
+      const { route: _route, ...publicPricing } = pricing as Record<string, unknown>
+      clean[key] = publicPricing
+    }
+  }
+  if (clean.pro && typeof clean.pro === "object" && !Array.isArray(clean.pro)) {
+    clean.pro = withoutVideoRouteSecrets(clean.pro as Record<string, unknown>)
+  }
+  return clean
+}
+
 function redact(value: unknown, seen: WeakMap<object, unknown>): unknown {
   if (value === null || typeof value !== "object") return value
 
@@ -203,7 +221,8 @@ function redact(value: unknown, seen: WeakMap<object, unknown>): unknown {
   const copy: Record<string, unknown> = {}
   seen.set(value, copy)
   for (const [key, item] of Object.entries(value)) {
-    if (key === "unscoredUrl") continue
+    if (key === "unscoredUrl" || key === "routeToken" || key === "privateUgcAdmission" || key === "ugcClipAdmission") continue
+    if (key === "route" && item && typeof item === "object" && ("quote" in item || "token" in item)) continue
     Object.defineProperty(copy, key, {
       value: redact(key === "output_data" || key === "input_data" ? withoutServerOnlyKeys(item) : item, seen),
       enumerable: true,

@@ -24,7 +24,7 @@ const mocks = vi.hoisted(() => {
     },
     error: null,
   })
-  const jobsSelectEqMock = vi.fn(() => ({ single: jobsSingleMock }))
+  const jobsSelectEqMock = vi.fn(() => ({ single: jobsSingleMock, maybeSingle: jobsSingleMock }))
   const jobsSelectMock = vi.fn(() => ({ eq: jobsSelectEqMock }))
   // UPDATE path (claim release): .from("jobs").update({ finalize_claimed_at: null })
   //   .eq("id", jobId).eq("finalize_claimed_at", claimTs)

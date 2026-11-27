@@ -29,6 +29,14 @@ const CLIP = "https://cdn.example/clip.mp4"
 const upload = node("clip", "upload-video", { url: CLIP })
 const empty = node("empty", "upload-video", {})
 
+it("quotes Edit Video Pro with its connected source, replace window and prompt", () => {
+  const edit = node("edit", "edit-video-pro", { provider: "seedance-2-5", spanStart: 3, spanEnd: 12, prompt: "Change the backdrop" })
+  const key = seedanceRefQuoteKeyFor(edit, [upload, edit], [edge("clip", "edit", "video")])
+  expect(parseSeedanceRefQuoteKey(key!)?.runQuote).toMatchObject({
+    type: "edit-video-pro", params: { provider: "seedance-2-5", videoUrl: CLIP, spanStart: 3, spanEnd: 12, prompt: "Change the backdrop" },
+  })
+})
+
 describe("seedanceRefQuoteRequest — Generate Video", () => {
   const gv = (data: Record<string, unknown>) => node("gv", "generate-video", { provider: "seedance-2-5", duration: 8, ...data })
 
@@ -96,9 +104,9 @@ describe("seedanceRefQuoteRequest — Seedance 2.5 reference task type", () => {
     const extend = gv({ referenceTaskType: "extend" })
     const keyOf = (g: WorkflowNode) => seedanceRefQuoteKeyFor(g, [upload, g], wires)!
     expect(new Set([keyOf(gv({})), keyOf(edit), keyOf(extend)]).size).toBe(3)
-    expect(keyOf(gv({}))).toBe(seedanceRefQuoteKey(today!))
+    expect(parseSeedanceRefQuoteKey(keyOf(gv({})))?.runQuote).toMatchObject({ type: "text-to-video", params: { provider: "seedance-2-5", referenceVideoUrls: [CLIP] } })
     expect(keyOf(gv({}))).not.toContain("referenceTaskType")
-    expect(parseSeedanceRefQuoteKey(keyOf(edit))).toStrictEqual({ ...today, referenceTaskType: "edit" })
+    expect(parseSeedanceRefQuoteKey(keyOf(edit))).toMatchObject({ ...today, referenceTaskType: "edit" })
   })
 
   // The editor's half of a shared fixture: a node with A reference and Duration
@@ -229,7 +237,7 @@ describe("quote keys", () => {
     const key = seedanceRefQuoteKeyFor(g, [upload, g], [edge("clip", "gv", "videoReferences")])!
     expect(isSeedanceRefQuoteKey(key)).toBe(true)
     expect(isSeedanceRefQuoteKey("seedance-2-5:8s:720p-ref")).toBe(false)
-    expect(parseSeedanceRefQuoteKey(key)).toEqual({ provider: "seedance-2-5", duration: 8, referenceVideoUrls: [CLIP] })
+    expect(parseSeedanceRefQuoteKey(key)).toMatchObject({ provider: "seedance-2-5", duration: 8, referenceVideoUrls: [CLIP] })
     expect(seedanceRefQuoteKey(parseSeedanceRefQuoteKey(key)!)).toBe(key)
   })
 })

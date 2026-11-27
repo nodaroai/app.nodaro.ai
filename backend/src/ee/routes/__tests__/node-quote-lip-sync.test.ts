@@ -11,7 +11,7 @@
  * only the edges are stubbed (the DB, the reservation, the queue, the audio
  * download and its decode).
  */
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
 import { z } from "zod"
 
@@ -105,6 +105,11 @@ vi.mock("../../billing/credits.js", async () => {
 vi.mock("../../../lib/queue.js", () => ({
   videoQueue: { add: vi.fn(() => Promise.resolve({ id: "queue-1" })) },
 }))
+
+beforeAll(async () => {
+  // The routes buildApp loads, loaded outside any test's time limit (a cold load under a full-suite run took longer than 5 s).
+  await Promise.all([import("../../../routes/lip-sync.js"), import("../node-quote.js")])
+}, 60_000)
 
 beforeEach(() => {
   vi.clearAllMocks()

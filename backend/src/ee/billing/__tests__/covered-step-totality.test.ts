@@ -38,7 +38,7 @@ const read = (rel: string) => readFileSync(join(SRC, rel), "utf8")
 describe("covered steps cannot be charged above their 0 hold", () => {
   it("commit_credits_metered is called from one function only, which reads the mark first", () => {
     const callers = sources(SRC)
-      .filter((f) => /rpc\(\s*"commit_credits_metered"/.test(readFileSync(f, "utf8")))
+      .filter((f) => /rpc\(\s*(?:routedJobId \? "commit_video_route_credits" : )?"commit_credits_metered"/.test(readFileSync(f, "utf8")))
       .map((f) => relative(SRC, f))
     // The schema probe calls it with a negative actual the function refuses before reading any row:
     // an existence check that settles nothing (lib/llm-metered-schema-probe.ts).
@@ -49,8 +49,9 @@ describe("covered steps cannot be charged above their 0 hold", () => {
     expect(start).toBeGreaterThan(-1)
     const body = credits.slice(start, credits.indexOf("\n  }\n", start))
     expect(body.indexOf("coveredMarkOf(")).toBeGreaterThan(-1)
-    expect(body.indexOf("coveredMarkOf(")).toBeLessThan(body.indexOf('rpc("commit_credits_metered"'))
-    expect(credits.match(/rpc\(\s*"commit_credits_metered"/g)).toHaveLength(1)
+    expect(body.indexOf("coveredMarkOf(")).toBeLessThan(body.indexOf("supabase.rpc("))
+    expect(body).toContain("p_actual_credits: covered ? 0 : actualCredits")
+    expect(credits.match(/rpc\(\s*(?:routedJobId \? "commit_video_route_credits" : )?"commit_credits_metered"/g)).toHaveLength(1)
   })
 
   it("the step runner's every reservation passes the run's cover", () => {

@@ -49,6 +49,10 @@ vi.mock("../../credits-job-lifecycle.js", () => ({ refundReservedCreditsForJob: 
 vi.mock("../bump-attempts.js", () => ({ bumpAttemptsOrExhaust: mocks.bump }))
 vi.mock("../kie.js", () => ({ finalizeRecoveredMedia: mocks.finalizeRecoveredMedia, reconcileKieJob: mocks.reconcileKieJob }))
 vi.mock("../../job-cost-columns.js", () => ({ jobCostColumns: async (cost: number | null) => ({ provider_cost: cost }) }))
+const queue = vi.hoisted(() => ({ live: [] as Array<{ data: { jobId: string } }>, tasks: [] as unknown[][] }))
+vi.mock("../../queue.js", () => ({ videoQueue: { getJob: async () => null, getJobs: async () => queue.live } }))
+vi.mock("../../concurrency-lanes/columns.js", () => ({ readBullEntry: async () => null }))
+vi.mock("../../video-route-ledger.js", async (orig) => ({ ...(await orig<typeof import("../../video-route-ledger.js")>()), recordRouteTask: async (...a: unknown[]) => { queue.tasks.push(a); return true } }))
 vi.mock("../../../providers/kie/client.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../providers/kie/client.js")>()),
   createKieTask: mocks.createKieTask,
@@ -322,5 +326,32 @@ describe("claimed with no reference saved", () => {
     expect(errorSpy.mock.calls.map((c: unknown[]) => String(c[0])).join("\n")).toMatch(/\[ALERT\] job j-1/)
     expect(mocks.createKieTask).toHaveBeenCalledTimes(1)
     expect(job()).toMatchObject({ provider_kind: "kie-standard", provider_task_id: "default-1" })
+  })
+})
+
+describe("a ROUTED run of a post-processing lane that finished on the route", () => {
+  const routedRow = () => ({ ...rowArg(), job_type: "lip-sync" })
+  beforeEach(() => {
+    queue.live = []
+    queue.tasks = []
+    ;(job().input_data as Record<string, Record<string, unknown>>)[ALTERNATE_ROUTE_KEY]!.routed = true
+    ;(job().input_data as Record<string, Record<string, unknown>>)[ALTERNATE_ROUTE_KEY]!.send = 1
+  })
+
+  it("is left to the queue entry that still holds it (its handler finishes the clip): never failed from here", async () => {
+    service(async () => ({ state: "done", resultUrl: "https://out.example/raw.mp4", providerCostUsd: 0.3, estimatedCostUsd: 0.28 }))
+    queue.live = [{ data: { jobId: "j-1" } }]
+    await reconcileAlternateRouteJob(routedRow())
+    expect(mocks.markJobFailed).not.toHaveBeenCalled()
+    expect(mocks.refund).not.toHaveBeenCalled()
+    expect(queue.tasks).toEqual([["j-1", 1, "task-9", 0.3, "", 0.28, "receipt"]])
+  })
+
+  it("with no entry left: failed and refunded in full, its billed task on the ledger as a known loss", async () => {
+    service(async () => ({ state: "done", resultUrl: "https://out.example/raw.mp4", providerCostUsd: 0.3, estimatedCostUsd: 0.28 }))
+    await reconcileAlternateRouteJob(routedRow())
+    expect(mocks.markJobFailed).toHaveBeenCalledWith("j-1", expect.objectContaining({ reconcile_last_error: "alternate_route_unfinished" }))
+    expect(mocks.refund).toHaveBeenCalledWith("j-1")
+    expect(queue.tasks).toEqual([["j-1", 1, "task-9", 0.3, "", 0.28, "receipt"]])
   })
 })

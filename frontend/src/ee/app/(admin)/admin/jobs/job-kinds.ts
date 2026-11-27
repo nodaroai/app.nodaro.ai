@@ -42,6 +42,8 @@ export const JOB_TYPE_KINDS: Readonly<Record<string, JobKind>> = {
   "cast-swap-face-mask": "video",
   "trend-face-mask-variant": "video",
   "ugc-finish": "video",
+  // The voiced lane's queue name (generate-video's voiced runs; the video route names its lane by it).
+  "voiced-video": "video",
   "suno-voice-create": "music",
   "suno-voice-validate": "music",
   // A node's step under its own name: the entity generators and their steps.

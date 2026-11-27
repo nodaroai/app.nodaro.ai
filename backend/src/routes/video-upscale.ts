@@ -580,6 +580,7 @@ export async function videoUpscaleRoutes(app: FastifyInstance) {
                   sourceJobId: draft.sourceJobId,
                   draftOutputSec: draft.outputSec,
                   draftHasRefVideo: draft.hasRefVideo,
+                  ...(draft.hasRefVideo ? { draftRefVideoDurationsSec: draft.refVideoDurationsSec } : {}),
                   ...(draft.nsfwChecker ? { draftNsfwChecker: true } : {}),
                   ...(draft.audioMux ? { draftAudioMux: draft.audioMux } : {}),
                   ...(draft.draftVideoUrl ? { draftVideoUrl: draft.draftVideoUrl } : {}),

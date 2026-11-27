@@ -1,4 +1,9 @@
+import { routedWorkflowVideoAddonBase } from "../../lib/loop-trim-addon.js"
+import { stopRuleSelect } from "../../lib/video-route-schema.js"
+import { ALTERNATE_ROUTE_JOB_TYPES } from "../../lib/alternate-route-request.js"
 import { projectDubbingCreditOverride, stampDubbingDuration } from "../../lib/dubbing-pricing.js"
+import { STOP_RULE_COLUMNS, finishesWhenStopped, stopsAtSegmentBoundary, unstartedSegmentJob, followedLane, stoppedFinishingError, type StopRuleRow } from "../../lib/stop-rule.js"
+import { bindRowlessRouteToken, rowlessRunTokenFor } from "../../lib/video-route-decision.js"
 import { dubbingRunImportRequest, dubbingSourceRefusal } from "../../lib/dubbing-source.js"
 import { SYNC_ROUTE_LANE_RULES } from "../../lib/concurrency-lanes/sync-route-lanes.js"
 import type { LeafLane } from "../../lib/concurrency-lanes/leaf-lanes.js"
@@ -2191,9 +2196,24 @@ export function computeImageOverlayCreditOverride(payload: Record<string, unknow
   return imageOverlayCredits(Array.isArray(payload.variants) ? payload.variants : undefined)
 }
 
+/**
+ * A workflow run's routed Pro pricing as the engine receives it: the host
+ * holds it here (the override), so the send token is bound now to the job and
+ * its user (`proPricing.route.token`). Without a job to bind to, no token: the
+ * run's segments cannot be sent on the route (they fail, refunded), never sent
+ * on a quote.
+ */
+function boundRoute<R extends { quote: string }>(route: R, bind: { jobId: string; userId: string } | undefined): R & { token?: string } {
+  const token = bind ? bindRowlessRouteToken(route.quote, { parentJobId: bind.jobId, userId: bind.userId }) : undefined
+  if (bind && !token) throw new Error("The video route reservation could not be verified")
+  return token ? { ...route, token } : route
+}
+
 export async function computeGenerateVideoProCreditOverride(
   payload: Record<string, unknown>,
   modelIdentifier = "",
+  /** The job that holds the run and its user: a routed run's segments are sent with a token bound to them. */
+  bind?: { jobId: string; userId: string },
 ): Promise<{ override: number; pricing: unknown } | undefined> {
   if (payload?.jobName !== "generate-video-pro" && payload?.type !== "generate-video-pro") return undefined
 
@@ -2235,6 +2255,21 @@ export async function computeGenerateVideoProCreditOverride(
   const base = payload.planOnly === true ? Math.max(2, pricing.feeBase) : pricing.reserveBase
   // Markup ONCE at this identifier's effective percent (credit-guard-impl.ts's helper).
   const { applyServiceMarkup } = await import("../../ee/billing/service-margin.js")
+  // A model the admin routed for the service: the run holds the routed price and
+  // its segments carry the route's token (`proPricing.route`), as on the plugin's own route.
+  if (payload.planOnly !== true) {
+    const { routedGenerateVideoProPricing } = await import("../../ee/billing/video-route-planned.js")
+    const route = await routedGenerateVideoProPricing(pricing, {
+      ...(payload.extendVideoUrl ? { hasOpeningVideo: true } : {}),
+      provider: String(payload.provider ?? "seedance-2"), resolution: String(payload.resolution ?? "720p"),
+      renderMethod: String(payload.renderMethod ?? "extend"),
+      generateAudio: typeof payload.generateAudio === "boolean" ? payload.generateAudio : undefined,
+    }, true)
+    if (route) {
+      payload.proPricing = { ...pricing, route: boundRoute(route, bind) }
+      return { override: route.reserveChargedCredits, pricing: payload.proPricing }
+    }
+  }
   const override = applyServiceMarkup(base, await getAppSettings(), modelIdentifier)
   return { override, pricing }
 }
@@ -2283,6 +2318,8 @@ export async function computeGenerateVideoProCreditOverride(
 export async function computeEditVideoProCreditOverride(
   payload: Record<string, unknown>,
   modelIdentifier = "",
+  /** The job that holds the run and its user: a routed run's segments are sent with a token bound to them. */
+  bind?: { jobId: string; userId: string },
 ): Promise<{ override: number; pricing: unknown } | undefined> {
   if (payload?.jobName !== "edit-video-pro" && payload?.type !== "edit-video-pro") return undefined
   if (((payload.mode as string | undefined) ?? "replace") !== "replace") return undefined
@@ -2306,6 +2343,13 @@ export async function computeEditVideoProCreditOverride(
   payload.spanEnd = pricing.spanEndSec
   payload.proPricing = pricing
 
+  // A model the admin routed for Edit Video Pro: the routed hold and the token its segments carry.
+  const { routedEditVideoProPricing } = await import("../../ee/billing/video-route-admission.js")
+  const route = await routedEditVideoProPricing(String(payload.provider ?? "seedance-2"), pricing, true)
+  if (route) {
+    payload.proPricing = { ...pricing, route: boundRoute(route, bind) }
+    return { override: route.reserveChargedCredits, pricing: payload.proPricing }
+  }
   // Markup ONCE at this identifier's effective percent (credit-guard-impl.ts's helper).
   const { applyServiceMarkup } = await import("../../ee/billing/service-margin.js")
   const override = applyServiceMarkup(pricing.reserveBase, await getAppSettings(), modelIdentifier)
@@ -3079,10 +3123,13 @@ async function executeWorkerNode(
   // restriction gate asks once more (the first ask is step 2 above).
   await refuseRestrictedInput(jobId, inputData, ctx.userId)
 
-  await supabase
-    .from("jobs")
-    .update({ input_data: inputData })
+  // A unified video node can dispatch a differently named job (including voiced video).
+  // Persist its paid lane before admission and Stop examine the row.
+  const isVideoLane = (ALTERNATE_ROUTE_JOB_TYPES as readonly string[]).includes(jobName)
+  const { error: inputError } = await supabase.from("jobs")
+    .update({ input_data: inputData, ...(isVideoLane ? { job_type: jobName } : {}) })
     .eq("id", jobId)
+  if (inputError) throw new Error(`Could not save job inputs before reservation: ${inputError.message}`)
 
   // 3. Reserve credits (skip for FFmpeg / 0-credit nodes)
   let usageLogId: string | undefined
@@ -3181,8 +3228,20 @@ async function executeWorkerNode(
         videoOverlayReserveId(jobName, payload) ??
         modelIdentifier
 
+      // A routable video model the admin put on the alternate route: the route
+      // is decided and stored on the job here, and the node is held at the
+      // route's quote (ee/billing/video-route-admission.ts). Null — the
+      // shipped state — leaves the chain below as it always was.
+      // Asked only for a Seedance 2.x price id (every routable model's ids start so), so every other node's reservation is untouched.
+      const routedVideo = meteredHold || !reserveModelIdentifier.startsWith("seedance-2")
+        ? null
+        : await (await import("../../ee/billing/video-route-admission.js")).admitRoutedVideoAnywhere({ jobId, priceId: reserveModelIdentifier, payload })
+      const routedAddon = routedVideo ? routedWorkflowVideoAddonBase(jobName, payload) : 0
+      const routedHold = routedVideo && routedVideo.holdCredits + (routedAddon > 0
+        ? (await import("../../ee/billing/service-margin.js")).applyServiceMarkup(routedAddon, await getAppSettings(), reserveModelIdentifier) : 0)
       const creditOverride =
         meteredHold?.holdCredits ??
+        routedHold ??
         await applyEdlCreditOverride(jobName, payload) ??
         await speakerViewCreditOverride(jobName, payload) ??
         await speakerFramesCreditOverride(jobName, payload) ??
@@ -3204,8 +3263,8 @@ async function executeWorkerNode(
         (await computeAudioIsolationCreditOverride(jobName, payload, reserveModelIdentifier)) ??
         (await computeVoiceChangerCreditOverride(jobName, payload, reserveModelIdentifier)) ??
         (await computeLtxRetakeCreditOverride(jobName, payload, modelIdentifier)) ??
-        (await computeGenerateVideoProCreditOverride(payload, modelIdentifier))?.override ??
-        (await computeEditVideoProCreditOverride(payload, modelIdentifier))?.override ??
+        (await computeGenerateVideoProCreditOverride(payload, modelIdentifier, { jobId, userId: ctx.userId }))?.override ??
+        (await computeEditVideoProCreditOverride(payload, modelIdentifier, { jobId, userId: ctx.userId }))?.override ??
         (await computeSeedance2RefVideoCreditOverride(payload, refVideoDurationsSec, modelIdentifier)) ??
         // MiniMax Hailuo 3 twin — unit×(input+output) ref-video billing plus
         // the >5-input-images surcharge (same heuristic-gated fallback slot).
@@ -3239,6 +3298,13 @@ async function executeWorkerNode(
         throw new Error(preflight.error ?? "Model not available on your plan or insufficient credits")
       }
 
+      const proPricing = jobName === "generate-video-pro" || jobName === "edit-video-pro"
+        ? payload.proPricing as { route?: { token?: string } } | undefined : undefined
+      const token = proPricing?.route?.token
+      const run = rowlessRunTokenFor(token, jobId)
+      if (proPricing?.route && (!run || run.userId !== ctx.userId || run.service !== jobName || run.reserveChargedCredits !== creditOverride)) {
+        throw new Error("The video route reservation does not match this job")
+      }
       const reservation = await CreditsService.reserveCredits(
         ctx.userId,
         jobId,
@@ -3251,6 +3317,7 @@ async function executeWorkerNode(
           billingContext: ctx.billingContext,
           isAppRun: ctx.isAppRun,
           creditOverride,
+          ...(run && token ? { oncePerJob: true, routedRun: { token, env: run.env } } : {}),
           webFreeMode: ctx.webFreeMode ?? false,
           // …and it holds 0 credits, its usage log naming the pack and its own price.
           ...(ctx.coveredBy ? { covered: ctx.coveredBy } : {}),
@@ -3266,18 +3333,27 @@ async function executeWorkerNode(
       usageLogId = reservation.usageLogId
       creditsUsed = reservation.creditsReserved
 
-      // Update job with reservation info
-      await supabase
-        .from("jobs")
-        .update({
+      if (run && token && proPricing?.route) {
+        // A replay uses the original bound token (its signed first admission),
+        // which the reservation stored atomically on the job.
+        const saved = rowlessRunTokenFor(reservation.routedRunToken, jobId, 0)
+        if (!saved || saved.service !== jobName || saved.userId !== ctx.userId || saved.reserveChargedCredits !== reservation.creditsReserved) {
+          throw new Error("The video reservation could not be verified")
+        }
+        payload.proPricing = { ...proPricing, route: { ...proPricing.route, token: reservation.routedRunToken } }
+      } else {
+        await supabase.from("jobs").update({
           usage_log_id: reservation.usageLogId,
           credits: reservation.creditsReserved,
           should_watermark: reservation.watermark,
-        })
-        .eq("id", jobId)
+        }).eq("id", jobId)
+      }
     } catch (err) {
-      // Clean up job if reservation fails
-      await supabase.from("jobs").delete().eq("id", jobId)
+      // A lost reply can follow a committed routed hold. Keep its job and
+      // reconciliation pointer unless the database confirms it was never debited.
+      const orphan = supabase.from("jobs").delete().eq("id", jobId)
+      if (jobName === "generate-video-pro" || jobName === "edit-video-pro") await orphan.is("usage_log_id", null)
+      else await orphan
       // P14/W3: a mapped billing refusal keeps its stable code (the worker
       // copies it into the node state) and its FIXED message — the raw RPC
       // text never reaches user-visible node states.
@@ -3493,7 +3569,7 @@ export async function loadCompletedFanOutIterations(
  * against committed credits → charge-without-delivery). In that case we ADOPT
  * the completion and return its result instead of throwing.
  */
-async function cancelJobAndThrow(
+export async function cancelJobAndThrow(
   jobId: string,
   usageLogId: string | undefined,
   reason: string,
@@ -3506,15 +3582,38 @@ async function cancelJobAndThrow(
   // billed cost is committed, never refunded (the reconcile sweep's rule).
   // One that cannot be committed yet stays with the sweep: the job is left
   // as it is — not cancelled, nothing refunded.
+  // The stop rule (lib/stop-rule.ts): a followed video run whose task already
+  // started is not cancelled — it finishes in its owner's library and is
+  // charged; the node reads as stopped. A timeout follows the same rule (the
+  // run goes on and is delivered late; only the node stops waiting).
+  const timedOut = reason !== "Execution cancelled"
+  let stopRow = await readStopRuleRow(jobId)
+  if (!stopRow && (nodeType === "generate-video" || nodeType === "video-to-video"
+    || stopsAtSegmentBoundary({ job_type: nodeType }) || ALTERNATE_ROUTE_JOB_TYPES.some(type => type === nodeType))) {
+    stopRow = await readStopRuleRow(jobId)
+    // A database outage is not evidence that a paid video is safe to cancel.
+    if (!stopRow) throw new Error("Could not verify whether the video had already started")
+  }
+  if (stopRow?.live && stopsAtSegmentBoundary(stopRow) && !unstartedSegmentJob(stopRow)) {
+    await (await import("../../workers/shared.js")).requestJobStop(jobId)
+    throw stoppedFinishingError(timedOut)
+  }
+  if (stopRow?.live && finishesWhenStopped(stopRow)) throw stoppedFinishingError(timedOut)
+  const followed = stopRow ? followedLane(stopRow) : false
   const meteredVerdict = hasCredits() ? await settleMeteredHoldsBeforeCancel(jobId) : "not-metered"
   if (meteredVerdict === "retry") {
     throw new Error(reason)
   }
-  const { data: flipped } = await supabase
+  let flip = supabase
     .from("jobs")
     .update({ status: "cancelled" })
     .eq("id", jobId)
     .not("status", "in", "(completed,failed,cancelled)")
+  // A followed run is cancelled only while no task exists (a free cancel): a
+  // task saved between the read above and this write keeps it running.
+  if (stopRow && unstartedSegmentJob(stopRow)) flip = flip.in("status", ["queued", "pending"]).is("video_send_started_at", null).is("provider_task_id", null)
+  else if (followed) flip = flip.is("provider_task_id", null).is("video_send_started_at", null)
+  const { data: flipped } = await flip
     // Real columns only: a returned column the table lacks fails the whole
     // UPDATE (it is one statement), which left the job running and unrefunded.
     .select("id, user_id, provider_task_id, provider_kind, credits, setHoldCreditId:input_data->>setHoldCreditId")
@@ -3593,6 +3692,15 @@ async function cancelJobAndThrow(
     throw new Error(reason)
   }
 
+  // 0 rows flipped on a followed run that is still live: its task started in between.
+  if (followed || (stopRow && unstartedSegmentJob(stopRow))) {
+    const now = await readStopRuleRow(jobId)
+    if (now?.live && stopsAtSegmentBoundary(now)) {
+      await (await import("../../workers/shared.js")).requestJobStop(jobId)
+      throw stoppedFinishingError(timedOut)
+    }
+    if (now?.live && finishesWhenStopped(now)) throw stoppedFinishingError(timedOut)
+  }
   // 0 rows flipped → the job reached a terminal state in the poll gap.
   const { data: jobRecord } = await supabase
     .from("jobs")
@@ -3611,6 +3719,19 @@ async function cancelJobAndThrow(
   const gapCode = jobRecord?.status === "failed" ? failedJobErrorCode(jobRecord.output_data, nodeType) : undefined
   if (gapCode) gapErr.errorCode = gapCode
   throw gapErr
+}
+
+/** The job's columns the stop rule reads, and whether it is still live; null when the row cannot be read. */
+async function readStopRuleRow(jobId: string): Promise<(StopRuleRow & { live: boolean }) | null> {
+  try {
+    // trash-read: stopping a run reads the job it stops, whatever became of it.
+    const { data, error } = await supabase.from("jobs").select(await stopRuleSelect(`status, ${STOP_RULE_COLUMNS}`)).eq("id", jobId).maybeSingle()
+    if (error || !data) return null
+    const row = data as StopRuleRow & { status?: unknown }
+    return { ...row, live: typeof row.status === "string" && !["completed", "failed", "cancelled"].includes(row.status) }
+  } catch {
+    return null
+  }
 }
 
 /** Today's ceilings — what every job that declares no budget polls under. */

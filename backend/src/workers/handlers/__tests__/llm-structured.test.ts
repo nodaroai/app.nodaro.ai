@@ -100,7 +100,7 @@ vi.mock("../../../lib/llm-billing.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../lib/llm-billing.js")>()),
   settleLlmUsageLog: settle.usageLog,
 }))
-const refunds = vi.hoisted(() => ({ refundCredits: vi.fn(async () => {}), commitCredits: vi.fn(async () => {}), trySettleManagedCredits: vi.fn(async () => false) }))
+const refunds = vi.hoisted(() => ({ refundCredits: vi.fn(async () => {}), commitCredits: vi.fn(async () => {}), trySettleManagedCredits: vi.fn(async () => false), trySettleManagedCreditsOrReadLog: vi.fn(async () => ({ managed: false, log: null })) }))
 vi.mock("../../../ee/services/credits.js", () => ({ CreditsService: refunds }))
 
 import { composeAnalysisInput, handleLlmStructured, waitForAnalysis, ANALYSIS_WAIT_BUDGET_MS } from "../llm-structured.js"

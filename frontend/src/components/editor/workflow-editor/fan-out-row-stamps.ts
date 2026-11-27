@@ -22,12 +22,12 @@ export type LandedTake = object & { readonly jobId?: unknown }
 export function fanOutRowStamps(
   nodeType: string | null | undefined,
   results: readonly string[],
-  landed: ReadonlyMap<string, LandedTake>,
+  landedRows: readonly (LandedTake | undefined)[],
   rowSent?: ReadonlyArray<RunResultRowStamp | undefined>,
   cancelledRows: ReadonlySet<number> = new Set(),
 ): RunResultRowStamp[] {
   return results.map((url, i) => {
-    const take = url ? landed.get(url) : undefined
+    const take = url ? landedRows[i] : undefined
     const jobId = typeof take?.jobId === "string" && take.jobId.length > 0 ? take.jobId : undefined
     return {
       ...rowSent?.[i],

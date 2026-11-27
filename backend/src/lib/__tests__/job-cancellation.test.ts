@@ -17,6 +17,22 @@ describe("job-cancellation", () => {
     expect(mockSingle).not.toHaveBeenCalled()
   })
 
+  it("finishes a paid segment, then stops before starting another one in the same polling window", async () => {
+    mockSingle.mockResolvedValue({ data: { status: "processing", stop_requested_at: "2026-11-23T10:00:00Z" }, error: null })
+    await runWithJobCancellation("job-1", undefined, async () => {
+      await expect(throwIfJobCancelled({ finishStartedVideo: true })).resolves.toBeUndefined()
+      await expect(throwIfJobCancelled()).rejects.toThrow("stop requested")
+    })
+    expect(mockSingle).toHaveBeenCalledTimes(1)
+  })
+
+  it("repairs the completed portion after Stop while preserving hard cancellation", async () => {
+    mockSingle.mockResolvedValueOnce({ data: { status: "completed", stop_requested_at: new Date().toISOString() } })
+      .mockResolvedValueOnce({ data: { status: "cancelled", stop_requested_at: new Date().toISOString() } })
+    await expect(runWithJobCancellation("job-1", "owner", () => throwIfJobCancelled(), { assemblyAttemptId: "attempt" })).resolves.toBeUndefined()
+    await expect(runWithJobCancellation("job-1", "owner", () => throwIfJobCancelled(), { assemblyAttemptId: "attempt" })).rejects.toBeInstanceOf(JobCancelledError)
+  })
+
   it("does not throw while the job is still running", async () => {
     mockSingle.mockResolvedValue({ data: { status: "processing" }, error: null })
     await runWithJobCancellation("job-1", undefined, async () => {

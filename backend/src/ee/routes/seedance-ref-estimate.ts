@@ -1,3 +1,4 @@
+// @registry-lookup prices the one routed reference-video request it is asked about
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { audioSoundtrackClipSec, billsReferenceVideoSeconds, pricedOutputDurationSec, SEEDANCE_2_5_REF_LIMITS, SEEDANCE_REFERENCE_TASK_TYPES, VIDEO_DYNAMIC_RANGES, videoHdrResolutionProblem } from "@nodaro/shared/models"
@@ -10,12 +11,17 @@ import { probeAndCheckRefVideoDurations, probeRefVideoDurations, refVideoCapFor 
 import { handlePriceNotConfigured } from "../lib/credit-guard-impl.js"
 import { seedance2RefVideoChargedQuote } from "../billing/seedance2-ref-video-quote.js"
 import { videoHdrAddonBaseCredits } from "../../lib/video-hdr-addon.js"
+import { routedRefVideoEstimate } from "../billing/video-route-admission.js"
 
 const ROUTE = "/v1/credits/seedance-ref-estimate"
 const MAX_CLIPS = SEEDANCE_2_5_REF_LIMITS.videos
 
 /** The quote body (exported: the Seedance 2.5 HD estimate reads a planned draft through these same fields). */
 export const seedanceRefEstimateBody = z.object({
+  routeService: z.enum(["text-to-video", "image-to-video", "voiced-video"]).optional(),
+  seed: z.number().int().optional(),
+  generateAudio: z.boolean().optional(),
+  unsupportedSettings: z.boolean().optional(),
   /** A Seedance 2 model (seedance-2, seedance-2-fast, seedance-2-mini, seedance-2-5, seedance-2-5-flash). */
   provider: z.string().min(1).max(64),
   /** The run's resolution; omitted = the model's default, as the run sends it. */
@@ -146,6 +152,11 @@ export function registerSeedanceRefEstimate(app: FastifyInstance): void {
       const durationsSec = soundtrackSec === undefined ? probed : [...probed, soundtrackSec]
       const videoTrim = { start: parsed.data.videoTrimStart, end: parsed.data.videoTrimEnd }
       // A Kling 4.0 HDR run's add-on, at the size and length it runs at.
+      // A model the admin routed for Generate Video: the route's own quote (or its listing while a clip is not produced yet).
+      if (soundtrackSec === undefined && hdrProblem === undefined && parsed.data.dynamicRange !== "hdr") {
+        const routed = await routedRefVideoEstimate({ provider, resolution, duration, draft, referenceTaskType, durationsSec: probed, unknownClips, seed: parsed.data.seed, routeService: parsed.data.routeService, generateAudio: parsed.data.generateAudio, unsupportedSettings: parsed.data.unsupportedSettings })
+        if (routed) return { data: routed }
+      }
       const hdrAddonBase = await videoHdrAddonBaseCredits({ provider, duration, resolution: resolution ?? uiResolutionFill(provider), dynamicRange: parsed.data.dynamicRange })
       return { data: await seedance2RefVideoChargedQuote({ provider, resolution, duration, draft, referenceTaskType, durationsSec, unknownClips, videoTrim, hdrAddonBase }) }
     } catch (err) {

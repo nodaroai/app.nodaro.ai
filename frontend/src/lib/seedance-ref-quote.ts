@@ -28,6 +28,8 @@ import {
   billsReferenceVideoSeconds,
   isGeminiOmniPerSecondProvider,
   isSeedanceVideoEditProvider,
+  isSeedance2Provider,
+  isSeedanceExtendProvider,
   videoToVideoProviderOf,
   listedSeedanceTaskType,
   videoRunsHdr,
@@ -51,7 +53,9 @@ import {
 import { wiredCharacterVideoUrls } from "@nodaro/shared/entities"
 import { hasFeature } from "@nodaro/shared/model-catalog"
 import { bypassTeleports } from "@nodaro/render-rules"
-import { expandWiredCharacterRefsForVideo } from "@/lib/video-prompt-assembly"
+import { computeNodePrompt } from "@nodaro/prompts/prompt-fields"
+import { buildNodeRefMap } from "@/lib/node-refs"
+import { assembleVideoPrompt, expandWiredCharacterRefsForVideo } from "@/lib/video-prompt-assembly"
 import { resolveNodeInputs } from "@/components/editor/workflow-editor/node-input-resolver"
 import { seedanceRefQuoteKey } from "@/lib/seedance-ref-quote-key"
 import { sendsReferenceVideo } from "@/lib/audio-reference-handles"
@@ -73,6 +77,7 @@ export function seedanceRefQuoteRequest(
   nodes: ReadonlyArray<WorkflowNode>,
   rawEdges: ReadonlyArray<WorkflowEdge>,
   rerunIds: ReadonlySet<string> = NO_RERUNS,
+  forRun = false,
 ): SeedanceRefEstimateRequest | undefined {
   const type = storedNode.type ?? ""
   const isGeneration = VIDEO_GENERATION_TYPES.has(type)
@@ -108,7 +113,7 @@ export function seedanceRefQuoteRequest(
   // wired as a reference video (the run sends it as the character only).
   const subjectsPriced = !!soundtrackProvider && videoCharacterClipsBilledAsReferenceVideo(soundtrackProvider)
   const subjectClips = subjectsPriced ? runSubjectClips : []
-  if (clipEdges.length === 0 && !soundtrack && subjectClips.length === 0) return undefined
+  if (clipEdges.length === 0 && !soundtrack && subjectClips.length === 0 && !(forRun && isSeedance2Provider(soundtrackProvider))) return undefined
 
   let provider: string
   let resolution: string | undefined
@@ -137,7 +142,7 @@ export function seedanceRefQuoteRequest(
   const unknown = Math.max(0, clipEdges.length - wiredUrls.length)
   const pricedWiredUrls = subjectsPriced ? wiredUrls : wiredUrls.filter((u) => !runSubjectClips.includes(u))
   const urls = [...pricedWiredUrls, ...subjectClips.filter((c) => !pricedWiredUrls.includes(c))]
-  if (urls.length === 0 && unknown === 0 && !soundtrack) return undefined
+  if (urls.length === 0 && unknown === 0 && !soundtrack && !(forRun && isSeedance2Provider(provider))) return undefined
   const soundtrackAudioUrl = soundtrack
     ? (inputs.referenceAudioUrls ?? []).find((u): u is string => typeof u === "string" && u.length > 0)
     : undefined
@@ -150,13 +155,40 @@ export function seedanceRefQuoteRequest(
   // that lane requests `edit`, as its run does, and prices the same).
   const taskType = isGeneration ? listedSeedanceTaskType(provider, data.referenceTaskType) : undefined
 
+  let runQuote: SeedanceRefEstimateRequest["runQuote"]
+  const start = inputs.startFrameUrl ?? inputs.imageUrl
+  const imageMode = type === "image-to-video" || (type === "generate-video" && Boolean(start || inputs.endFrameUrl))
+  if (forRun && isSeedance2Provider(provider) && unknown === 0) {
+    const runType = !isGeneration ? "video-to-video" : imageMode ? "generate-video" : "text-to-video"
+    const prompt = assembleVideoPrompt(type, { node, nodes, edges, refMap: buildNodeRefMap(node.id, nodes, edges), inputs })
+    const params: Record<string, unknown> = {
+      provider, prompt: prompt || inputs.prompt,
+      ...(resolution ? { resolution } : {}), ...(isGeneration && duration !== undefined ? { duration } : {}),
+      ...(start && imageMode ? { imageUrl: start } : {}), ...(inputs.endFrameUrl ? { endFrameUrl: inputs.endFrameUrl } : {}),
+      ...(isGeneration ? { referenceVideoUrls: urls } : { videoUrl: urls[0] }),
+      referenceImageUrls: inputs.referenceImageUrls, referenceAudioUrls: inputs.referenceAudioUrls,
+    }
+    for (const field of ["aspectRatio", "generateAudio", "sound", "seed", "draft", "nsfwChecker", "webSearch", "outputFormat", "dialogue", "characterVoices", "dialogueProvider"]) {
+      if (data[field] !== undefined) params[field] = data[field]
+    }
+    if (taskType) params.referenceTaskType = taskType
+    runQuote = { type: runType, params }
+  }
+
   return {
     provider,
     ...(resolution !== undefined ? { resolution } : {}),
     ...(duration !== undefined ? { duration } : {}),
     ...(data.draft === true ? { draft: true } : {}),
-    ...(taskType ? { referenceTaskType: taskType } : {}),
+    ...(taskType ? { referenceTaskType: taskType } : forRun && !isGeneration && !runQuote ? { referenceTaskType: "edit" as const } : {}),
     referenceVideoUrls: urls,
+    ...(runQuote ? { runQuote } : {}),
+    ...(forRun && !runQuote && isSeedance2Provider(provider) ? {
+      routeService: imageMode && Array.isArray(data.dialogue) && data.dialogue.length > 0 && data.characterVoices ? "voiced-video" as const : imageMode ? "image-to-video" as const : "text-to-video" as const,
+      ...(typeof data.seed === "number" ? { seed: data.seed } : {}),
+      ...(data.webSearch === true || data.nsfwChecker === true ? { unsupportedSettings: true } : {}),
+      ...(typeof data.generateAudio === "boolean" ? { generateAudio: data.generateAudio } : typeof data.sound === "boolean" ? { generateAudio: data.sound } : {}),
+    } : {}),
     ...(unknown > 0 ? { unknownReferenceVideos: unknown } : {}),
     ...(soundtrack ? (soundtrackAudioUrl ? { soundtrackAudioUrl } : { unknownSoundtrack: true }) : {}),
     // Flash 1.2 bills the stretch of the clip the node's trim keeps.
@@ -230,6 +262,28 @@ export function seedanceRefQuoteKeyFor(
   edges: ReadonlyArray<WorkflowEdge>,
   rerunIds: ReadonlySet<string> = NO_RERUNS,
 ): string | undefined {
-  const request = seedanceRefQuoteRequest(node, nodes, edges, rerunIds)
+  if (node.type === "edit-video-pro") {
+    const data = node.data as Record<string, unknown>
+    const provider = typeof data.provider === "string" ? data.provider : "seedance-2"
+    const graphEdges = bypassTeleports(nodes as WorkflowNode[], edges as WorkflowEdge[]) as WorkflowEdge[]
+    const inputs = resolveNodeInputs(node, nodes as WorkflowNode[], graphEdges)
+    const prompt = computeNodePrompt("edit-video-pro", data, { refMap: buildNodeRefMap(node.id, nodes, graphEdges), wired: inputs.prompt, appendWired: true })
+    const params = { provider, prompt: prompt || inputs.prompt, videoUrl: inputs.videoUrl, spanStart: data.spanStart, spanEnd: data.spanEnd, referenceImageUrls: inputs.referenceImageUrls, generateAudio: data.generateAudio }
+    return seedanceRefQuoteKey({ provider, referenceVideoUrls: [], runQuote: { type: "edit-video-pro", params } })
+  }
+  if (node.type === "lip-sync" || node.type === "extend-video") {
+    const effective = withWiredSettings(node, nodes as WorkflowNode[], edges as WorkflowEdge[]) as WorkflowNode
+    const data = effective.data as Record<string, unknown>
+    const provider = data.provider
+    if (typeof provider !== "string" || !(node.type === "lip-sync" ? isSeedance2Provider(provider) : isSeedanceExtendProvider(provider))) return undefined
+    const inputs = resolveNodeInputs(effective, nodes as WorkflowNode[], bypassTeleports(nodes as WorkflowNode[], edges as WorkflowEdge[]) as WorkflowEdge[])
+    const params: Record<string, unknown> = {
+      provider, prompt: inputs.prompt ?? data.prompt, resolution: data.resolution,
+      ...(node.type === "lip-sync" ? { imageUrl: inputs.imageUrl, audioUrl: inputs.audioUrl, seed: data.seed }
+        : { videoUrl: inputs.videoUrl, duration: data.duration, referenceImageUrls: inputs.referenceImageUrls }),
+    }
+    return seedanceRefQuoteKey({ provider, referenceVideoUrls: [], runQuote: { type: node.type, params } })
+  }
+  const request = seedanceRefQuoteRequest(node, nodes, edges, rerunIds, true)
   return request ? seedanceRefQuoteKey(request) : undefined
 }

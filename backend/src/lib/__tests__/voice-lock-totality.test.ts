@@ -122,7 +122,7 @@ const JOB_CREATORS: Readonly<Record<string, { readonly judges: RegExp; readonly 
   "routes/text-to-dialogue.ts": { judges: /await judgeVoices\(dialogue\.map\(\(line\) => line\.voice\)\.filter\(\(v\) => !clones\.has\(v\)\), \{ userId \}\)/, row: /insertJob\(/ },
   "routes/voice-changer.ts": { judges: /await judgeVoice\(voiceId, \{ userId \}\)/, row: /insertJob\(/ },
   "routes/generate-video.ts": {
-    judges: /if \(dispatchesVoicedVideo\(parsed\.data\)\) \{\s*const voiceVerdict = await judgeVoicesUnderLock\(\s*voicesTheVoicedVideoSends\(\{ prompt, dialogue, characterVoices, dialogueProvider: voicedDialogueProvider\(characterVoices\) \}, provider\),\s*\{ userId \},?\s*\)/,
+    judges: /const isVoiced = dispatchesVoicedVideo\(parsed\.data\)[\s\S]*?if \(isVoiced\) \{\s*const voiceVerdict = await judgeVoicesUnderLock\(\s*voicesTheVoicedVideoSends\(\{ prompt, dialogue, characterVoices, dialogueProvider: voicedDialogueProvider\(characterVoices\) \}, provider\),\s*\{ userId \},?\s*\)/,
     row: /insertJobIdempotent</,
   },
   // A preHandler, the route's first: it runs before the handler that writes the row.

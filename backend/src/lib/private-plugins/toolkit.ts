@@ -1,3 +1,10 @@
+import { withoutVideoRouteSecrets } from "../public-job-data.js"
+import { assemblyRecoveryColumns } from "../video-assembly-manifest.js"
+import { rowlessRouteTaskOf } from "../video-route-decision.js"
+import { rowlessSegmentDone } from "../alternate-route.js"
+import { recordRouteTaskOutcome, routeCostBasisOf, verifiedReportedUsd } from "../video-route-ledger.js"
+import { getPluginServices as getPluginServicesForRoute } from "./services-registry.js"
+import { HOST_ROUTES_PER_MODEL } from "../video-route-host.js"
 import { retainVideo, readRetainedVideo, copyRetainedVideo } from "../retained-videos.js"
 import { retainJobVideo, readRetainedJobVideos } from "../retained-job-videos.js"
 import { readRetainedVideoCopies, recordRetainedVideoCopy } from "../retained-video-copies.js"
@@ -72,6 +79,7 @@ import { markProviderCallStart, markProviderCallStartIfLive } from "../reconcile
 import { sendInternalError } from "../http-errors.js"
 import { runPostProcessing } from "../post-processing-error.js"
 import { uploadJobScratchFile } from "../job-scratch.js"
+import { storeProDeliveryClip } from "../pro-delivery-store.js"
 import { storeVideoAsIs, storedVideoFields, storeVideoResult } from "../video-result-store.js"
 import {
   markJobCompletedDetailed,
@@ -118,7 +126,7 @@ import { firePluginTrigger, listActivePluginTriggers } from "../plugin-triggers.
 import { readJobExecution } from "./job-execution.js"
 import { sendTelegramBotTextFor } from "./social-toolkit.js"
 import { jobSourceColumns } from "../job-source.js"
-import { getJobId, getJobUserId, throwIfJobCancelled } from "../job-cancellation.js"
+import { assemblyIntermediateId, getJobId, getJobUserId, throwIfJobCancelled } from "../job-cancellation.js"
 import { assertOwnDeferredChild, resolveDeferredChild } from "../deferred-child-settlement.js"
 import { isOurCdnUrl } from "../cdn-host.js"
 import { jobFileObjectId } from "../job-output-keys.js"
@@ -181,7 +189,7 @@ import { extractTailToFile } from "../../providers/video/extract-tail.js"
 import { APPLY_EDL_LABEL, renderEdlTimeline } from "../../providers/video/edl-timeline.js"
 import { DeterministicJobError } from "../deterministic-job-error.js"
 import { llmCompleteStructured } from "../llm-client.js"
-import type { FastifyInstance, FastifyRequest } from "fastify"
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { type LlmReasoningEffort, getLlmModel } from "@nodaro/shared/llm-models"
 import { ENTITY_TABLE, type EntityNodeKind } from "@nodaro/shared/entities"
 import { WORKSPACE_HEADER_LOWER } from "@nodaro/shared/organizations"
@@ -204,7 +212,7 @@ import { randomUUID } from "node:crypto"
 import { dirname, join } from "node:path"
 import { promises as fs } from "node:fs"
 import type { ZodType } from "zod"
-import type { PluginEdlTimelineOptions, PluginEdlTimelineResult } from "./types.js"
+import type { PluginEdlTimelineOptions, PluginEdlTimelineResult, PluginRoutedRunPricing } from "./types.js"
 import { PluginHttpError } from "./types.js"
 import type { PluginBillingContext, PluginCapabilities, PluginEntityRead, PluginEntityTable, PluginInternalRequestOptions, PluginJobErrorHint, PluginOwnedJobRow, PluginOwnedRawJob } from "./types.js"
 import type { PluginDownloadFileOptions, PluginUploadFileOptions, PluginFfmpegToolkit, PluginLlmToolkit, PluginMediaToolkit, PluginProvidersToolkit } from "./types.js"
@@ -260,6 +268,26 @@ function toReconcileOpts(
 }
 
 /**
+ * A toolkit VIDEO send's options: {@link toReconcileOpts}, stating that the
+ * call has no job row of its own (`routeRowless`, providers/provider.interface.ts)
+ * — it runs inside its parent's job, so it takes the default route.
+ */
+function toVideoReconcileOpts(
+  options: { onTaskCreated?: (taskId: string) => void | Promise<void>; routeToken?: string; routeSegmentKey?: string } | undefined,
+): ReconcileOpts {
+  return { ...toReconcileOpts(options), routeRowless: true, ...(options?.routeToken ? { routeToken: options.routeToken } : {}), ...(options?.routeSegmentKey ? { routeSegmentKey: options.routeSegmentKey } : {}) }
+}
+
+/** A routed segment's result names what the route billed (`PluginVideoGenResult.routed`). */
+function withRouted(result: { url: string; kieTaskId?: string; routedVia?: string; cost?: number | null; routedCredits?: number | null }): PluginVideoGenResult {
+  return {
+    url: result.url,
+    taskId: result.kieTaskId,
+    ...(result.routedVia ? { routed: { costUsd: result.cost ?? null, chargedCredits: result.routedCredits ?? null } } : {}),
+  }
+}
+
+/**
  * Picks/renames `PluginVideoGenOptions`'s fields onto the real
  * `ProviderOptions` shape `KieVideoProvider` expects. `aspectRatio` is only
  * set when the caller passes one explicitly — `textToVideo` has its own
@@ -297,9 +325,9 @@ async function pluginTextToVideo(
     durationSec,
     aspectRatio,
     toProviderOptions(options),
-    toReconcileOpts(options),
+    toVideoReconcileOpts(options),
   )
-  return { url: result.url, taskId: result.kieTaskId }
+  return withRouted(result)
 }
 
 /** `tk.providers.imageToVideo` — wraps `KieVideoProvider#imageToVideo` (`providers/kie/video.ts`). */
@@ -332,9 +360,9 @@ async function pluginImageToVideo(
     // closing-frame reference hint. Undefined for every other segment.
     shaped.endFrameUrl,
     shaped.options,
-    toReconcileOpts(options),
+    toVideoReconcileOpts(options),
   )
-  return { url: result.url, taskId: result.kieTaskId }
+  return withRouted(result)
 }
 
 /**
@@ -469,7 +497,35 @@ async function pluginGenerateMusic(
  */
 async function getVideoTaskStatus(
   taskId: string,
-): Promise<{ state: "processing" | "succeeded" | "failed"; videoUrl?: string; contentPolicy?: boolean }> {
+): Promise<{ state: "processing" | "succeeded" | "failed"; videoUrl?: string; contentPolicy?: boolean; routed?: { costUsd: number | null; chargedCredits: number | null } }> {
+  // A routed segment's id is the route's own: read through the route, never the default upstream.
+  const routed = rowlessRouteTaskOf(taskId)
+  if (routed) {
+    const service = getPluginServicesForRoute().alternateRoutes
+    if (!service) return { state: "processing" }
+    try {
+      const polled = await service.poll(routed.routeId, routed.taskRef)
+      if (polled.state === "done") {
+        if (!polled.resultUrl) return { state: "processing" }
+        // A resumed segment's cost goes on its parent's route ledger, as the send's does: the
+        // route's verified bill; an estimate is recorded beside it and never charged.
+        const parentJobId = getJobId()
+        const cost = typeof polled.providerCostUsd === "number" && Number.isFinite(polled.providerCostUsd) && polled.providerCostUsd >= 0 ? polled.providerCostUsd : null
+        const estimated = typeof polled.estimatedCostUsd === "number" && Number.isFinite(polled.estimatedCostUsd) && polled.estimatedCostUsd >= 0 ? polled.estimatedCostUsd : null
+        const chargedCredits = parentJobId && routed.segmentKey ? await rowlessSegmentDone(parentJobId, routed.segmentKey, routed.taskRef, cost, estimated, routeCostBasisOf(polled)) : null
+        return { state: "succeeded", videoUrl: polled.resultUrl, routed: { costUsd: verifiedReportedUsd(polled), chargedCredits } }
+      }
+      if (polled.state === "failed" || polled.state === "expired") {
+        // How the resumed segment ended goes on its parent's ledger (not billed).
+        const parentJobId = getJobId()
+        if (parentJobId && routed.segmentKey) await recordRouteTaskOutcome(parentJobId, 1, routed.segmentKey, routed.taskRef, polled.state)
+        return { state: "failed" }
+      }
+      return { state: "processing" }
+    } catch {
+      return { state: "processing" }
+    }
+  }
   try {
     const { resultJson } = await pollKieTask(taskId, 1)
     const videoUrl = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
@@ -525,7 +581,7 @@ async function combineVideosToUrl(options: {
     edgeFades: options.edgeFades,
   })
   try {
-    return await uploadFileToR2(localPath, jobFileObjectId(getJobId(), "combine"), "video")
+    return await uploadFileToR2(localPath, assemblyIntermediateId() ?? jobFileObjectId(getJobId(), "combine"), "video")
   } finally {
     // combineVideos uses its own temp dir structure (not cleanupWorkDir-
     // compatible) — mirrors workers/handlers/ffmpeg.ts's handleCombineVideos.
@@ -698,7 +754,7 @@ async function updateJobCheckpoint(jobId: string, patch: Record<string, unknown>
   const existing = (data?.output_data as Record<string, unknown> | null) ?? {}
   await supabase
     .from("jobs")
-    .update({ output_data: { ...existing, ...patch } })
+    .update({ output_data: withoutVideoRouteSecrets({ ...existing, ...patch }) })
     .eq("id", jobId)
 }
 
@@ -760,11 +816,12 @@ async function findJobByIdempotencyKey(
   status: string
   input_data: Record<string, unknown> | null
   output_data: Record<string, unknown> | null
+  privateUgcAdmission?: unknown
   error_message: string | null
 } | null> {
   const { data, error } = await supabase
     .from("jobs")
-    .select("id,status,input_data,output_data,error_message")
+    .select("id,status,input_data,output_data,error_message,privateUgcAdmission:metadata->ugcClipAdmission")
     .eq("user_id", userId)
     .eq("idempotency_key", idempotencyKey)
     .maybeSingle()
@@ -774,6 +831,7 @@ async function findJobByIdempotencyKey(
   if (!data) return null
   return {
     id: data.id as string,
+    ...(data.privateUgcAdmission != null ? { privateUgcAdmission: data.privateUgcAdmission } : {}),
     status: data.status as string,
     input_data: (data.input_data as Record<string, unknown> | null) ?? null,
     output_data: (data.output_data as Record<string, unknown> | null) ?? null,
@@ -929,12 +987,12 @@ async function pluginMarkJobCompleted(
   output: Record<string, unknown>,
   extraColumns?: Record<string, unknown>,
 ): Promise<boolean> {
-  const { data, error } = await supabase.from("jobs").select("output_data, job_type").eq("id", jobId).single()
+  const { data, error } = await supabase.from("jobs").select("output_data, job_type, user_id, should_watermark").eq("id", jobId).single()
   if (error) {
     throw new Error(`Failed to read output_data for job ${jobId}: ${error.message}`)
   }
   const existing = (data?.output_data as Record<string, unknown> | null) ?? {}
-  const nextOutput = { ...existing, ...output }
+  const nextOutput = withoutVideoRouteSecrets({ ...existing, ...output })
   // A finished video the clients play: its CDN light copies are warmed for the first viewer (never awaited).
   const jobType = (data as { job_type?: unknown } | null)?.job_type
   // `output` merges into output_data; `extraColumns` (optional) spread as real
@@ -943,6 +1001,7 @@ async function pluginMarkJobCompleted(
   const outcome = await markJobCompletedDetailed(jobId, {
     output_data: nextOutput,
     ...(extraColumns ?? {}),
+    ...assemblyRecoveryColumns(jobId, jobType, nextOutput, data?.user_id, data?.should_watermark),
   })
   if (outcome === "completed") {
     warmAfterCompletion(jobType, nextOutput)
@@ -974,7 +1033,11 @@ async function pluginMarkJobCompleted(
     status?: unknown
     output_data?: unknown
   } | null
-  if (terminalRow?.status === "completed" && jsonContains(terminalRow.output_data, nextOutput)) {
+  const { deliveryMode, videoUrl: _firstClip, assemblyInputsPending: _pending, ...delivered } = nextOutput
+  const recovered = deliveryMode === "separate_clips" && Array.isArray(delivered.unassembledClips) &&
+    (terminalRow?.output_data as { deliveryMode?: unknown } | null)?.deliveryMode === "simple_cuts" &&
+    jsonContains(terminalRow?.output_data, delivered)
+  if (terminalRow?.status === "completed" && (jsonContains(terminalRow.output_data, nextOutput) || recovered)) {
     warmAfterCompletion(jobType, nextOutput)
     return true
   }
@@ -1747,6 +1810,15 @@ function forLoadedEngine<T extends FaceMasking>(m: T, drawsFaceMesh: boolean, cs
  * compute per toolkit. Add a member here WITH the feature it describes.
  */
 const HOST_CAPABILITIES: PluginCapabilities = Object.freeze({
+  // Per-model routing of the alternate route (lib/video-route-decision.ts): admission-time
+  // decisions with service and kind, holds from `quote`, settlement from the billed cost, no fallback.
+  alternateRouteV2: HOST_ROUTES_PER_MODEL,
+  // The host holds and settles a plugin's routed run end to end (PluginRoutedRunPricing).
+  routedRuns: HOST_ROUTES_PER_MODEL,
+  // `jobs.throwIfJobCancelled({ finishStartedVideo: true })`: a stop lets the started video finish (lib/stop-rule.ts).
+  proStopFinishesSegment: true,
+  // `markJobCompleted` accepts a run delivered as simple cuts or as its separate clips, and retries the assembly in the background.
+  proDeliveryFallback: true,
   mixAudioDuck: true,
   audioFxLossless: true,
   seedanceDraft: true,
@@ -2041,6 +2113,7 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
       applyAudioFx,
       applyImageWatermark,
       // The string-returning member cannot hand an original back, so it keeps none (`original: "never"`).
+      storeProDeliveryClip,
       uploadVideoMaybeWatermark: async (url, jobId, userId, watermark) =>
         (await storeVideoResult({ url }, { jobId, userId, watermark, original: "never" })).videoUrl,
       // The whole funnel: the original kept beside the preview, every field returned for the plugin to write.
@@ -2128,6 +2201,27 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
       setJobProgress,
       withProgressRamp,
       commitJobCredits,
+      // A routed run's parent (PluginRoutedRunPricing): the host charges it from its route ledger.
+      ...(hasCredits() ? {
+        prepareRoutedRunSettlement: async (usageLogId: string, jobId: string, token: string, opts?: { waiveFee?: boolean; anchorsGenerated?: number; nonVideoChargedCredits?: number }) => {
+          const { prepareRoutedRunSettlement } = await import("../../ee/billing/video-route-runs.js")
+          await prepareRoutedRunSettlement(usageLogId, jobId, token, opts)
+        },
+        settleRoutedRun: async (usageLogId: string, jobId: string, token: string, opts?: { waiveFee?: boolean; anchorsGenerated?: number; nonVideoChargedCredits?: number }) => {
+          const { settleRoutedRunJob } = await import("../../ee/billing/video-route-runs.js")
+          const { RoutedSettleRetry } = await import("../../ee/billing/video-route-receipt.js")
+          try {
+            await settleRoutedRunJob(usageLogId, jobId, token, opts)
+          } catch (err) {
+            // A settlement left pending (no verified bill yet, a read that failed) or held for an
+            // admin is not a failed run: the job is completed and delivered, and its ledger is
+            // marked for the settlement sweep. Thrown on, it would fail the handler after the
+            // completion and send a finished job back to the queue for another run.
+            if (!(err instanceof RoutedSettleRetry)) throw err
+            console.warn(`[video-route] job ${jobId}: its routed settlement is pending (${err.message}); the settlement sweep retries it`)
+          }
+        },
+      } : {}),
       clearReconcileSentinel,
       throwIfJobCancelled,
       updateJobCheckpoint,
@@ -2189,6 +2283,17 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
       creditGuard,
       reserveCreditsForJob,
       reserveCreditsForJobOnce,
+      // A routed run (PluginRoutedRunPricing): held at its signed quote, its send token bound to the job.
+      ...(hasCredits() ? {
+        quoteUgcRoutedClip: async (args) => {
+          const { quoteUgcRoutedClip } = await import("../../ee/billing/video-route-ugc.js")
+          return quoteUgcRoutedClip(args)
+        },
+        reserveRoutedRun: async (req: FastifyRequest, reply: FastifyReply, jobId: string, route: PluginRoutedRunPricing) => {
+          const { reserveRoutedRun } = await import("../../ee/billing/video-route-runs.js")
+          return reserveRoutedRun(req, reply, jobId, route)
+        },
+      } : {}),
       // Cloud only: absent (not a throwing stub) where there is no credit
       // system, so a plugin feature-detects it with `?.`.
       ...(hasCredits() ? { checkPayerCanAfford } : {}),
@@ -2267,6 +2372,11 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
         if (!Array.isArray(args.durationsSec) || args.durationsSec.length === 0) {
           throw new Error("quoteSeedanceRefVideo: durationsSec must name at least one reference clip")
         }
+        // A model the admin routed for this service is quoted as its child's
+        // admission will hold it (the route's quote); else the default quote.
+        const { routedRefVideoHoldQuote } = await import("../../ee/billing/video-route-admission.js")
+        const routed = await routedRefVideoHoldQuote(args)
+        if (routed) return routed
         const { seedance2RefVideoChargedHoldQuote } = await import("../../ee/billing/seedance2-ref-video-quote.js")
         return seedance2RefVideoChargedHoldQuote(args)
       },
@@ -2277,7 +2387,12 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
         const { computeGenerateVideoProPricing: computePricing } = await import(
           "../../ee/billing/generate-video-pro-credits.js"
         )
-        return computePricing(args)
+        const pricing = await computePricing(args)
+        // A model the admin routed for this service: the run's routed pricing
+        // and the token its segments are sent with (PluginRoutedRunPricing).
+        const { routedGenerateVideoProPricing } = await import("../../ee/billing/video-route-planned.js")
+        const route = args.planOnly || args.existingReservation ? undefined : await routedGenerateVideoProPricing(pricing, args)
+        return route ? { ...pricing, route } : pricing
       },
       computeEditVideoProPricing: async (args) => {
         if (!hasCredits()) {
@@ -2286,7 +2401,11 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
         const { computeEditVideoProPricing: computePricing } = await import(
           "../../ee/billing/edit-video-pro-credits.js"
         )
-        return computePricing(args)
+        const pricing = await computePricing(args)
+        // A model the admin routed for Edit Video Pro: the run's routed pricing (PluginRoutedRunPricing).
+        const { routedEditVideoProPricing } = await import("../../ee/billing/video-route-admission.js")
+        const route = await routedEditVideoProPricing(args.provider, pricing)
+        return route ? { ...pricing, route } : pricing
       },
       computeGenerateVideoProContinuationPricing: async (args) => {
         if (!hasCredits()) {
@@ -2295,7 +2414,12 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
         const { computeGenerateVideoProContinuationPricing: computePricing } = await import(
           "../../ee/billing/generate-video-pro-credits.js"
         )
-        return computePricing(args)
+        const pricing = await computePricing(args)
+        // A continuation of a routed run's model: on the route, at its own quote for the
+        // segments it re-renders (PluginRoutedRunPricing), exactly as a first run would be.
+        const { routedContinuationPricing } = await import("../../ee/billing/video-route-admission.js")
+        const route = await routedContinuationPricing(args, pricing)
+        return route ? { ...pricing, route } : pricing
       },
       sendInternalError,
       hostnameMatchesAllowlist,

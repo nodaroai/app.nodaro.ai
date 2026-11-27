@@ -11684,6 +11684,7 @@ export async function runVideoDirector(params: {
 }
 
 export interface VideoProEstimateInput {
+  hasOpeningVideo?: boolean
   provider:string; resolution:string; duration:number; aspectRatio?:string
   segmentMode?:"short"|"long"|"max"; preferredSegmentSec?:number; segmentDurations?:number[]; sourceSegmentDurations?:number[]
   renderMethod?:"extend"|"keyframes"; anchorMode?:"upfront"|"progressive"|"none"; contextTailSec?:number; planOnly?:boolean
@@ -11726,6 +11727,11 @@ export async function estimateSeedanceHdCredits(
 
 /** What `POST /v1/credits/seedance-ref-estimate` is asked to price. */
 export interface SeedanceRefEstimateRequest {
+  readonly generateAudio?: boolean
+  readonly unsupportedSettings?: boolean
+  readonly routeService?: "text-to-video" | "image-to-video" | "voiced-video"
+  readonly seed?: number
+  readonly runQuote?: { type: "generate-video" | "text-to-video" | "video-to-video" | "lip-sync" | "extend-video" | "edit-video-pro"; params: Record<string, unknown> }
   readonly provider: string
   readonly resolution?: string
   readonly duration?: number | string
@@ -11756,6 +11762,10 @@ export interface SeedanceRefEstimateRequest {
 export async function estimateSeedanceRefCredits(
   request: SeedanceRefEstimateRequest,
 ): Promise<{ credits: number; min: number; exact: boolean }> {
+  if (request.runQuote) {
+    const result = await apiJson<{ data: { reserve: number } }>("/v1/quote", { body: request.runQuote, label: "apiErr.estimateVideoCredits" })
+    return { credits: result.data.reserve, min: result.data.reserve, exact: true }
+  }
   const result = await apiJson<{ data: { credits: number; min: number; exact: boolean } }>("/v1/credits/seedance-ref-estimate", {
     body: { ...request, referenceVideoUrls: [...request.referenceVideoUrls] },
     label: "apiErr.estimateVideoCredits",

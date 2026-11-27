@@ -82,6 +82,6 @@ describe("every lane that lands a take lands its identity", () => {
     const executors = code(join(SRC, "components/editor/workflow-editor/node-executors.ts"))
     expect(executors).toMatch(/resultFields: \(od\) => runResultIdentity\("apply-edl", od\)/)
     const list = code(join(SRC, "components/editor/workflow-editor/list-execution.ts"))
-    expect(list).toMatch(/\.\.\.landed\.get\(url\)/)
+    expect(list).toMatch(/\.\.\.landedRows\[i\]/)
   })
 })

@@ -206,8 +206,8 @@ export function getCachedUserId(): string | undefined {
  * The signed-in user's id, re-rendering on sign-in and sign-out. Needs no
  * router, unlike useAuth, so a query hook used outside one can key by it.
  */
-export function useCachedUserId(): string | undefined {
-  useEffect(() => { initAuth() }, [])
+export function useCachedUserId(enabled = true): string | undefined {
+  useEffect(() => { if (enabled) initAuth() }, [enabled])
   return useSyncExternalStore(subscribe, getCachedUserId)
 }
 

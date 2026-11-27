@@ -665,7 +665,7 @@ describe("POST /v1/quote refusals", () => {
     const res = await app.inject({ method: "POST", url: "/v1/quote", payload: { type: "generate-music", params: {} } })
     expect(res.statusCode).toBe(400)
     // The hand-written rows, then each node unit with a quote.ts.
-    expect(res.json().error).toMatchObject({ code: "quote_unsupported", supported: ["text-to-video", "generate-video", "video-to-video", "video-upscale", "edit-image", "ai-avatar", "cinematic-avatar", "switchx", "lip-sync", "split-into-layers", "suno-speech"] })
+    expect(res.json().error).toMatchObject({ code: "quote_unsupported", supported: ["text-to-video", "generate-video", "video-to-video", "video-upscale", "edit-image", "ai-avatar", "cinematic-avatar", "switchx", "lip-sync", "extend-video", "split-into-layers", "suno-speech"] })
     await app.close()
   })
 

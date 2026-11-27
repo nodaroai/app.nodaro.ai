@@ -60,7 +60,8 @@ import {
   withAlternateRouteRecord,
   type AlternateRouteRecord,
 } from "../alternate-route-request.js"
-import { ALTERNATE_ROUTE_BUDGET_MS, ALTERNATE_ROUTE_MAX_READ_FAILURES, ALTERNATE_ROUTE_POLL_MS, noteDoneWithoutResult } from "../alternate-route.js"
+import { ALTERNATE_ROUTE_BUDGET_MS, ALTERNATE_ROUTE_MAX_READ_FAILURES, ALTERNATE_ROUTE_POLL_MS, ROUTED_FAILURE_MESSAGE, noteDoneWithoutResult } from "../alternate-route.js"
+import { foreignVideoRouteStamp, videoRouteStampOf } from "../video-route-decision.js"
 import { KieError, MAX_POLL_ATTEMPTS, createKieTask, createUpstreamFailureError, isInputVideoRefusal } from "../../providers/kie/client.js"
 import { deriveKieEgressDimensions } from "../../providers/kie/egress-dimensions.js"
 import { bumpAttemptsOrExhaust } from "./bump-attempts.js"
@@ -68,6 +69,8 @@ import { finalizeRecoveredMedia, reconcileKieJob } from "./kie.js"
 import { providerKindForVideoModel } from "./provider-kind.js"
 import { STALE_THRESHOLD_MS } from "./types.js"
 import { jobCostColumns } from "../job-cost-columns.js"
+import { recordRouteTask, recordRouteTaskOutcome, routeCostBasisOf, verifiedReportedUsd } from "../video-route-ledger.js"
+import { readBullEntry } from "../concurrency-lanes/columns.js"
 
 /** A row left alone (no service here, unreadable here) this long past its stamp is failed and refunded. */
 export const ALTERNATE_ROUTE_UNREAD_LIMIT_MS = 2 * 60 * 60_000
@@ -194,6 +197,7 @@ export async function reconcileAlternateRouteJob(
     current.provider_task_id !== row.provider_task_id ||
     !FAILABLE_STATUSES.includes(current.status)
   ) return
+  if (foreignVideoRouteStamp(current.input_data)) return
   const record = alternateRouteRecordOf(current.input_data)
   const service = getPluginServices().alternateRoutes
   if (!service) return leaveAlone(row.id, current, "no alternate route service in this process")
@@ -211,7 +215,7 @@ export async function reconcileAlternateRouteJob(
     // Claimed, no reference saved: the worker died around `start`. A start may
     // still be in flight on a worker that only lost its lock — left for a later look.
     if (ageMs(current.provider_call_started_at) < ALTERNATE_ROUTE_CLAIM_GRACE_MS) return
-    console.error(`[ALERT] job ${row.id}: claimed for an alternate route with no task reference saved; a paid task may exist upstream (possible orphan paid task). Sending the default request.`)
+    console.error(`[ALERT] job ${row.id}: claimed for an alternate route with no task reference saved; a paid task may exist upstream (possible orphan paid task). ${record?.routed ? "Failing and refunding the routed run." : "Sending the default request."}`)
     return resendDefault(row.id, current, record, "claimed-without-reference", "The alternate route was claimed but no task reference was saved.", opts)
   }
   if (!record?.routeId) return leaveAlone(row.id, current, "no route named on the record")
@@ -244,6 +248,8 @@ export async function reconcileAlternateRouteJob(
   }
 
   if (polled?.state === "failed" || polled?.state === "expired") {
+    // A routed run's send that ended with no result goes on its ledger as such (not billed).
+    if (record.routed) await recordRouteTaskOutcome(row.id, record.send ?? 1, "", taskRef, polled.state)
     return resendDefault(row.id, current, record, polled.state, polled.message, opts)
   }
   const done = polled as Extract<PluginAlternateRoutePoll, { state: "done" }>
@@ -256,11 +262,41 @@ export async function reconcileAlternateRouteJob(
     }
     return leaveAlone(row.id, current, `alternate route task ${taskRef} read done without a result file`, { alert: true })
   }
+  // A routed run of a lane whose handler post-processes the provider's clip
+  // (an extend stitches it, voiced video and lip-sync lay the voice on it,
+  // entity motion attaches it) is never delivered raw from here: its worker
+  // is gone, so the job fails and is refunded rather than shipping an
+  // unfinished clip. Only the two plain generation lanes are recovered.
+  if (record.routed && row.job_type !== "image-to-video" && row.job_type !== "text-to-video") {
+    // Reached only when no queue job is left to resume it (a re-pick runs the
+    // lane's own handler, which reads this same task and finishes the clip:
+    // workers/video-worker.ts `resumesRoutedTask`). The route billed it: the
+    // loss is recorded on the row itself (its provider cost on a failed,
+    // refunded routed job — what the daily reconciliation lists as such).
+    const billed = verifiedReportedUsd(done) ?? undefined
+    // The billed task goes on the route ledger (what the job's settle, or the known-loss line, reads).
+    await recordRouteTask(row.id, record.send ?? 1, taskRef, usd(done.providerCostUsd) ?? null, "", usd(done.estimatedCostUsd), routeCostBasisOf(done))
+    // A queue entry still holds the job (a retry waiting, a re-pick about to run
+    // its handler, which reads this same task and finishes the clip): it is that
+    // entry's to finish — never failed from here. A read that fails counts as held.
+    if (await stillQueued(row.id)) return leaveAlone(row.id, current, `routed ${row.job_type ?? "video"} run finished on the route; its queue entry will finish it`)
+    console.error(`[ALERT] job ${row.id}: a routed ${row.job_type ?? "video"} run finished on the route with no worker left to finish it; its raw clip is not delivered. Failing and refunding (a recorded loss${billed !== undefined ? ` of ${billed.toFixed(4)} USD` : ""}).`)
+    const flipped = await markJobFailed(row.id, {
+      error_message: ROUTED_FAILURE_MESSAGE,
+      error_detail: "A routed run finished after its worker was gone.",
+      reconcile_last_error: "alternate_route_unfinished",
+      ...(billed !== undefined ? await jobCostColumns(billed) : {}),
+    })
+    if (flipped) await refundReservedCreditsForJob(row.id)
+    return
+  }
   if (!isFinalizeJobType(row.job_type)) {
     await bumpAttemptsOrExhaust(row.id, new Error(`unknown job_type for finalize: ${row.job_type ?? "null"}`))
     return
   }
   const providerMs = usd(done.providerMs)
+  // A routed run's billed cost goes on its route ledger (what its settlement charges).
+  if (record.routed) await recordRouteTask(row.id, record.send ?? 1, taskRef, usd(done.providerCostUsd) ?? null, "", usd(done.estimatedCostUsd), routeCostBasisOf(done))
   await finalizeRecoveredMedia(
     {
       id: row.id,
@@ -274,7 +310,7 @@ export async function reconcileAlternateRouteJob(
     {
       url,
       // The route's own figure; none reported leaves the planned figure saved with the reference.
-      cost: usd(done.providerCostUsd) ?? null,
+      cost: record.routed ? verifiedReportedUsd(done) : (usd(done.providerCostUsd) ?? null),
       providerUsed: ALTERNATE_PROVIDER_USED,
       ...(providerMs !== undefined ? { providerMs } : {}),
     },
@@ -307,6 +343,18 @@ async function resendDefault(
 ): Promise<void> {
   const held = current.provider_task_id as string
   const fallback = record?.fallback
+  // A run the admin routed was priced on the route: it is never sent to the
+  // default upstream. It fails and is refunded instead.
+  if (record?.routed || videoRouteStampOf(current.input_data, jobId)) {
+    console.warn(`[reconcile/alternate-route] job ${jobId}: routed run ended (${reason}); failing and refunding it, never resending`)
+    const flipped = await markJobFailed(jobId, {
+      error_message: ROUTED_FAILURE_MESSAGE,
+      error_detail: `Alternate route run ended: ${reason}.`,
+      reconcile_last_error: "alternate_route_failed",
+    })
+    if (flipped) await refundReservedCreditsForJob(jobId)
+    return
+  }
   if (!record || !fallback) return failForUpstream(jobId, upstreamMessage, current.input_data)
 
   const token = `${ALTERNATE_ROUTE_RESENDING_PREFIX}${randomUUID()}`
@@ -370,5 +418,28 @@ async function resendDefault(
       { id: jobId, provider_kind: kind, provider_task_id: newTaskId, reconcile_attempts: 0, job_type: current.job_type, input_data: current.input_data },
       { claimant: opts.claimant ?? "worker", pollAttempts: MAX_POLL_ATTEMPTS },
     )
+  }
+}
+
+/** The queue states in which an entry will still run the job's handler. */
+const LIVE_QUEUE_STATES: ReadonlySet<string> = new Set(["active", "waiting", "delayed", "prioritized", "waiting-children"])
+
+/**
+ * Whether a video-queue entry still holds `jobId` (its stamped entry, else a
+ * scan of the live states). A read that fails answers true: the row is looked
+ * at again next tick, never failed on a Redis hiccup.
+ */
+async function stillQueued(jobId: string): Promise<boolean> {
+  try {
+    const { videoQueue } = await import("../queue.js")
+    const stored = await readBullEntry(jobId)
+    if (stored?.queue === "video-generation") {
+      const entry = await videoQueue.getJob(stored.bullJobId)
+      if (entry && LIVE_QUEUE_STATES.has(await entry.getState())) return true
+    }
+    const live = await videoQueue.getJobs(["active", "prioritized", "waiting", "delayed"], 0, 500)
+    return live.some((j) => (j?.data as { jobId?: string } | undefined)?.jobId === jobId)
+  } catch {
+    return true
   }
 }

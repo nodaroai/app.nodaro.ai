@@ -28,6 +28,7 @@ import { UNIT_NODE_DESCRIPTORS } from "./unit-descriptors.js"
 import { composeSet, unitsWith } from "./unit-compose.js"
 import { AUDIO_TYPES, IMAGE_TYPES, VIDEO_TYPES, type FinalizeJobType, type ProviderFinalizeResult } from "./job-finalize-types.js"
 import { assertExtraImageSets, libraryImagesOf, storeExtraImageSets, storeWithAttempts, type DroppedExtraImages, type ExtraImageSet, type StoredExtraImages } from "./job-finalize-store.js"
+import { isRoutedJobRow } from "./video-route-ledger.js"
 import { DISCARD_AFTER_MISSED_BLOCK, DISCARD_STATUSES, discardUnfinishedStores, storeLedger } from "./job-finalize-discard.js"
 
 // The job types, the provider result and the extra-image declarations live in their own modules; callers import them from here.
@@ -245,12 +246,13 @@ export const NOT_GENERIC_RECOVERABLE: ReadonlySet<string> = composeSet("NOT_GENE
  * writing a second copy.
  */
 export async function loadUsageLogId(jobId: string): Promise<string | null> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("usage_logs")
     .select("id")
     .eq("job_id", jobId)
     .eq("status", "reserved")
     .limit(1)
+  if (error) throw new Error(`Job ${jobId}: could not verify its open reservation: ${error.message}`)
   return (data?.[0] as { id: string } | undefined)?.id ?? null
 }
 
@@ -742,7 +744,7 @@ export async function finalizeJobWithMedia(
   // plugin settles or releases it, or the sweep does.
   const deferred = usageLogId !== null && isDeferredSettlementJob(job)
   const deferredFields = deferred && usageLogId !== null
-    ? await deferredCompletionFields({ usageLogId, commit: commitReplay, providerCost: result.cost ?? null, workflowExecutionId: job.workflow_execution_id, rule: storedDeferRule(job.input_data) })
+    ? await deferredCompletionFields({ jobId, usageLogId, commit: commitReplay, providerCost: result.cost ?? null, workflowExecutionId: job.workflow_execution_id, rule: storedDeferRule(job.input_data) })
     : {}
   const outcome = await markJobCompletedDetailed(
     jobId,
@@ -759,6 +761,7 @@ export async function finalizeJobWithMedia(
       // they are ordinary `jobs` columns, NOT settlement inputs, so they must
       // never appear in HELD_COMMIT_REPLAY_KEYS or the commitReplay below.
       ...relayFieldsFrom(result),
+      ...(usageLogId !== null && isRoutedJobRow(job.input_data) && { video_route_addons_base: input.extraNonProviderCredits ?? 0 }),
       ...deferredFields,
     },
     // THE hold-eligible funnel: this is the only completion whose tail

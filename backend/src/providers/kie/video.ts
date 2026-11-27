@@ -1,3 +1,5 @@
+import { getJobId } from "../../lib/job-cancellation.js"
+import { beginPlannedVideoSegment, markVideoSendStarted } from "../../lib/video-send-start.js"
 /**
  * KIE.ai Video Provider
  *
@@ -37,6 +39,7 @@ import {
   MAX_POLL_ATTEMPTS_LIP_SYNC_LONG,
 } from "./client.js"
 import { snapAspectRatioToken } from "../video/aspect-ratio.js"
+import { SEEDANCE_2_DEFAULT_ASPECT, resolveCatalogAspect } from "../../lib/seedance-request-shape.js"
 import { deriveKieEgressDimensions } from "./egress-dimensions.js"
 import { resolveOmniCharacterIds, forgetOmniCharacters, isInvalidOmniCharacterError, isInvalidOmniAudioError } from "./omni-character.js"
 import { kling3Generate } from "./kling3-client.js"
@@ -268,11 +271,6 @@ export function applySeedance2Params(
   }
 }
 
-/** KIE's documented seedance default when no ratio is supplied
- *  (docs.kie.ai/market/bytedance/seedance-2) — also the value a pure-t2v
- *  "Auto" resolves to, since `adaptive` means "match the input" and t2v has none. */
-const SEEDANCE_2_DEFAULT_ASPECT = "16:9"
-
 /**
  * The `omni_reference_task_type` a prepared Seedance body carries, or
  * `undefined` for none — the last line of defence behind the routes, which
@@ -340,6 +338,18 @@ export { isSeedance2EditModeRejection, SEEDANCE_2_EDIT_MODE_PARAMS }
  * caller's credit audit reports the duration KIE billed, not the one we first
  * asked for.
  */
+/**
+ * Every Seedance 2.x send states its route context — the job it runs for
+ * (`routeJob`), or that it has no row of its own (`routeRowless`) — so a
+ * routed job can never reach the default upstream through a lane that forgot
+ * to say whose run it is. The send sites are pinned by
+ * `__tests__/video-route-send-sites.test.ts`; this is the run-time alarm.
+ */
+function warnIfRouteContextMissing(provider: string, reconcileOpts: ReconcileOpts | undefined): void {
+  if (!isSeedance2Provider(provider) || reconcileOpts?.routeJob || reconcileOpts?.routeRowless || reconcileOpts?.routeToken) return
+  console.error(`[ALERT] a ${provider} send states no route context (routeJob / routeRowless); it takes the default route`)
+}
+
 /** The poll budget of a run: the long one for a long render (Seedance 2.5 at 4K, `long-render.ts`). */
 function videoTaskAttemptBudget(provider: string, input: Record<string, unknown>, options: ProviderOptions | undefined, edit = false): number {
   return longRenderPollAttempts(provider, input, MAX_POLL_ATTEMPTS_VIDEO, { referenceVideoSec: options?.referenceVideoDurationsSec, edit })
@@ -354,7 +364,10 @@ async function runVideoTaskWithSeedanceEditRetry(
 ): Promise<Awaited<ReturnType<typeof runKieTask>> & { sentInput: Record<string, unknown> }> {
   // `routeJob` is the alternate route's opt-in (lib/alternate-route.ts), read
   // before this call: it never rides on to the upstream call.
-  const { routeJob: _routeJob, ...upstreamOpts } = reconcileOpts ?? {}
+  const { routeJob: _routeJob, routeRowless: _routeRowless, routeToken: _routeToken, routeSegmentKey: _routeSegmentKey, ...upstreamOpts } = reconcileOpts ?? {}
+  if (_routeJob && isSeedance2Provider(provider)) await markVideoSendStarted(_routeJob.jobId)
+  const parentJobId = _routeRowless && isSeedance2Provider(provider) ? getJobId() : undefined
+  if (parentJobId) await beginPlannedVideoSegment(parentJobId)
   const meta = (payload: Record<string, unknown>) => ({
     ...upstreamOpts,
     modelKey: provider,
@@ -393,38 +406,6 @@ async function runVideoTaskWithSeedanceEditRetry(
   }
 }
 
-/**
- * Resolve a requested aspect ratio against a model's OWN catalog list.
- *
- * One implementation for the "the route enums are a flat union of every ratio
- * any video model supports" problem: an off-enum ratio (4:5, 5:4, 9:21) reaches
- * the provider and is rejected synchronously, and a FieldMapping can inject
- * `aspectRatio` at run time after every UI guard is gone.
- *
- * `"adaptive"` is a real provider enum member for the seedance family and is
- * returned untouched. `"Auto"` is the unified node's provider-agnostic token
- * with no provider meaning: it becomes `"adaptive"` when the model offers it
- * AND there is something to match, and the model's fixed default otherwise —
- * `videoAutoAspectRunsAt`, the shared rule the reference task type resolver
- * reads too.
- */
-function resolveCatalogAspect(
-  modelId: string | undefined,
-  requested: string | undefined,
-  opts: { hasVisualInput: boolean; fallback: string },
-): string | undefined {
-  const raw = requested?.trim()
-  if (!raw) return undefined
-  const allowed = (modelId ? getModel(modelId)?.aspectRatios : undefined) ?? []
-  if (allowed.length === 0) return raw
-  const fixed = allowed.filter((a) => a !== "adaptive")
-
-  if (isVideoAutoAspectToken(raw)) {
-    return videoAutoAspectRunsAt(modelId, opts.hasVisualInput) ?? opts.fallback
-  }
-  if (allowed.includes(raw)) return raw
-  return snapAspectRatioToken(raw, fixed) ?? opts.fallback
-}
 
 /**
  * MiniMax Hailuo 3 fixed aspect enum. t2v REQUIRES one of these (no adaptive);
@@ -3229,6 +3210,7 @@ export class KieVideoProvider
       : modelConfig.model
     // A plugin's alternate route may run this prepared request instead
     // (lib/alternate-route.ts); null = send it here, unchanged.
+    warnIfRouteContextMissing(provider, reconcileOpts)
     const alternate = await takeAlternateRoute({ provider, taskModel, body: input, reconcileOpts })
     if (alternate) return alternate
     const { resultJson, rawRecordInfo, taskId: kieTaskId, providerMs, sentInput } =
@@ -3595,6 +3577,7 @@ export class KieVideoProvider
       ? minimaxH3TaskModel(modelConfig.model, input)
       : modelConfig.model
     // See the image-to-video path: an alternate route may run it instead.
+    warnIfRouteContextMissing(provider, reconcileOpts)
     const alternate = await takeAlternateRoute({ provider, taskModel: t2vTaskModel, body: input, reconcileOpts })
     if (alternate) return alternate
     const { resultJson, taskId: kieTaskId, providerMs, rawRecordInfo } =

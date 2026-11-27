@@ -82,7 +82,9 @@ export async function executeNodeForList(
   // stamps the same.
   const graph = useWorkflowStore.getState();
   const rowSent = fanOut ? browserRenderRowSentStamps(node, graph.nodes, graph.edges, fanOut.rows) : undefined;
-  const stampsRows = isRenderNodeType(node.type);
+  const proTakes: (GeneratedResult | undefined)[] | undefined =
+    node.type === "generate-video-pro" || node.type === "edit-video-pro" ? [] : undefined;
+  const stampsRows = isRenderNodeType(node.type) || Boolean(proTakes);
 
   // Snapshot prior history before we clear it on the next line; re-appended
   // after the fan-out settles so prior runs aren't lost.
@@ -146,9 +148,13 @@ export async function executeNodeForList(
     // is exactly what it has always been.
     const prompt = isPrompt ? item : undefined;
     const mediaUrl = isUrl ? item : undefined;
+    const iterationCtx: ExecutionContext = proTakes ? {
+      ...ctx,
+      onMediaTake: (nodeId, take) => { if (nodeId === node.id) proTakes[i] = take; },
+    } : ctx;
     const result = await (listRowIndex === undefined
-      ? executeNode(iterationNode, ctx, prompt, mediaUrl, i, runId)
-      : executeNode(iterationNode, ctx, prompt, mediaUrl, i, runId, undefined, listRowIndex));
+      ? executeNode(iterationNode, iterationCtx, prompt, mediaUrl, i, runId)
+      : executeNode(iterationNode, iterationCtx, prompt, mediaUrl, i, runId, undefined, listRowIndex));
 
     completedCount++;
     useWorkflowStore.getState().updateNodeData(node.id, {
@@ -203,14 +209,15 @@ export async function executeNodeForList(
     const landedResults = (useWorkflowStore.getState().nodes.find((n) => n.id === node.id)?.data as Record<string, unknown> | undefined)
       ?.generatedResults as readonly GeneratedResult[] | undefined;
     for (const r of landedResults ?? []) if (r.url && !landed.has(r.url)) landed.set(r.url, r);
+    const landedRows = results.map((url, i) => proTakes ? proTakes[i] : landed.get(url));
     const batchResults: GeneratedResult[] = results
       .map((url, i) =>
         url
           ? {
-              ...landed.get(url),
+              ...landedRows[i],
               url,
               timestamp: batchTimestamp,
-              jobId: landed.get(url)?.jobId ?? `iter-${runId}-${i}`,
+              jobId: landedRows[i]?.jobId ?? `iter-${runId}-${i}`,
             }
           : null,
       )
@@ -228,7 +235,7 @@ export async function executeNodeForList(
       __listCompleted: completedCount + failedCount,
       __listResults: results,
       // A render's row stamps, row-aligned with __listResults (`fanOutRowStamps`).
-      __listResultStamps: stampsRows ? fanOutRowStamps(node.type, results, landed, rowSent, cancelledRows) : undefined,
+      __listResultStamps: stampsRows ? fanOutRowStamps(node.type, results, landedRows, rowSent, cancelledRows) : undefined,
       __listInputs: [...items],
       generatedResults: [...batchResults, ...preBatchHistory],
       activeResultIndex: 0,
@@ -236,7 +243,7 @@ export async function executeNodeForList(
       // take keeps its own row's, as its poll landed it; the node's fields hold
       // every row's, row-aligned with __listResults — what a wire from a side
       // pip reads after the batch, as on the server (unitSideBatchFields).
-      ...unitSideBatchFields(node.type, results.map((url) => (url ? landed.get(url) : undefined))),
+      ...unitSideBatchFields(node.type, landedRows),
       // Fan-out window closes atomically with the terminal status write, so the
       // abandon-guard resumes normal single-job matching the moment the batch
       // settles. (The finally below is a defensive backstop for the throw path.)

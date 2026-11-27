@@ -1,3 +1,7 @@
+import { routedSettleCandidate } from "../../lib/video-route-policy.js"
+import { settingsReadFailed } from "../../lib/app-settings-read-status.js"
+import { getAppSettings } from "../../lib/app-settings.js"
+import { VIDEO_ROUTE_STAMP_KEY } from "../../lib/video-route-decision.js"
 import { registerVideoProEstimate } from "./video-pro-estimate.js"
 import { usecaseViewerEstimateFor } from "../../lib/use-case/inner-availability.js"
 import { registerSeedanceHdEstimate } from "./seedance-hd-estimate.js"
@@ -585,13 +589,20 @@ export async function creditsRoutes(app: FastifyInstance) {
     // Verify the usage log belongs to the requesting user
     const { data: log } = await supabase
       .from("usage_logs") // tenant-scope-ignore: ownership verified post-fetch (403 below)
-      .select("user_id")
+      .select("user_id, action, job_id")
       .eq("id", usageLogId)
       .single()
 
     if (!log || log.user_id !== userId) {
       return reply.status(403).send({
         error: { code: "forbidden", message: "Usage log does not belong to you" },
+      })
+    }
+    // A routed video job is settled only by the one routed settlement, from its route ledger.
+    const owner = log as { action?: string | null; job_id?: string | null }
+    if (routedSettleCandidate(owner.action) && owner.job_id && (await jobCarriesRouteDecision(owner.job_id))) {
+      return reply.status(409).send({
+        error: { code: "settled_by_route", message: "This hold is settled by its video run." },
       })
     }
 
@@ -720,4 +731,20 @@ export async function creditsRoutes(app: FastifyInstance) {
       })
     }
   })
+}
+
+/** Whether a job carries a routing decision (a read failure counts as yes: never settled on a guess). */
+async function jobCarriesRouteDecision(jobId: string): Promise<boolean> {
+  // No routing policy ever saved here: nothing is routed, and nothing is read.
+  try {
+    const settings = await getAppSettings()
+    if (!settingsReadFailed(settings) && !settings.video_route_policy) return false
+  } catch {
+    // Unknown: the job itself decides.
+  }
+  // trash-read: settling a hold reads its job whatever became of it.
+  const { data, error } = await supabase.from("jobs").select(`input_data->${VIDEO_ROUTE_STAMP_KEY}, run:metadata->videoRouteRun`).eq("id", jobId).maybeSingle() // tenant-scope-ignore: the usage log's own job, its owner verified on the log above
+  if (error) return true
+  const raw = (data as Record<string, unknown> | null)?.[VIDEO_ROUTE_STAMP_KEY]
+  return raw != null || (data as Record<string, unknown> | null)?.run != null
 }

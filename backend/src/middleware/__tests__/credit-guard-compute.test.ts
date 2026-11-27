@@ -102,6 +102,7 @@ function createSupabaseProfileChain(data: unknown, error: unknown = null) {
 async function buildApp(
   modelResolver: (req: unknown) => string,
   computeCredits?: (body: unknown) => number,
+  computeChargedCredits?: (body: unknown) => number | undefined,
 ): Promise<FastifyInstance> {
   const app = Fastify({ logger: false })
 
@@ -114,7 +115,7 @@ async function buildApp(
 
   const guard = creditGuard(
     (req) => modelResolver(req),
-    computeCredits ? { computeCredits } : undefined,
+    { computeCredits, computeChargedCredits },
   )
 
   app.post("/v1/test-route", { preHandler: guard }, async (req) => ({
@@ -143,6 +144,27 @@ describe("creditGuard with computeCredits", () => {
     mockCheckCreditsWithProfile.mockResolvedValue({ allowed: true, watermark: false })
     mockGetAppSettings.mockResolvedValue({ cost_markup_percent: 0 })
     mockFrom.mockReturnValue(createSupabaseProfileChain(fakeProfile))
+  })
+
+  it("admits an affordable routed quote without marking it up again or checking the default price", async () => {
+    mockGetAppSettings.mockResolvedValue({ cost_markup_percent: 50 })
+    mockCheckCreditsWithProfile.mockImplementation(async (_user, _profile, _model, _field, credits) => ({
+      allowed: credits <= 50, watermark: false, required: credits, available: 50,
+    }))
+    const app = await buildApp(() => "generate-video-pro", () => 100, () => 40)
+    const res = await app.inject({ method: "POST", url: "/v1/test-route", payload: { userId: "u1" } })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().creditReservation.creditOverride).toBe(40)
+    await app.close()
+  })
+
+  it("uses ordinary marked-up pricing when no charged override applies", async () => {
+    mockGetAppSettings.mockResolvedValue({ cost_markup_percent: 50 })
+    const app = await buildApp(() => "loop-video", () => 4, () => undefined)
+    const res = await app.inject({ method: "POST", url: "/v1/test-route", payload: { userId: "u1" } })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().creditReservation.creditOverride).toBe(6)
+    await app.close()
   })
 
   it("passes the computed amount as creditOverride to checkCreditsWithProfile", async () => {

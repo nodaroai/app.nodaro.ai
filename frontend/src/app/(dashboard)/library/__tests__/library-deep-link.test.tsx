@@ -21,7 +21,7 @@ const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), info: vi.fn(
 const scrollToRow = vi.hoisted(() => vi.fn())
 
 vi.mock("@/lib/api", async (orig) => ({ ...(await orig<typeof import("@/lib/api")>()), ...api }))
-vi.mock("@/hooks/use-auth", () => ({ useAuth: () => ({ user: { id: "u1" } }) }))
+vi.mock("@/hooks/use-auth", () => ({ useAuth: () => ({ user: { id: "u1" } }), useCachedUserId: () => "u1" }))
 vi.mock("sonner", () => ({ toast }))
 vi.mock("@/ee/hooks/queries/use-billing-queries", () => ({
   useStorageProfile: () => ({ data: undefined }),

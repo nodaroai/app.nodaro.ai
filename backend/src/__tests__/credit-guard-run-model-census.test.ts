@@ -238,8 +238,6 @@ const RUN_MODEL_EXEMPT: Readonly<Record<string, string>> = {
 
 /** Guards run inside a wrapper or a handler (no route attaches them), by creating file — and why. */
 const INLINE_RUN_MODEL_EXEMPT: Readonly<Record<string, string>> = {
-  // Extend Video: one of two guards by `provider`, which its schema requires.
-  "routes/extend-video.ts": MODEL_REQUIRED,
 }
 
 // ── Probing ──────────────────────────────────────────────────────────────────

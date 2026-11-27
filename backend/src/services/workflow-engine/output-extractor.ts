@@ -34,6 +34,7 @@ import { drawnSourceId, isUseCaseNodeType, RECORDED_OUTPUT_LENGTH_NODE_TYPES, sp
  * 2. Node `data` fields (for source nodes like text-prompt, upload-*)
  */
 
+import { deliveredVideoClips } from "@nodaro/render-rules"
 import type { SimpleNode, SimpleEdge, NodeOutput, NodeExecutionState } from "./types.js"
 import { savedDataAllowed } from "./saved-data.js"
 import {
@@ -2321,6 +2322,14 @@ export function buildNodeOutputFromJobData(
   for (const key of DIRECT_OUTPUT_KEYS) {
     if (outputData[key] != null) {
       ;(output as Record<string, unknown>)[key] = outputData[key]
+    }
+  }
+
+  if ((nodeType === "generate-video-pro" || nodeType === "edit-video-pro") && Array.isArray(outputData.unassembledClips)) {
+    const clips = deliveredVideoClips(outputData)
+    if (clips.length) {
+      output.unassembledClips = clips
+      if (jobId) output.clipJobId = jobId
     }
   }
 

@@ -651,6 +651,27 @@ describe("executeNodeForList — each iteration keeps its own result (A1b)", () 
     vi.clearAllMocks()
   })
 
+  it.each(["generate-video-pro", "edit-video-pro"])("%s keeps clip downloads and the job for each row sharing a URL", async type => {
+    mockNodes = [makeNode({ type })]
+    const url = "https://clips/first"
+    mockExecuteNode.mockReset().mockImplementation(async (node: WorkflowNode, ctx: ExecutionContext, _prompt, _url, i: number) => {
+      if (i === 1) return ""
+      const clips = [{ segment: 1, url }, { segment: 2, url: `https://clips/second-${i}` }]
+      ctx.onMediaTake?.(node.id, { jobId: `job-${i}`, url, timestamp: "t", unassembledClips: clips })
+      return url
+    })
+    await executeNodeForList(mockNodes[0] as unknown as WorkflowNode, ["a", "b", "c"], makeCtx())
+    expect(mockUpdateNodeData).toHaveBeenCalledWith("n1", expect.objectContaining({
+      __listResults: [url, "", url],
+      __listResultStamps: [
+        expect.objectContaining({ jobId: "job-0" }), {}, expect.objectContaining({ jobId: "job-2" }),
+      ],
+      generatedResults: [0, 2].map(i => expect.objectContaining({ jobId: `job-${i}`, url,
+        unassembledClips: [{ segment: 1, url }, { segment: 2, url: `https://clips/second-${i}` }],
+      })),
+    }))
+  })
+
   it("the batch keeps the job id, thumbnail and render stamps each iteration landed, in list order", async () => {
     // The store applies every patch (the batch start empties the history).
     mockNodes = [makeNode({ type: "apply-edl", data: { label: "Render Clip", generatedResults: [{ url: "old.mp4", jobId: "job-old", timestamp: "t" }] } })]

@@ -11,16 +11,43 @@ const result = z.discriminatedUnion("managed", [
 ])
 /** Legacy rows keep their old path; unknown ownership never falls through to it. */
 export async function trySettleManagedJob(usageLogId: string): Promise<boolean> {
-  const { data: row, error } = await supabase.from("usage_logs").select("metadata").eq("id",usageLogId).maybeSingle()
+  return (await trySettleManagedJobOrReadLog(usageLogId)).managed
+}
+
+/** The usage log as the managed check read it (one read): what a routed settle decides from. */
+export interface SettledLogRead {
+  readonly action: string | null
+  readonly credits_used: number | null
+  readonly job_id: string | null
+  /** The reservation is marked routed (a routed run's own mode, or the mark a routed job's admission writes). */
+  readonly routed: boolean
+}
+
+/**
+ * {@link trySettleManagedJob}, also handing back what the same read found on
+ * the log when it is not managed (null: no such log) — so the routed settle
+ * decides without a read of its own.
+ */
+export async function trySettleManagedJobOrReadLog(usageLogId: string): Promise<{ managed: true } | { managed: false; log: SettledLogRead | null }> {
+  const { data: row, error } = await supabase.from("usage_logs").select("metadata, action, credits_used, job_id").eq("id",usageLogId).maybeSingle()
   if (error && error.code !== "PGRST116") throw new Error(`Cannot confirm reservation ownership: ${error.message}`)
-  if (row?.metadata?.reservation_mode !== "job-once") return false
+  if (row?.metadata?.reservation_mode !== "job-once") {
+    const r = row as { action?: unknown; credits_used?: unknown; job_id?: unknown } | null
+    return {
+      managed: false,
+      log: r ? {
+        action: typeof r.action === "string" ? r.action : null, credits_used: typeof r.credits_used === "number" ? r.credits_used : null, job_id: typeof r.job_id === "string" ? r.job_id : null,
+        routed: row?.metadata?.reservation_mode === "video-route" || row?.metadata?.video_route === true,
+      } : null,
+    }
+  }
   const { data, error: rpcError } = await supabase.rpc("settle_checkpointed_job_reservation", { p_usage_log_id: usageLogId })
   if (rpcError) throw new Error(`Managed job settlement could not be confirmed: ${rpcError.message}`)
   const parsed = result.safeParse(data)
   if (!parsed.success || !parsed.data.managed || (!parsed.data.deferred && parsed.data.settlement?.usageLogId !== usageLogId)) {
     throw new Error("Managed job settlement returned an invalid receipt")
   }
-  return true
+  return { managed: true }
 }
 /** Persist the cumulative admitted-price decision before crossing output policy. */
 export async function checkpointJobSettlement(input: PluginJobSettlementCheckpoint): Promise<void> {

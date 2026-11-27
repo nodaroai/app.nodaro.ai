@@ -67,6 +67,8 @@ export interface ProviderResult {
    *  then that route's own figure, and no handler re-derives it from the
    *  default upstream's rates. Absent on every other result. */
   routedVia?: string
+  /** A rowless routed segment (a plugin's): the credits its billed cost charges, by the host's one rule. */
+  routedCredits?: number | null
 }
 
 // Capabilities a provider can support
@@ -113,7 +115,22 @@ export interface ReconcileOpts {
    *  context, and a claim written there would land on the parent's row.
    *  Absent ⇒ the alternate route is never tried. Stripped before any
    *  upstream call. */
-  routeJob?: { jobId: string; jobType: AlternateRouteJobType }
+  routeJob?: {
+    jobId: string
+    jobType: AlternateRouteJobType
+    /** Which send of the job this is (1 when absent): a later send of a routed job runs on the same route, freshly quoted. */
+    send?: number
+  }
+  /** The call has NO job row of its own (a plugin toolkit call inside its
+   *  parent's job): stated so a video send never omits its route context by
+   *  accident. Such a send takes the default route. Stripped before any
+   *  upstream call. Every Seedance 2.x send states `routeJob` or this
+   *  (`__tests__/video-route-send-sites.test.ts`). */
+  routeRowless?: true
+  /** A rowless call's signed routing decision (`rowlessRouteToken`): a Seedance 2.x send runs on that route. */
+  routeToken?: string
+  /** A rowless routed segment's own key (`PluginVideoGenOptions.routeSegmentKey`). */
+  routeSegmentKey?: string
 }
 
 // Standard options passed to all operations
