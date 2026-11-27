@@ -212,11 +212,11 @@ function takeCensus(): Census {
 
 describe("the jobs columns census", () => {
   it("reads the schema the migrations build", () => {
-    for (const col of ["id", "status", "error_message", "error_detail", "provider_task_id", "job_type", "output_data", "credits"]) {
+    for (const col of ["id", "status", "error_message", "error_detail", "provider_task_id", "job_type", "output_data", "credits", "metadata"]) {
       expect(COLUMNS.has(col), col).toBe(true)
     }
     // Dropped (063), renamed away (063), or never created (303 says so).
-    for (const col of ["credits_used", "credits_estimated", "updated_at", "error", "metadata", "model_identifier"]) {
+    for (const col of ["credits_used", "credits_estimated", "updated_at", "error", "model_identifier"]) {
       expect(COLUMNS.has(col), col).toBe(false)
     }
   })
