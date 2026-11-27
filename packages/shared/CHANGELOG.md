@@ -1,5 +1,19 @@
 # @nodaro/shared
 
+## 3.75.0
+
+### Minor Changes
+
+- 0590952: Kling 4.0 (`kling-4`, `kling-4-keyframes`) renders 4K and takes an HDR setting, and offers the 4:3 aspect ratio. Both catalog entries list `resolutions: ["720p", "1080p", "4k"]`, the `4:3` ratio and the feature `hdr`, with a new catalog field `hdr: { resolutions, addonCreditPrefix }` (HDR at 1080p and 4K, priced as its own add-on). `normalizeKling4Resolution` now returns `"4k"` for a 4K request (it used to collapse it to 720p), so the credit identifiers price `kling-4:<N>s:4k` and `kling-4:<N>s:4k-ref`. Kling 4.0 Flash is unchanged.
+
+  New: `VIDEO_DYNAMIC_RANGES`, the `VideoDynamicRange` type, `videoTakesHdr`, `videoRunsHdr`, `videoHdrResolution`, `videoHdrResolutionProblem` (with `VIDEO_HDR_RESOLUTION_CODE` and the `VideoHdrResolutionProblem` type: HDR at a size that does not render it is refused before anything is held) and `videoHdrAddonCreditId` (the add-on's `kling-4-hdr:<N>s:<res>` id on the output seconds). `normalizeModelInput` takes and returns `dynamicRange`: dropped on a model without the setting, an unknown value read as `sdr`, and HDR at 720p (or with no size) moves the size to 1080p; `MODEL_INPUT_ADJUSTMENT_FIELDS` gains `dynamicRange`. `normalizeNodeModelParams` holds a Generate Video node's stored `dynamicRange` the same way.
+
+- 03126fc: `@nodaro/shared/runtime-config`: `toolApps.examples`, a white-label deployment's own before-and-after examples for its mini apps, by app id, for the app's page to show. Each example is `{ before, after }`, both an address `ownPictureAddress` accepts (a path on the site or an https address), with an optional `ask`, `title` and `text`. A key that is not an app id, a value that is not a list, an example without both pictures and an app left with no example are left out; an `ask`, `title` or `text` that is empty or over its limit is left out alone. `RuntimeSurface["toolApps"]` always carries `examples`, `{}` when the deployment gives none. Also the type `SurfaceAppExample` and the limits `MAX_APP_EXAMPLES`, `MAX_APP_EXAMPLE_ASK`, `MAX_APP_EXAMPLE_TITLE` and `MAX_APP_EXAMPLE_TEXT`; `MAX_TOOL_APPS` also bounds the apps that may have examples.
+
+### Patch Changes
+
+- 82b764f: Hebrew picker catalogs read as native Hebrew. The `he` sidecars of the picker catalogs (settings, lighting, lenses, poses, people, animals, vehicles, music, motions and the rest) were reviewed entry by entry: word-for-word translations and English word order rewritten, wrong meanings fixed, English left where Hebrew is natural replaced, gender agreement and pose names (action nouns) corrected, the same English word given the same Hebrew within a catalog, and the house typography applied (straight quotes, maqaf, the single ellipsis character). Ids, prompt hints and English text are unchanged.
+
 ## 3.74.0
 
 ### Minor Changes

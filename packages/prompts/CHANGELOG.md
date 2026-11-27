@@ -1,5 +1,18 @@
 # @nodaro/prompts
 
+## 1.62.0
+
+### Minor Changes
+
+- 19de7be: Generate 3D Scene now takes its brief through the shared prompt precedence: `NODE_PROMPT_CANDIDATE_FIELDS` lists its `scenePrompt` field, so a prompt wired into the node is appended after the typed brief (or placed by `{Label}`), and the new `promptPlacementField(nodeType)` names the typed field a node's `{Label}` placements are read from.
+
+### Patch Changes
+
+- Updated dependencies [82b764f]
+- Updated dependencies [0590952]
+- Updated dependencies [03126fc]
+  - @nodaro/shared@3.75.0
+
 ## 1.61.0
 
 ### Minor Changes

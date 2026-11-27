@@ -1,5 +1,29 @@
 # @nodaro/sdk
 
+## 2.81.0
+
+### Minor Changes
+
+- 0590952: Generate Video and Text to Video take `dynamicRange?: "sdr" | "hdr"` (Kling 4.0, `kling-4` and `kling-4-keyframes`): `"hdr"` renders HDR (HEVC 10-bit, BT.2020, HLG) at `1080p` or `4k`, priced as an add-on on the output seconds. HDR at `720p`, or with no resolution, is refused with a `400` before anything is charged. Every other model ignores it.
+- 93255f0: `userSettings.get()` answers two new optional fields. `privateOutputsAllowed` says whether the account's plan may switch outputs to private (on Nodaro Cloud: Standard, Pro and Business). `privateOutputsEndedByPlanAt` is the time a plan drop returned the outputs to public, while the account is still on a plan without private outputs (`null` otherwise). Both are absent from a server that predates them. When an account's plan drops from one with private outputs to one without (Free or Basic), the server returns `publicOutputs` to `true`: new results are public again, and nothing made while private is republished.
+- e55b92f: Video Remake: `resolution` is the size the video is delivered at. `VideoRemakeParams.resolution` takes the new `VideoRemakeResolution` (`"480p" | "720p" | "1080p" | "4k"`): Nodaro Prism and Nodaro Pulse deliver `"720p"` (the default), `"1080p"` or `"4k"`, their Flash choices `"720p"` (the default) or `"1080p"`. `videoRemake.styleChoice()` answers `resolutions`, the sizes each engine choice offers on the deployment, smallest (the default) first; list exactly those. A size the engine choice does not offer is refused 400 `resolution_not_offered` (the error's `offered` names the sizes it does), and an offered size a request cannot have is refused 409 `resolution_unavailable`, before anything is held. `VideoRemakeEstimate.resolution` and `VideoRemakeJobOutput.resolution` are the size delivered. Where `resolutions` is empty, the deployment's engine does not deliver resolutions yet and `resolution` is the size it makes, as before. `VideoToVideoRemakeParams.resolution` (`nodes.run("video-to-video", …)` with a Video Remake engine) takes the same sizes.
+
+  The upscale choice is removed from the types: `VideoRemakeParams.upscale`, the estimate's `outputResolution`, `upscale`, `upscaleOffered` and `breakdown.upscale`, the job output's `outputResolution`, `upscale`, `engineVideoUrl`, `engineWidth`, `engineHeight` and `upscaleCharged`, `styleChoice()`'s `upscaleChoice` and `upscaleTo`, and the types `VideoRemakeUpscaleChoice`, `VideoRemakeUpscaleOutcome`, `VideoRemakeOutputResolution` and `VideoRemakeUpscaleTo`. Code that names them no longer type-checks: send `resolution` alone, the size you want delivered, and read `resolution` back. Fields sent beyond the typed ones still reach the server as before.
+
+  `UserBalance.firstRemakeOffer` gains `allowedDelivered`: the runs "First Remake on us" covers named by the size delivered (a 4-second preview at 720p on Nodaro Prism or Nodaro Pulse), present only where the deployment's engine delivers resolutions. `allowed` keeps naming them by the engine's size (Nodaro Prism 480p, Nodaro Pulse 720p), for requests and engines that use it.
+
+- 453f97d: `VideoJobOutput`: the `output_data` of a completed video job. `videoUrl` is always browser-playable; when the provider's file is one the browser-safe step would change (not H.264 yuv420p, e.g. HEVC 10-bit or HDR), that file is kept untouched as `originalVideoUrl` and `videoUrl` is its 8-bit H.264 preview (an HDR original's tone-mapped to SDR). `videoPreviewUnavailable: true` means the preview could not be made and `videoUrl` is the original itself. Watermarked runs keep no original.
+
+### Patch Changes
+
+- 8e5b6c5: Documentation only: the doc comments of a Video Remake role's `subject` (`VideoRemakeRolePrevizSettings`) and of `VideoRemakeClipKind` now say that on a 3D previz run `subject` is what the role's model becomes in the finished video, written as that finished thing rather than as the previz model and without the model's colour unless the real thing has it (`"a jockey on a bay racehorse"`, not `"the driver of the red car"`). No types or behaviour change.
+- Updated dependencies [19de7be]
+- Updated dependencies [82b764f]
+- Updated dependencies [0590952]
+- Updated dependencies [03126fc]
+  - @nodaro/prompts@1.62.0
+  - @nodaro/shared@3.75.0
+
 ## 2.80.0
 
 ### Minor Changes
