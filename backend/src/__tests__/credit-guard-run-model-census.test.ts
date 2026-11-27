@@ -185,6 +185,8 @@ const RUN_MODEL_EXEMPT: Readonly<Record<string, string>> = {
   "POST /v1/suno/voice/generate": OUTSIDE_CATALOG,
   // KIE's ai-music-api/speech, which has no catalog entry.
   "POST /v1/suno-speech": OUTSIDE_CATALOG,
+  // Kling 4.0's long image (kling-4-0/long-image), which has no catalog entry.
+  "POST /v1/long-image": OUTSIDE_CATALOG,
   // No AI model at all.
   "POST /v1/combine-videos": NO_MODEL,
   "POST /v1/apply-edl": NO_MODEL,

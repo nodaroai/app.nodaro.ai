@@ -6822,6 +6822,8 @@ function estimateNodeCredits(
     // Audio-to-video (LTX 2.5 Fast): its first audio wire, read as Lip Sync's audio wire is read.
     ...drivingAudioWireOf(node, edges, (sourceId) => wires.measuredSec(sourceId, "lip-sync", LIP_SYNC_AUDIO_WIRE_READ_OPTIONS)),
     imageRefsWired: edges && node.id ? countImageInputEdges(edges, node.id) : undefined,
+    // A node unit priced by the inputs it is sent: which of its inputs carry a wire.
+    wiredInputs: edges && node.id ? wiredInputIdsOf(edges, node.id) : undefined,
     // Kling Image 4.0: the node and its graph, so its input items are counted as its run counts them.
     imageInputGraph: edges && nodes && node.id && isKlingImage4((node.data as { provider?: unknown } | undefined)?.provider)
       ? {
@@ -8321,6 +8323,11 @@ export type EstimateNode = { id?: string; type: string; data?: Record<string, un
  *  stop rule follows (`sourceHandle`, `data.outputMode`). */
 export type EstimateEdge = { source?: string; target: string; sourceHandle?: string | null; targetHandle?: string | null; data?: unknown }
 
+/** The ids of node `nodeId`'s inputs that carry a wire (each edge into it names its target handle). */
+function wiredInputIdsOf(edges: ReadonlyArray<EstimateEdge>, nodeId: string): ReadonlySet<string> {
+  return new Set(edges.flatMap((e) => (e.target === nodeId && typeof e.targetHandle === "string" && e.targetHandle !== "" ? [e.targetHandle] : [])))
+}
+
 /**
  * Does an edge feed this add-captions node a TIMED caption source — a Transcript
  * on its `transcript` handle, or a transcribe node wired straight in? That makes
@@ -8457,6 +8464,8 @@ export function getNodeModelIdentifier(
     grokExtendSourceResolution?: string
     /** Nodaro Video Upscale: the mode the estimate decided from the wired clip (`nodaroEstimateMode`); absent, read from the node (unknown clip: no mode is Transparent). */
     nodaroVideoUpscaleMode?: "transparent" | "sharp"
+    /** The ids of the node's inputs that carry a wire (a GRAPH fact; undefined = unknown), for a node unit priced by the inputs it is sent. */
+    wiredInputs?: ReadonlySet<string>
   } = {},
 ): string {
   // A retired video model is quoted as the model it runs as — what the run reserves.
@@ -8473,6 +8482,15 @@ export function getNodeModelIdentifier(
   const meteredCall = meteredNodeCall(node)
   const meteredKey = meteredCall && llmMeteredPricing() ? meteredLlmPriceKeyOf(meteredCall) : null
   if (meteredKey) return meteredKey
+
+  // A node unit priced by its settings (its price.ee.ts `creditId`): the row
+  // its run is charged, by the unit's own rule, handed the node's wired inputs
+  // when the graph is known — as the editor's estimate hands them
+  // (frontend/src/lib/unit-price-ids.ts) — so the server and the editor quote
+  // one row, the run's. Without the rule a unit fell through to its bare row
+  // whatever its settings. A flat-priced unit names no rule and keeps its row.
+  const unitCreditId = UNIT_PRICES[nodeType]?.creditId
+  if (unitCreditId) return unitCreditId(data, graph.wiredInputs)
 
   // Audio Sync: priced per source aligned to the reference — a GRAPH fact (how
   // many recordings are wired into `sources`), counted by the caller from the

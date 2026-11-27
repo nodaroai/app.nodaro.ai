@@ -3,6 +3,7 @@
 // @registry-exports routes: UNIT_ROUTES
 import type { UnitRoute } from "../kit.js"
 import { route as unit_gif_to_video } from "../gif-to-video/route.js" // unit:gif-to-video
+import { route as unit_long_image } from "../long-image/route.js" // unit:long-image
 import { route as unit_remove_audio } from "../remove-audio/route.js" // unit:remove-audio
 import { route as unit_shot_cuts } from "../shot-cuts/route.js" // unit:shot-cuts
 import { route as unit_speaker_map } from "../speaker-map/route.js" // unit:speaker-map
@@ -11,6 +12,7 @@ import { route as unit_suno_speech } from "../suno-speech/route.js" // unit:suno
 
 export const UNIT_ROUTES: Readonly<Record<string, UnitRoute>> = Object.assign(Object.create(null), {
   "gif-to-video": unit_gif_to_video, // unit:gif-to-video
+  "long-image": unit_long_image, // unit:long-image
   "remove-audio": unit_remove_audio, // unit:remove-audio
   "shot-cuts": unit_shot_cuts, // unit:shot-cuts
   "speaker-map": unit_speaker_map, // unit:speaker-map

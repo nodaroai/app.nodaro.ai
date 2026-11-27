@@ -217,5 +217,12 @@ export interface UnitUseCase {
  */
 export interface UnitPrice {
   readonly staticCosts: Readonly<Record<string, number>>
-  creditId?(data: Readonly<Record<string, unknown>>): string
+  /**
+   * The row a run of `data` is charged, when it depends on the node's settings.
+   * `wiredInputs`, when the caller knows the graph (a run estimate): the ids of
+   * the node's inputs that carry a wire, for a unit priced by the inputs it is
+   * sent (Long Image's pictures); without it the rule prices from the data
+   * alone. The editor's twin is the unit's price-id.ts.
+   */
+  creditId?(data: Readonly<Record<string, unknown>>, wiredInputs?: ReadonlySet<string>): string
 }

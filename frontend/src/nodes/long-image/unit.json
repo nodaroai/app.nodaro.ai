@@ -1,0 +1,72 @@
+{
+  "$schema": "../../../../tools/units/unit.schema.json",
+  "schemaVersion": 1,
+  "type": "long-image",
+  "label": "Long Image",
+  "category": "ai",
+  "position": {
+    "after": "generate-image"
+  },
+  "picker": {
+    "family": "image-create",
+    "after": "generate-image",
+    "pickerCategory": "AI",
+    "keywords": ["long", "tall", "webpage", "web page", "landing page", "website", "page design", "product page", "product detail", "e-commerce", "ecommerce", "listing", "kling"]
+  },
+  "handles": {
+    "inputs": [
+      { "id": "prompt", "label": "Prompt", "accepts": ["text"], "field": "prompt" },
+      { "id": "productImage1", "label": "Product image 1", "accepts": ["image"] },
+      { "id": "productImage2", "label": "Product image 2", "accepts": ["image"] },
+      { "id": "productImage3", "label": "Product image 3", "accepts": ["image"] },
+      { "id": "styleImage", "label": "Style image", "accepts": ["image"] },
+      { "id": "subjectImage", "label": "Subject image", "accepts": ["image"] }
+    ],
+    "outputs": [
+      { "id": "image", "label": "Image", "kind": "image", "from": "generatedImageUrl" }
+    ]
+  },
+  "defaultData": {
+    "label": "Long Image",
+    "mode": "webpage",
+    "length": "medium",
+    "resolution": "2K",
+    "prompt": "",
+    "fieldMappings": {}
+  },
+  "execution": {
+    "kind": "worker",
+    "queue": "video"
+  },
+  "capabilities": ["panel:generate-button", "finalize:own-writer", "lane:provider", "provider:kie"],
+  "appFields": [
+    {
+      "field": "resolution",
+      "kind": "select",
+      "labelKey": "longImage.resolution",
+      "options": [{ "value": "1K" }, { "value": "2K" }]
+    },
+    {
+      "field": "length",
+      "kind": "select",
+      "labelKey": "longImage.length",
+      "options": [
+        { "value": "short", "labelKey": "longImage.lengthShort" },
+        { "value": "medium", "labelKey": "longImage.lengthMedium" },
+        { "value": "long", "labelKey": "longImage.lengthLong" }
+      ]
+    }
+  ],
+  "registry": {
+    "description": "Make one very tall image from a prompt: a webpage design (with an optional style and subject picture), or a product detail page from one to three product pictures.",
+    "outputType": "image",
+    "category": "ai-image"
+  },
+  "contract": {
+    "producer": "image"
+  },
+  "docs": {
+    "page": "docs/nodes/ai-image/long-image.md",
+    "useCase": "Design a whole web page, or a product detail page from your product photos, as one tall picture"
+  }
+}

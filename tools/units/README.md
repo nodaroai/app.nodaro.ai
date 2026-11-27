@@ -307,12 +307,17 @@ vocabulary). `unit-connections.test.ts` proves it on a fixture unit.
 
 **A unit's input lanes.** An input that declares a `field` names where its
 value belongs in the node's data; the run still routes it by the source's
-type. Two kinds of input never have a `field`, and both engines route their
+type. Three kinds of input never have a `field`, and both engines route their
 wires by the input they land on, into `inputs.unitInputs[<input id>]`
 (`unitInputLanding`, `packages/render-rules/src/unit-input-lanes.ts`): a JSON
 input (`accepts: ["look"]`) holds the wired JSON string — of two real wires
 the last wins, and a wired input whose upstream produced nothing holds `""`
-so the unit refuses the run rather than read it as unwired; a many-wire input
+so the unit refuses the run rather than read it as unwired; an image input
+with no `field` (`accepts: ["image"]` only, the image lane, decided
+2026-11-27) holds its wired picture's URL the same way, so a unit with several
+image inputs tells them apart (Long Image's product, style and subject
+pictures) where a `field` input would put every picture in one place, and its
+`payload.ts` checks each value is a picture's address; a many-wire input
 (`many: true`) holds one `UnitSourceRow` (`id` = the upstream node, `url`,
 `kind` video/audio) per upstream node, in the order of the workflow's edge
 list, the first wire from a node winning and a wire that carried nothing
@@ -507,7 +512,14 @@ descriptor / definition, never as a literal — so they cannot drift. The editor
 `unitCreditIdOf(type, data)` (`frontend/src/lib/unit-price-ids.ts`):
 `getModelIdentifier` returns that id, and `estimateNodeCredits` prices it
 (the cached charged price, else the `priceRows` mirror, else the type's own
-row). A unit with no `price-id.ts` prices exactly as before.
+row). A unit with no `price-id.ts` prices exactly as before. Where the editor
+has the canvas's edges it also hands the rule the ids of the node's inputs that
+carry a wire (`wiredInputs`, `wiredInputsOf`), for a unit priced by the inputs
+it is sent (Long Image's pictures). The server's run estimate prices a unit by
+the same rule, its `price.ee.ts` `creditId(data, wiredInputs)`, handed the
+wired inputs from the estimate's edges (`getNodeModelIdentifier`,
+`ee/billing/credits.ts`), so the two quote one row. Without the edges such a
+rule prices the most it may send, never below the run.
 
 **A worker unit's job budget.** A worker whose job can outlast the default
 ceilings (90 minutes of processing) declares its budget in `budget.ts`:
@@ -815,6 +827,7 @@ which the two engines' parity tests read.)
 | `execution.builder` | `use-case` only, required: a key of `USE_CASE_SPECS` (`packages/render-rules/src/use-case-specs.ts`), unique across units. |
 | `handles.inputs[].id` (use-case) | one of `media`, `music`, `introCard`, `masterAudio` (`USE_CASE_INPUT_HANDLES`; the run routes only these), with no `field`, no `many`, never accepting `look`. |
 | `handles.inputs[].accepts: ["look"]` | a JSON input: `look` is never beside another kind, and it declares no `field` (its wire lands in `unitInputs`, "A unit's input lanes"). |
+| `handles.inputs[]` with `accepts` including `image` and no `field` | the image lane: it accepts `image` only, and its wire lands in `unitInputs` under the input's id as the picture's URL ("A unit's input lanes"). |
 | `handles.inputs[].many: true` | the input takes every wire, in order: only `true`, only when `accepts` ⊆ `video`, `audio` (`MANY_KINDS`), never with `field`. |
 | `handles.outputs[].kind: "look"` (not a use case) | a JSON output names its `from` (the field its value lands on), and stands beside other `look` outputs ("A worker unit's JSON outputs") or beside media outputs, the media take first ("A worker unit's media take and its side outputs") — never beside a text or any other output (`json-output-rules.mjs`). |
 | `handles.outputs[].from` (use-case) | absent: the use-case reader (`use-case-io.ts` in the editor, `use-case-output.ts` on the server) reads a use-case node's outputs, never `from`. |

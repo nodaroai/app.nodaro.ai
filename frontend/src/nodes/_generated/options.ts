@@ -6,6 +6,7 @@ import { option as unit_clip_pack } from "../clip-pack/option" // unit:clip-pack
 import { option as unit_episode_chapters } from "../episode-chapters/option" // unit:episode-chapters
 import { option as unit_episode_trailer } from "../episode-trailer/option" // unit:episode-trailer
 import { option as unit_gif_to_video } from "../gif-to-video/option" // unit:gif-to-video
+import { option as unit_long_image } from "../long-image/option" // unit:long-image
 import { option as unit_remove_audio } from "../remove-audio/option" // unit:remove-audio
 import { option as unit_shot_cuts } from "../shot-cuts/option" // unit:shot-cuts
 import { option as unit_speaker_layout } from "../speaker-layout/option" // unit:speaker-layout
@@ -19,6 +20,7 @@ export const UNIT_OPTIONS: Readonly<Record<string, UnitOption>> = Object.assign(
   "episode-chapters": unit_episode_chapters, // unit:episode-chapters
   "episode-trailer": unit_episode_trailer, // unit:episode-trailer
   "gif-to-video": unit_gif_to_video, // unit:gif-to-video
+  "long-image": unit_long_image, // unit:long-image
   "remove-audio": unit_remove_audio, // unit:remove-audio
   "shot-cuts": unit_shot_cuts, // unit:shot-cuts
   "speaker-layout": unit_speaker_layout, // unit:speaker-layout

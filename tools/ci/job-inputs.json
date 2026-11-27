@@ -972,6 +972,8 @@
         "backend/src/nodes/episode-trailer/use-case.ts",
         "backend/src/nodes/gif-to-video/descriptor.generated.ts",
         "backend/src/nodes/gif-to-video/price.ee.ts",
+        "backend/src/nodes/long-image/descriptor.generated.ts",
+        "backend/src/nodes/long-image/price.ee.ts",
         "backend/src/nodes/remove-audio/descriptor.generated.ts",
         "backend/src/nodes/remove-audio/price.ee.ts",
         "backend/src/nodes/shot-cuts/budget.ts",

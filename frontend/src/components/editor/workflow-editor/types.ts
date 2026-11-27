@@ -27,7 +27,7 @@ import { speechQuote, upstreamSpeechText } from "@/lib/speech-estimate"
 import { UNIT_NODE_DEFINITIONS } from "@/lib/unit-definitions"
 import { composeRecord, composeSet, unitPriceRows } from "@/lib/unit-compose"
 // estimateNodeCredits asks the one node type it prices for its unit price id (unitCreditIdOf(nodeType, data)).
-import { unitCreditIdOf } from "@/lib/unit-price-ids"
+import { unitCreditIdOf, wiredInputsOf } from "@/lib/unit-price-ids"
 
 /** Sentinel error thrown when a polling callback detects that the active
  *  workflow has changed. Callers should catch this silently (no error toast). */
@@ -629,7 +629,7 @@ export function estimateNodeCredits(
   // A node unit priced by its settings (its price-id.ts): the row its run
   // reserves — the live charged price when cached, else the price mirror's
   // row, else its type's own row. A unit without one is priced below.
-  const unitCreditId = unitCreditIdOf(nodeType, node.data)
+  const unitCreditId = unitCreditIdOf(nodeType, node.data, wiredInputsOf(node.id, edges))
   if (unitCreditId !== undefined) {
     return getCachedCredits(unitCreditId) ?? NODE_CREDIT_COSTS[unitCreditId] ?? NODE_CREDIT_COSTS[nodeType] ?? 0
   }

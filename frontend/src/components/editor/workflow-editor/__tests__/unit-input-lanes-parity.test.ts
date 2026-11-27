@@ -11,9 +11,10 @@ vi.mock("@/hooks/use-workflow-store", () => ({
 }))
 
 /**
- * A node unit's JSON and many-wire inputs on the canvas's engine (decided
- * 2026-10-18): the fixture unit fixture-echo (and the JSON-only worker
- * fixture-map, a source), added through the editor's one
+ * A node unit's JSON, many-wire and image inputs on the canvas's engine
+ * (decided 2026-10-18; the image lane 2026-11-27): the fixture unit
+ * fixture-echo (and the JSON-only worker fixture-map, a source, and the
+ * image-lane target fixture-slots), added through the editor's one
  * door to the unit definitions, resolved by the real resolver over every case
  * of tools/units/__fixtures__/unit-input-lanes-parity.json. The server's half
  * (backend/src/services/workflow-engine/__tests__/unit-input-lanes-parity.test.ts)
@@ -28,8 +29,11 @@ vi.mock("@/lib/unit-definitions", async (importOriginal) => {
   // The JSON-only worker of unit-json-outputs.json, a source of JSON.
   const json = JSON.parse(read(resolve(__dirname, "../../../../../../tools/units/__fixtures__/unit-json-outputs.json"), "utf8")).unit
   const map = { ...definition, type: json.type, label: json.label, outputs: json.outputs.map((o: { id: string }) => o.id), handles: { inputs: [], outputs: json.outputs } }
+  // The image lane's target: image inputs with no field (and one with a field), from the fixture's slotUnit.
+  const slot = JSON.parse(read(resolve(__dirname, "../../../../../../tools/units/__fixtures__/unit-input-lanes-parity.json"), "utf8")).slotUnit
+  const slots = { ...definition, type: slot.type, label: slot.label, inputs: slot.inputs.map((i: { id: string }) => i.id), handles: { inputs: slot.inputs, outputs: [] } }
   type Unit = (typeof real.UNIT_NODE_DEFINITIONS)[number]
-  const units = [...real.UNIT_NODE_DEFINITIONS, definition as unknown as Unit, map as unknown as Unit]
+  const units = [...real.UNIT_NODE_DEFINITIONS, definition as unknown as Unit, map as unknown as Unit, slots as unknown as Unit]
   const unitDefinitionOf = (t: string | undefined) => units.find((u) => u.type === t)
   return {
     ...real,

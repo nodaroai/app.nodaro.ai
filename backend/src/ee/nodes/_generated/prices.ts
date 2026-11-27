@@ -6,6 +6,7 @@ import { price as unit_clip_pack } from "../../../nodes/clip-pack/price.ee.js" /
 import { price as unit_episode_chapters } from "../../../nodes/episode-chapters/price.ee.js" // unit:episode-chapters
 import { price as unit_episode_trailer } from "../../../nodes/episode-trailer/price.ee.js" // unit:episode-trailer
 import { price as unit_gif_to_video } from "../../../nodes/gif-to-video/price.ee.js" // unit:gif-to-video
+import { price as unit_long_image } from "../../../nodes/long-image/price.ee.js" // unit:long-image
 import { price as unit_remove_audio } from "../../../nodes/remove-audio/price.ee.js" // unit:remove-audio
 import { price as unit_shot_cuts } from "../../../nodes/shot-cuts/price.ee.js" // unit:shot-cuts
 import { price as unit_speaker_layout } from "../../../nodes/speaker-layout/price.ee.js" // unit:speaker-layout
@@ -19,6 +20,7 @@ export const UNIT_PRICES: Readonly<Record<string, UnitPrice>> = Object.assign(Ob
   "episode-chapters": unit_episode_chapters, // unit:episode-chapters
   "episode-trailer": unit_episode_trailer, // unit:episode-trailer
   "gif-to-video": unit_gif_to_video, // unit:gif-to-video
+  "long-image": unit_long_image, // unit:long-image
   "remove-audio": unit_remove_audio, // unit:remove-audio
   "shot-cuts": unit_shot_cuts, // unit:shot-cuts
   "speaker-layout": unit_speaker_layout, // unit:speaker-layout

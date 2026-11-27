@@ -274,6 +274,13 @@ function checkHandles(h, errors) {
         const kinds = Array.isArray(handle.accepts) ? handle.accepts : []
         if (kinds.includes("look") && kinds.length > 1) errors.push(`${at}: a JSON input (accepts "look") accepts nothing else — a wire is either a JSON value or a medium`)
         if (kinds.includes("look") && handle.field !== undefined) errors.push(`${at}.field: a JSON input (accepts "look") lands in unitInputs, never a data field — remove field`)
+        // An image input that names no data field is the image lane (decided
+        // 2026-11-27): its wire lands, by the input's id, in unitInputs as the
+        // picture's URL (@nodaro/render-rules unitInputLaneOf), so a unit with
+        // several image inputs tells them apart. It takes pictures only.
+        if (handle.field === undefined && handle.many === undefined && kinds.includes("image") && !kinds.every((k) => k === "image")) {
+          errors.push(`${at}: an image input with no field lands in unitInputs by its id (the image lane) and accepts only "image" — accept only image, or add a field to route it by its source's type`)
+        }
         if (handle.many !== undefined) {
           if (handle.many !== true) errors.push(`${at}.many: only true (or absent)`)
           else if (kinds.length === 0 || !kinds.every((k) => MANY_KINDS.includes(k))) errors.push(`${at}.many: only on a video/audio input (accepts ⊆ ${MANY_KINDS.join(", ")}) — each wire is one ordered media source`)

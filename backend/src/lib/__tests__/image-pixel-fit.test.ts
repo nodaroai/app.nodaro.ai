@@ -11,6 +11,16 @@ describe("a picture over a step's cap is scaled down to fit it", () => {
     expect(sizeWithinPixels(100, 50, 1_000_000)).toEqual({ width: 100, height: 50 })
   })
 
+  it("a whole page in one tall picture fits a step's edge as well as its area, its shape kept", async () => {
+    // Long Image's shape: far taller than wide. The overlay steps' 8192 a side binds before their area does.
+    const s = sizeWithinPixels(2048, 40000, 8192 * 8192, 8192)
+    expect(s.height).toBe(8192)
+    expect(s.width / s.height).toBeCloseTo(2048 / 40000, 2)
+    const tall = await sharp({ create: { width: 64, height: 9000, channels: 3, background: "#ddd" } }).png().toBuffer()
+    const meta = await sharp(await fitImageUnderPixels(tall, 8192 * 8192, 8192)).metadata()
+    expect([meta.height, meta.width! <= 64]).toEqual([8192, true])
+  })
+
   it("hands a picture within the cap on byte for byte, and fits one over it", async () => {
     const small = await sharp({ create: { width: 64, height: 32, channels: 3, background: "#000" } }).png().toBuffer()
     expect(await fitImageUnderPixels(small, 10_000)).toBe(small)

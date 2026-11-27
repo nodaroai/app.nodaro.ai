@@ -248,6 +248,7 @@ const PINNED_UNREAD: ReadonlyArray<readonly [site: string, types: string]> = [
   ["backend/src/routes/social-post-reads.ts buildJobInputData(nodeType)", "the nodeType of each startJob(…) call, read there"],
   ["backend/src/nodes/split-into-layers/route.ts buildJobInputData(descriptor.type)", "split-into-layers, the unit's own node type: its kind is its node's"],
   ["backend/src/nodes/suno-speech/route.ts buildJobInputData(descriptor.type)", "suno-speech, the unit's own node type: its kind is its node's"],
+  ["backend/src/nodes/long-image/route.ts buildJobInputData(descriptor.type)", "long-image, the unit's own node type: its kind is its node's"],
   ["backend/src/routes/suno-add-track.ts buildJobInputData(jobType)", "suno-add-instrumental and suno-add-vocals, the two registerAddTrackRoute(…) calls"],
 ]
 

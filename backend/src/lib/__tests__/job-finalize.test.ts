@@ -535,6 +535,20 @@ describe("finalizeJobWithMedia", () => {
     expect(sharedMocks.markJobCompletedDetailed.mock.calls[0]![1].output_data).not.toHaveProperty("imageMimeTypes")
   })
 
+  it("a caller that says its result's file type is not stated (storeAsItsBytes) is stored as what its bytes are, whatever its request names", async () => {
+    mocks.jobsSingleMock.mockResolvedValueOnce({
+      data: { id: "j-long", user_id: "u1", should_watermark: true, is_public: true, job_type: "long-image", workflow_execution_id: null, status: "processing", input_data: { type: "long-image", mode: "webpage", resolution: "2K", prompt: "p" } },
+      error: null,
+    })
+    formatStoreMocks.storeFormattedImages.mockResolvedValueOnce({ urls: ["https://r2.example/images/j-long.jpg"], format: "jpeg", mimeType: "image/jpeg" })
+    const out = await finalizeJobWithMedia({ jobId: "j-long", jobType: "generate-image", result: { url: "https://kie/page", cost: 0.5, providerUsed: "kie" }, storeAsItsBytes: true })
+
+    expect(out).toEqual({ ok: true })
+    expect(formatStoreMocks.storeFormattedImages).toHaveBeenCalledWith({ sourceUrls: ["https://kie/page"], jobId: "j-long", userId: "u1", watermark: true })
+    expect(sharedMocks.uploadImageVariantsMaybeWatermark).not.toHaveBeenCalled()
+    expect(sharedMocks.markJobCompletedDetailed.mock.calls[0]![1].output_data).toMatchObject({ imageUrl: "https://r2.example/images/j-long.jpg", imageMimeType: "image/jpeg" })
+  })
+
   it("an image asked for as PNG, or with no format, keeps the PNG path", async () => {
     for (const input_data of [{ outputFormat: "png" }, {}, null]) {
       vi.clearAllMocks()

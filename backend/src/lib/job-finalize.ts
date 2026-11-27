@@ -425,6 +425,14 @@ export interface FinalizeInput {
    *  result, unless it asked for a format, and every extra image). Absent: 1,
    *  exactly as before. A failed attempt stores and counts nothing. */
   storeAttempts?: number
+  /** An IMAGE job whose result's file type no request decides (a model that
+   *  does not state what it returns: Long Image's tall picture): stored as
+   *  what its bytes are (`storeFormattedImages`, lib/image-output-store.ts),
+   *  as a job `imageStoredAsItsBytes` names is. The caller that knows its
+   *  model says so here, on every path that delivers the job (its worker and
+   *  its recovery), so no central list names the model. Absent: decided by
+   *  `imageStoredAsItsBytes(input_data)`, exactly as before. */
+  storeAsItsBytes?: boolean
   /** Credits for work NOT reflected in the provider's USD cost (e.g. a
    *  successful loop-trim add-on). Passed through to commitJobCredits so the
    *  provider-cost reconciliation doesn't refund it. Defaults to none. */
@@ -580,9 +588,10 @@ export async function finalizeJobWithMedia(
   }
   const attempts = input.storeAttempts ?? 1
   try {
-    if (IMAGE_TYPES.has(jobType) && imageStoredAsItsBytes(job.input_data)) {
-      // A run that asked for JPEG, WebP, a GIF or an SVG, or of a model whose
-      // format follows its size (Kling Image 4.0): stored as what its bytes
+    if (IMAGE_TYPES.has(jobType) && (input.storeAsItsBytes === true || imageStoredAsItsBytes(job.input_data))) {
+      // A run that asked for JPEG, WebP, a GIF or an SVG, of a model whose
+      // format follows its size (Kling Image 4.0), or whose caller says its
+      // file type is not stated (`storeAsItsBytes`): stored as what its bytes
       // are, an SVG made safe first (a refused one fails the job with a
       // refund, lib/image-output-store.ts), with a PNG still of a GIF or SVG.
       const isSet = typeof job.input_data?.setHoldCreditId === "string"

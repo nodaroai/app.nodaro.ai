@@ -309,6 +309,9 @@ export const TYPED_HANDLE_IDS: ReadonlySet<string> = new Set([
   //     Content Ideas' `recipes` (recipe producers + text) and `field-brand`
   //     (text only). Drift mirror of the registry.
   "link", "recipes", "field-brand",
+  //   - Long Image's picture inputs (the image lane: each picture by its own
+  //     input), image producers only. Drift mirror of the registry.
+  "productImage1", "productImage2", "productImage3", "styleImage", "subjectImage",
   //   - The UGC video nodes' inputs, read from the rows their pips draw
   //     (ugc-handles.ts). Drift mirror of the registry.
   ...Object.values(UGC_TARGET_HANDLES).flatMap((rows) => rows.map((row) => row.handleId)),

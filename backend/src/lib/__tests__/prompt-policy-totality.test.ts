@@ -55,6 +55,9 @@ const HOOKED_ROUTES: readonly string[] = [
   // generate-image assembles each job's prompt in its planner module (one per
   // model of a fan-out); the route file itself holds no prompt schema.
   "generate-image-plan.ts",
+  // Long Image: its route polices the request's prompt; its workflow lane
+  // polices in its own payload (a unit's payload runs before the engine's).
+  "nodes/long-image/route.ts",
   "image-to-image.ts",
   "edit-image.ts",
   "generate-surround-continuation.ts",

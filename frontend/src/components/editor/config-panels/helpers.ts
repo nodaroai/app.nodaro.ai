@@ -1,7 +1,7 @@
 // @registry-lookup getModelIdentifier asks the one node type it prices for its unit price id (unitCreditIdOf(node.type, data))
 import type { WorkflowNode, WorkflowEdge, FieldMappings, ProbedVideoInfo } from "@/types/nodes"
 import type { SourceNodeInfo } from "./types"
-import { unitCreditIdOf } from "@/lib/unit-price-ids"
+import { unitCreditIdOf, wiredInputsOf } from "@/lib/unit-price-ids"
 import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, isSeedanceVideoEditProvider, videoToVideoProviderOf, isCatalogExtendProvider, isGrokExtendProvider, canonicalVideoProvider, applyDefaultVideoSelection, MUSIC_CREDIT_ID, dialogueProviderOf, sunoSeparateCreditId, NODARO_VIDEO_UPSCALE_PROVIDER } from "@nodaro/shared/models"
 import { videoMaskCreditId, resolveVideoMaskProvider, videoDepthCreditId, resolveVideoDepthProvider } from "@nodaro/shared/media"
 import { defaultImageModelForNode, imageFormatLeversOf, isFlux3Klein, isPricedPerInputImage, imageResolutionFor8K, klingImage4SetCount, maskedEditResolution, priceReadsInputImages, pricedEstimatedImages, resolutionAtAspectRatio, type ImageInputGraph, type SourceImageSize } from "@nodaro/shared/model-catalog"
@@ -462,7 +462,7 @@ export function getModelIdentifier(
   const data = node.data as Record<string, unknown>
   // A node unit priced by its settings (its price-id.ts): the row its run
   // reserves, named by the same rule as its backend price.ee.ts creditId.
-  const unitCreditId = unitCreditIdOf(node.type, data)
+  const unitCreditId = unitCreditIdOf(node.type, data, wiredInputsOf(node.id, edges))
   if (unitCreditId !== undefined) return unitCreditId
   // Dubbing: its language's per-minute row (Hebrew rides the separately priced
   // project API) — the row the route and the workflow run reserve on, × the
