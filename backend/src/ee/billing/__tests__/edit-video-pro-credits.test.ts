@@ -356,4 +356,13 @@ describe("deriveBridgeResolution", () => {
   it("floors at the smallest tier when below every threshold", () => {
     expect(deriveBridgeResolution("seedance-2", 100, 100)).toBe("480p")
   })
+
+  // Decided 2026-11-25: Seedance 2.5 follows the source as Seedance 2 does.
+  it("bridges a 4K source at 4K on Seedance 2.5 (short side 2160 or more), a smaller one below it", () => {
+    expect(deriveBridgeResolution("seedance-2-5", 3840, 2160)).toBe("4k")
+    expect(deriveBridgeResolution("seedance-2-5", 2160, 3840)).toBe("4k")
+    expect(deriveBridgeResolution("seedance-2-5", 3840, 2158)).toBe("1080p")
+    expect(deriveBridgeResolution("seedance-2-5", 1920, 1080)).toBe("1080p")
+    expect(deriveBridgeResolution("seedance-2-5-flash", 3840, 2160)).toBe("720p")
+  })
 })

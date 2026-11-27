@@ -203,6 +203,53 @@ describe("POST /v1/extend-video — each Seedance provider's price", () => {
     expect(held).toEqual([(8 + 8) / 2 * 190, Math.ceil((8.3 + 8) / 2 * 190)])
   })
 
+  // 4K (decided 2026-11-25): only a source that is already 4K (short side 2160 or more).
+  it("extends a 4K source at 4K, on its 4K row", async () => {
+    vi.mocked(probeVideoSource).mockResolvedValue({ width: 3840, height: 2160, durationSeconds: 4, videoDurationSeconds: 4 })
+    const res = await post({ provider: "seedance-2-5-extend", duration: 4, resolution: "4k" })
+    expect(res.statusCode).toBe(200)
+    expect(reservedId()).toBe("seedance-2-5-extend:4k:per-2s")
+    // 4 s sent + 4 s added: 4 of the 4K two-second row.
+    expect(h.computed).toEqual([(4 + 4) / 2 * 775])
+    expect(queued().resolution).toBe("4k")
+  })
+
+  it("refuses 4K on a source under 4K with a 400, before anything is checked or held", async () => {
+    vi.mocked(probeVideoSource).mockResolvedValue({ width: 1920, height: 1080, durationSeconds: 10, videoDurationSeconds: 10 })
+    const res = await post({ provider: "seedance-2-5-extend", duration: 8, resolution: "4k" })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("extend_source_below_4k")
+    expect(res.json().error.message).toMatch(/already 4K.*1920×1080/)
+    expect(h.guarded).toEqual([])
+    expect(reserveCreditsForJob).not.toHaveBeenCalled()
+    expect(videoQueue.add).not.toHaveBeenCalled()
+  })
+
+  // Decided 2026-11-27: 2160p and UHD (any case) are 4K on Seedance 2.5 Extend.
+  it("reads 2160p and UHD as 4K: the 4K row on a 4K source, the 4K-source refusal on a smaller one", async () => {
+    vi.mocked(probeVideoSource).mockResolvedValue({ width: 3840, height: 2160, durationSeconds: 4, videoDurationSeconds: 4 })
+    const res = await post({ provider: "seedance-2-5-extend", duration: 4, resolution: "2160p" })
+    expect(res.statusCode).toBe(200)
+    expect(reservedId()).toBe("seedance-2-5-extend:4k:per-2s")
+    expect(queued().resolution).toBe("4k")
+    vi.clearAllMocks()
+    vi.mocked(probeVideoSource).mockResolvedValue({ width: 1920, height: 1080, durationSeconds: 10, videoDurationSeconds: 10 })
+    const small = await post({ provider: "seedance-2-5-extend", duration: 8, resolution: "UHD" })
+    expect(small.statusCode).toBe(400)
+    expect(small.json().error.code).toBe("extend_source_below_4k")
+    // Another provider is left as it came: its schema refuses the spelling.
+    const other = await post({ provider: "seedance-2-0-extend", duration: 8, resolution: "2160p" })
+    expect(other.statusCode).toBe(400)
+    expect(other.json().error.code).toBe("validation_error")
+  })
+
+  it("a 4K request on a source the route could not measure is left to the worker's check", async () => {
+    vi.mocked(probeVideoSource).mockRejectedValue(new Error("ffprobe timed out"))
+    const res = await post({ provider: "seedance-2-5-extend", duration: 8, resolution: "4k" })
+    expect(res.statusCode).toBe(200)
+    expect(reservedId()).toBe("seedance-2-5-extend:4k:per-2s")
+  })
+
   it("a source the route could not measure holds the whole 10 s window (the worker settles on the source it measures)", async () => {
     vi.mocked(probeVideoSource).mockRejectedValue(new Error("ffprobe timed out"))
     const res = await post({ provider: "seedance-2-5-extend", duration: 8 })

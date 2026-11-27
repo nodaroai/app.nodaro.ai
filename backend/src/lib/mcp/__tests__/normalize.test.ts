@@ -327,3 +327,36 @@ describe("imageToImageLevers", () => {
     expect(imageToImageLevers({ model: "flux-kontext" }, {})).toEqual({ provider: "flux-kontext" })
   })
 })
+
+// Seedance 2.5 at 4K (decided 2026-11-25): only an explicit 4K is 4K on it; a
+// K-style value that is not 4K lands on the model's default, as before it
+// listed 4K. Seedance 2 keeps its own rule.
+describe("normalizeVideoInput — Seedance 2.5 4K", () => {
+  const res = (resolution: string, model = "seedance-2-5") => normalizeVideoInput({ model, resolution }, {}, "seedance-2-5").resolution
+
+  it("honours 4k in either case", () => {
+    expect(res("4k")).toBe("4k")
+    expect(res("4K")).toBe("4k")
+  })
+
+  it("lands 2k, 1K and 8K on the model's default, never 4K", () => {
+    const fallback = normalizeVideoInput({ model: "seedance-2-5" }, {}, "seedance-2-5").resolution
+    for (const v of ["2k", "2K", "1K", "8K"]) expect(res(v), v).toBe(fallback)
+    expect(fallback).not.toBe("4k")
+  })
+
+  it("leaves Seedance 2's own rule as it was", () => {
+    expect(res("8K", "seedance-2")).toBe("4k")
+    expect(res("2k", "seedance-2")).toBe("4k")
+  })
+})
+
+// Decided 2026-11-27: on Seedance 2.5, 2160p and UHD (any case) mean 4K.
+describe("normalizeVideoInput — Seedance 2.5 reads 2160p and UHD as 4K", () => {
+  const res = (resolution: string, model = "seedance-2-5") => normalizeVideoInput({ model, resolution }, {}, "seedance-2-5").resolution
+  it("reads them as 4k; loose values do not become 4K; other models keep their own rule", () => {
+    for (const v of ["2160p", "2160P", "UHD", "uhd"]) expect(res(v), v).toBe("4k")
+    for (const v of ["2k", "1K", "8K"]) expect(res(v), v).not.toBe("4k")
+    expect(res("2160p", "veo3")).toBe(normalizeVideoInput({ model: "veo3", resolution: "2160p" }, {}, "veo3").resolution)
+  })
+})

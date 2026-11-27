@@ -24,7 +24,8 @@ describe("Seedance extend shared wiring", () => {
       expect(m.modes).toEqual(["extend"])
       expect(m.family).toBe("Bytedance")
       expect(m.durations).toEqual(durations)
-      expect(m.resolutions).toEqual(["480p", "720p", "1080p"])
+      // Seedance 2.5 also extends a 4K source at 4K (decided 2026-11-25).
+      expect(m.resolutions).toEqual(id === "seedance-2-5-extend" ? ["480p", "720p", "1080p", "4k"] : ["480p", "720p", "1080p"])
     }
   })
 

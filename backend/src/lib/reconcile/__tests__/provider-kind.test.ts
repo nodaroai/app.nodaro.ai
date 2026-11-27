@@ -60,7 +60,9 @@ describe("providerKindFor*", () => {
     }
     // Flash has no 4K or HDR: always the standard kind.
     expect(providerKindForVideoModel("kling-4-flash", { resolution: "4k", dynamicRange: "hdr" })).toBe("kie-standard")
-    expect(providerKindForVideoModel("seedance-2-5", { resolution: "4k" })).toBe("kie-standard")
+    // Seedance 2.5 at 4K is a long render too (decided 2026-11-25); its other sizes are not.
+    expect(providerKindForVideoModel("seedance-2-5", { resolution: "4k" })).toBe("kie-long-video")
+    expect(providerKindForVideoModel("seedance-2-5", { resolution: "1080p" })).toBe("kie-standard")
     // The threshold is past the worker's poll (2 × 45 s per output second of a 30 s clip = 45 min).
     expect(STALE_THRESHOLD_MS["kie-long-video"]).toBe(75 * 60 * 1000)
     expect(STALE_THRESHOLD_MS["kie-standard"]).toBe(20 * 60 * 1000)

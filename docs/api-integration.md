@@ -3381,7 +3381,9 @@ so a value the model doesn't support is ignored, never a 400:
 - **`seedance-2`** (full) supports `resolution: "4k"` and
   `aspectRatio: "adaptive"` (plus `"21:9"`). `seedance-2-fast` and
   `seedance-2-mini` are **480p / 720p only** (no 1080p, no 4K);
-  `seedance-2-5` is **480p / 720p / 1080p** (no 4K; 1080p added 2026-08-17).
+  `seedance-2-5` is **480p / 720p / 1080p / 4K** (1080p added 2026-08-17, native 4K
+  2026-11-25; only an explicit 4K renders 4K: `"4k"`, `"2160p"` or `"UHD"` in any case, read as `"4k"`; any other size it does not list keeps landing below 4K — until 2026-11-25 such a
+  request rendered and was charged at 1080p).
 - **`seedance-2-5`** (Seedance 2.5) generates up to **30s in one call** — every
   other Seedance 2 SKU stops at 15s — and raises the reference caps to
   **30 images / 10 videos / 10 audio** (audio ≤ 30s per clip). With a start

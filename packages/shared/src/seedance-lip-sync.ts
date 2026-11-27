@@ -11,7 +11,8 @@
  * none — so it is priced on the plain row `<model>:8s:<resolution>`.
  *
  * The resolution is the one asked when the model renders it, else the model's
- * top catalog tier (a 1080p asked of Seedance 2 Fast renders and bills 720p),
+ * top catalog tier (a 1080p asked of Seedance 2 Fast renders and bills 720p;
+ * on Seedance 2.5 its top tier below 4K — only an explicit 4K is 4K there),
  * and 720p when none is asked. Every catalog tier of every family member has a
  * plain 8-second row. The worker sends this same resolution, so what renders is
  * what was priced.
@@ -21,6 +22,7 @@
  */
 import { MODEL_CATALOG } from "./model-catalog.js"
 import { SEEDANCE_LIP_SYNC_PROVIDERS, isMinimaxH3Provider, isSeedance2Provider } from "./model-constants.js"
+import { explicitFourKOf, resolutionsALooseRequestMayLandOn } from "./explicit-4k.js"
 
 /** The length, in seconds, a Seedance Lip Sync run renders and is priced at. */
 export const SEEDANCE_LIP_SYNC_SECONDS = 8
@@ -38,7 +40,14 @@ export function seedanceLipSyncResolution(provider: string, resolution?: unknown
   const supported = MODEL_CATALOG[provider]?.resolutions ?? []
   const want = typeof resolution === "string" && resolution !== "" ? resolution : SEEDANCE_LIP_SYNC_DEFAULT_RESOLUTION
   if (supported.includes(want)) return want
-  return supported[supported.length - 1] ?? SEEDANCE_LIP_SYNC_DEFAULT_RESOLUTION
+  // On Seedance 2.5 a 4K spelling (`4K`, `2160p`, `UHD`) is 4K (decided 2026-11-27).
+  const fourK = explicitFourKOf(provider, want)
+  if (fourK && supported.includes(fourK)) return fourK
+  // A size the model does not list lands on its top tier — on a model where
+  // only an explicit 4K means 4K (Seedance 2.5, decided 2026-11-25), its top
+  // tier below 4K (1080p), where such a size landed before 4K was listed.
+  const landing = resolutionsALooseRequestMayLandOn(provider, want, supported)
+  return landing[landing.length - 1] ?? SEEDANCE_LIP_SYNC_DEFAULT_RESOLUTION
 }
 
 /** The credit id a Seedance Lip Sync run is held and charged on: its plain 8-second row. */

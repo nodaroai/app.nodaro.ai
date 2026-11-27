@@ -25,7 +25,7 @@ Seedance comes as three choices, one per model: **Seedance 2.5** (`seedance-2-5-
 | veo-extend | Model: fast (VEO 3.1 Fast) or quality (VEO 3.1 Quality) |
 | runway-extend | Quality: 720p or 1080p |
 | ltx-2.3-pro | Extend mode: `start` (prepend before clip) or `end` (append after clip, default); duration: 1–20s of new footage to add (default 6) |
-| seedance-2-5-extend | Duration: 4–30s of new footage to add (default 8); Resolution: 480p / 720p / 1080p, the resolution the new footage is generated at and priced by (default 720p; the delivered video keeps the source's size, rounded down to even); Generate Audio: continue the soundtrack into the extension (default on); Reference images: up to 8 (API/MCP — see below) |
+| seedance-2-5-extend | Duration: 4–30s of new footage to add (default 8); Resolution: 480p / 720p / 1080p / 4K (4K only for a source that is already 4K — see below), the resolution the new footage is generated at and priced by (default 720p; the delivered video keeps the source's size, rounded down to even); Generate Audio: continue the soundtrack into the extension (default on); Reference images: up to 8 (API/MCP — see below) |
 | seedance-2-5-flash-extend | Duration: 4–30s of new footage to add (default 8); Resolution: 480p / 720p, the resolution the new footage is generated at and priced by (default 720p; the delivered video keeps the source's size, rounded down to even); Generate Audio: continue the soundtrack into the extension (default on); Reference images: up to 8 (API/MCP — see below) |
 | seedance-2-0-extend | Duration: 4–15s of new footage to add (default 8); Resolution: 480p / 720p / 1080p, the resolution the new footage is generated at and priced by (default 720p; the delivered video keeps the source's size, rounded down to even); Generate Audio: continue the soundtrack into the extension (default on); Reference images: up to 8 (API/MCP — see below) |
 | kling-4-extend | Duration: 3–30s of new footage to add (default 5); Resolution: 720p / 1080p, the resolution the new footage is generated at and priced by (default 720p; the delivered video keeps the source's size, rounded down to even). The new footage always has sound (there is no sound switch), and it takes no reference images |
@@ -48,7 +48,7 @@ Seedance comes as three choices, one per model: **Seedance 2.5** (`seedance-2-5-
 | `veo-extend` | VEO generation node | append-only | provider-fixed | 720p / 1080p |
 | `runway-extend` | Runway generation node | append-only | provider-fixed | 720p / 1080p |
 | `ltx-2.3-pro` | Any video URL | `start` or `end` | +1–20s of new footage per run (no cumulative cap; chain extends to go further) | 1080p |
-| `seedance-2-5-extend` | Any video URL | append-only | +4–30s of new footage per run (chain to go further) | 480p / 720p / 1080p |
+| `seedance-2-5-extend` | Any video URL | append-only | +4–30s of new footage per run (chain to go further) | 480p / 720p / 1080p / 4K (a 4K source only) |
 | `seedance-2-5-flash-extend` | Any video URL | append-only | +4–30s of new footage per run (chain to go further) | 480p / 720p |
 | `seedance-2-0-extend` | Any video URL | append-only | +4–15s of new footage per run (chain to go further) | 480p / 720p / 1080p |
 | `kling-4-extend` | Any video URL | append-only | +3–30s of new footage per run (chain to go further) | 720p / 1080p |
@@ -68,6 +68,7 @@ These are refused with HTTP 400 when the request arrives, before any credits are
 
 - **A length outside the provider's window** (`validation_error`): Seedance 2.5 and Seedance 2.5 Flash add 4–30 seconds, Seedance 2.0 4–15, Kling 4 3–30, Gemini Omni Flash 1.2 3–10, PixVerse V6 1–15, Grok 6 or 10, LTX 2.3 Pro 1–20, always a whole number of seconds. VEO and Runway add a length of their own; a `duration` sent to them must be 1–20 and does not change it.
 - **A resolution the model does not render** (`validation_error`): Kling 4 renders 720p or 1080p, so a `resolution` of 480p sent to `kling-4-extend` is refused. (A saved node or workflow carrying 480p onto Kling 4 runs at 720p, the resolution it is priced at.) PixVerse V6 renders 360p, 540p, 720p or 1080p, so 480p sent to `pixverse-v6-extend` is refused, and so is 360p or 540p sent to Seedance or Kling 4. Seedance 2.5 Flash renders 480p or 720p, so 1080p sent to `seedance-2-5-flash-extend` is refused. Gemini Omni Flash 1.2 renders 360p, 720p, 1080p or 4k, so 480p sent to `gemini-omni-flash-1-2-extend` is refused (a saved node or workflow carrying it runs at 720p), and 4k is refused on every other provider. (A saved node or workflow carrying 1080p onto Seedance 2.5 Flash runs at 720p, the resolution it is priced at.) (A saved node or workflow carrying 480p onto PixVerse V6 runs at 540p, the nearest quality it renders, and is priced at it.)
+- **4K on a source that is not already 4K** (`extend_source_below_4k`, Seedance 2.5; `2160p` and `UHD` are read as 4K too): Seedance 2.5 extends at 4K only a source that is already 4K — its short side 2160 pixels or more (3840×2160, or 2160×3840 upright), the rule Edit Video Pro picks 4K by. The extended video keeps the source's size, so a 4K extension of a smaller clip would be paid for at 4K and delivered at the smaller size. Choose 1080p or lower, or extend a 4K source. A workflow run refuses it the same way, before anything is held; the editor does not offer 4K once it knows the source is smaller (a 4K already set is cleared), and a source whose size it does not know is checked when the run starts. The result of a 4K extend is the joined video at the source's size, encoded as every extend is (below).
 - **A source shape Seedance 2.5 Flash does not take** (`video_aspect_unsupported`, Seedance 2.5 Flash): a source wider than 2.5:1 or taller than 1:2.5 is refused; crop it to a less extreme shape.
 - **A source that is not 16:9 or 9:16** (`video_aspect_unsupported`, Gemini Omni Flash 1.2): the model renders only those two shapes, so any other (square, 4:3, 21:9) is refused, with a message naming the two shapes; a source within 2% of one of them is taken, a phone video that is stored sideways with a rotation tag reads the same either way, and a video with non-square pixels is judged by the shape it plays at (an anamorphic clip that plays as 16:9 is taken, and is sent to the model at the shape it plays at). Crop it to 16:9 or 9:16, or pick a Seedance engine, which keeps the video's own shape. A workflow run refuses it the same way, before anything is held.
 - **No prompt** (`validation_error`, Seedance, Kling 4 and Gemini Omni Flash 1.2): each needs a prompt that says what happens next. On Gemini Omni Flash 1.2 a prompt of spaces only counts as none. A workflow run refuses it the same way, before anything is held.
@@ -173,6 +174,7 @@ Charged per second of video the run sends and adds: the seconds of the source it
 | 480p | 46.75<!-- credits-rate: seedance-2-5-extend:480p:per-2s@0.5 --> |
 | 720p | 104.5<!-- credits-rate: seedance-2-5-extend:720p:per-2s@0.5 --> |
 | 1080p | 261.25<!-- credits-rate: seedance-2-5-extend:1080p:per-2s@0.5 --> |
+| 4K (a 4K source only) | 426.25<!-- credits-rate: seedance-2-5-extend:4k:per-2s@0.5 --> |
 
 ```
 seconds sent = min(10, the source's length in seconds)
@@ -191,11 +193,11 @@ The source's length is its picture's, as measured, with one allowance: a picture
 
 A source of 10 seconds or longer, at the other resolutions:
 
-| Seconds added | 480p | 1080p |
-|---|---|---|
-| 4 | 655<!-- credits: seedance-2-5-extend:480p:per-2s@7 --> | 3658<!-- credits: seedance-2-5-extend:1080p:per-2s@7 --> |
-| 8 (or none set) | 842<!-- credits: seedance-2-5-extend:480p:per-2s@9 --> | 4703<!-- credits: seedance-2-5-extend:1080p:per-2s@9 --> |
-| 30 | 1870<!-- credits: seedance-2-5-extend:480p:per-2s@20 --> | 10450<!-- credits: seedance-2-5-extend:1080p:per-2s@20 --> |
+| Seconds added | 480p | 1080p | 4K (a 4K source) |
+|---|---|---|---|
+| 4 | 655<!-- credits: seedance-2-5-extend:480p:per-2s@7 --> | 3658<!-- credits: seedance-2-5-extend:1080p:per-2s@7 --> | 5968<!-- credits: seedance-2-5-extend:4k:per-2s@7 --> |
+| 8 (or none set) | 842<!-- credits: seedance-2-5-extend:480p:per-2s@9 --> | 4703<!-- credits: seedance-2-5-extend:1080p:per-2s@9 --> | 7673<!-- credits: seedance-2-5-extend:4k:per-2s@9 --> |
+| 30 | 1870<!-- credits: seedance-2-5-extend:480p:per-2s@20 --> | 10450<!-- credits: seedance-2-5-extend:1080p:per-2s@20 --> | 17050<!-- credits: seedance-2-5-extend:4k:per-2s@20 --> |
 
 The source is measured before anything is held, and the run holds exactly its price; it then sends no more of the source than the length it was priced on, even if the link later serves a longer file. When the source cannot be measured at that point (a link that does not answer in time), the run holds the price of the whole 10 seconds and is charged for the source it measures before it generates; the difference is refunded when the job completes.
 

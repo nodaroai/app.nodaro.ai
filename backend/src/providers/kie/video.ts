@@ -79,6 +79,7 @@ import { pictureShapeSentence } from "./aspect-ratio-sentence.js"
 import { displayedSize, planImageSize } from "../../lib/image-min-size.js"
 import { takeAlternateRoute } from "../../lib/alternate-route.js"
 import { join } from "node:path"
+import { longRenderPollAttempts } from "./long-render.js"
 import { readFile } from "node:fs/promises"
 import sharp from "sharp"
 import {
@@ -338,6 +339,11 @@ export { isSeedance2EditModeRejection, SEEDANCE_2_EDIT_MODE_PARAMS }
  * caller's credit audit reports the duration KIE billed, not the one we first
  * asked for.
  */
+/** The poll budget of a run: the long one for a long render (Seedance 2.5 at 4K, `long-render.ts`). */
+function videoTaskAttemptBudget(provider: string, input: Record<string, unknown>, options: ProviderOptions | undefined, edit = false): number {
+  return longRenderPollAttempts(provider, input, MAX_POLL_ATTEMPTS_VIDEO, { referenceVideoSec: options?.referenceVideoDurationsSec, edit })
+}
+
 async function runVideoTaskWithSeedanceEditRetry(
   provider: string,
   taskModel: string,
@@ -355,7 +361,7 @@ async function runVideoTaskWithSeedanceEditRetry(
   })
 
   try {
-    const first = await runKieTask(taskModel, input, MAX_POLL_ATTEMPTS_VIDEO, options?.onProgress, meta(input))
+    const first = await runKieTask(taskModel, input, videoTaskAttemptBudget(provider, input, options), options?.onProgress, meta(input))
     return { ...first, sentInput: input }
   } catch (err) {
     const message = providerErrorText(err)
@@ -381,7 +387,7 @@ async function runVideoTaskWithSeedanceEditRetry(
         `[KIE.ai] ${provider}: dropped the declared reference task type "${String(declared)}" from the resubmit — the provider ran the request as an edit`,
       )
     }
-    const retried = await runKieTask(taskModel, editInput, MAX_POLL_ATTEMPTS_VIDEO, options?.onProgress, meta(editInput))
+    const retried = await runKieTask(taskModel, editInput, videoTaskAttemptBudget(provider, editInput, options, true), options?.onProgress, meta(editInput))
     return { ...retried, sentInput: editInput }
   }
 }

@@ -153,6 +153,8 @@ export interface ProviderOptions {
   // provider's input resolver — the examples below are orientation only.
   referenceImageUrls?: string[] // Reference images (VEO 3 ref2v 3, Seedance 2 9, Wan 3 10, Gemini Omni 7)
   referenceVideoUrls?: string[] // Reference videos (Seedance 2 3, Wan 3 5, Gemini Omni V2V 1)
+  /** Each reference video's measured length, in seconds (null: not measured), in `referenceVideoUrls` order. Read only to size a long render's poll budget when the length is Auto. */
+  referenceVideoDurationsSec?: ReadonlyArray<number | null>
   referenceAudioUrls?: string[] // Reference audio tracks (Seedance 2 3, Wan 3 5)
   // Identity inputs for models that take a dedicated character channel (data:
   // a positive `characters` cap in VIDEO_REF_LIMITS_BY_PROVIDER — Gemini Omni 3).

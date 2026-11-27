@@ -61,7 +61,7 @@ import {
   videoUpscaleResolutionsFor,
 } from "@nodaro/shared/model-catalog"
 import { TOPAZ_VIDEO_FPS_CHOICES, TOPAZ_VIDEO_RESOLUTIONS, clampTopazVideoFps, isTopazVideoResolution, NODARO_VIDEO_UPSCALE_PROVIDER, type NodaroVideoUpscaleMode, type TopazVideoResolution } from "@nodaro/shared/models"
-import { geminiOmniExtendEstimateSource, geminiOmniExtendResolution, isGeminiOmniExtendProvider, isSeedanceExtendPricedBySecondsSent, nodaroVideoUpscaleModeTierOf, seedanceExtendRateCreditId } from "@nodaro/render-rules"
+import { geminiOmniExtendEstimateSource, geminiOmniExtendResolution, isGeminiOmniExtendProvider, isSeedanceExtendPricedBySecondsSent, seedanceExtendOfferedResolutions, nodaroVideoUpscaleModeTierOf, seedanceExtendRateCreditId } from "@nodaro/render-rules"
 import { extendVideoPricingUnits } from "@/lib/extend-video-estimate"
 import { unitQuoteCredits, unitQuoteIdFor } from "@/lib/unit-quote"
 import { motionTransferShownSize, motionTransferSizes, motionTransferSnap } from "@/lib/motion-transfer-sizes"
@@ -5474,7 +5474,23 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
   // Kling 4 3–30 s, PixVerse V6 1–15 s, each at its own resolutions.
   const catalogEntry = catalogProvider ? MODEL_CATALOG[catalogProvider] : undefined
   const catalogDurations = catalogEntry?.durations ?? []
-  const catalogResolutions = catalogEntry?.resolutions ?? []
+  // Seedance 2.5 Extend renders 4K only for a source that is already 4K
+  // (decided 2026-11-25): with the source's size known and under 4K, 4K is not
+  // offered (a source of unknown size is left to the server's check).
+  const extendSourceFrame = isSeedanceExtendPricedBySecondsSent(catalogProvider) && nodeId
+    ? geminiOmniExtendEstimateSource({ id: nodeId }, (nodes ?? []) as never, (edges ?? []) as never, new Set()).frame
+    : undefined
+  const extendSourceWidth = extendSourceFrame?.width
+  const extendSourceHeight = extendSourceFrame?.height
+  const catalogResolutions = catalogProvider ? seedanceExtendOfferedResolutions(catalogProvider, extendSourceFrame) : []
+  // A 4K set before the source was known to be smaller is cleared, as a
+  // resolution the model does not render is (the fail-safe below).
+  useEffect(() => {
+    if (data.resolution !== undefined && catalogProvider && !catalogResolutions.includes(data.resolution)
+      && (MODEL_CATALOG[catalogProvider]?.resolutions ?? []).includes(data.resolution)) {
+      onUpdate({ resolution: undefined })
+    }
+  }, [catalogProvider, extendSourceWidth, extendSourceHeight]) // eslint-disable-line react-hooks/exhaustive-deps
   // The length the run is priced and sent at: the stored seconds in the
   // model's window, else its catalog default.
   const catalogDuration = catalogProvider ? pricedOutputDurationSec(catalogProvider, data.duration) : 0

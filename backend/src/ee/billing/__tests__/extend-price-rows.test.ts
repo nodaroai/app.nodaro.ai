@@ -119,8 +119,8 @@ describe.each(["seedance-2-0-extend", "kling-4-extend"] as const)("%s price rows
 })
 
 describe("each provider's lengths and resolutions", () => {
-  it("Seedance renders 480p, 720p and 1080p (2.5 Flash 480p and 720p); Kling 4 renders 720p and 1080p", () => {
-    expect(MODEL_CATALOG["seedance-2-5-extend"]!.resolutions).toEqual(["480p", "720p", "1080p"])
+  it("Seedance renders 480p, 720p and 1080p (2.5 also 4K for a 4K source; 2.5 Flash 480p and 720p); Kling 4 renders 720p and 1080p", () => {
+    expect(MODEL_CATALOG["seedance-2-5-extend"]!.resolutions).toEqual(["480p", "720p", "1080p", "4k"])
     expect(MODEL_CATALOG["seedance-2-5-flash-extend"]!.resolutions).toEqual(["480p", "720p"])
     expect(MODEL_CATALOG["seedance-2-0-extend"]!.resolutions).toEqual(["480p", "720p", "1080p"])
     expect(MODEL_CATALOG["kling-4-extend"]!.resolutions).toEqual(["720p", "1080p"])
@@ -158,7 +158,7 @@ describe("seedance-2-5-extend: charged per second sent and added", () => {
 
   it("each resolution's row is two seconds at the seedance-2-5 reference-video rate (its 8 s -ref row ÷ 8)", () => {
     expect(SEEDANCE_EXTEND_RATE_SECONDS).toBe(2)
-    for (const resolution of RESOLUTIONS) {
+    for (const resolution of [...RESOLUTIONS, "4k"] as const) {
       const perSecond = STATIC_CREDIT_COSTS[`seedance-2-5:8s:${resolution}-ref`]! / 8
       expect(STATIC_CREDIT_COSTS[SEEDANCE_EXTEND_RATE_CREDIT_IDS[resolution]], resolution).toBe(perSecond * SEEDANCE_EXTEND_RATE_SECONDS)
     }
@@ -166,14 +166,20 @@ describe("seedance-2-5-extend: charged per second sent and added", () => {
       "480p": "seedance-2-5-extend:480p:per-2s",
       "720p": "seedance-2-5-extend:720p:per-2s",
       "1080p": "seedance-2-5-extend:1080p:per-2s",
+      "4k": "seedance-2-5-extend:4k:per-2s",
     })
     expect([85, 190, 475]).toEqual(RESOLUTIONS.map((r) => STATIC_CREDIT_COSTS[SEEDANCE_EXTEND_RATE_CREDIT_IDS[r]]))
+    // 4K (decided 2026-11-25; a 4K source only): two seconds at the 4K -ref rate.
+    expect(STATIC_CREDIT_COSTS[SEEDANCE_EXTEND_RATE_CREDIT_IDS["4k"]]).toBe(775)
   })
 
   it("the run's rate row is its resolution's (one the model offers, else 720p)", () => {
     expect(seedanceExtendRateCreditId("480p")).toBe("seedance-2-5-extend:480p:per-2s")
     expect(seedanceExtendRateCreditId("1080p")).toBe("seedance-2-5-extend:1080p:per-2s")
-    for (const other of [undefined, "720p", "4k", "2160p", 7]) expect(seedanceExtendRateCreditId(other)).toBe("seedance-2-5-extend:720p:per-2s")
+    expect(seedanceExtendRateCreditId("4k")).toBe("seedance-2-5-extend:4k:per-2s")
+    // 2160p and UHD are read as 4K (decided 2026-11-27).
+    for (const fourK of ["2160p", "UHD", "4K"]) expect(seedanceExtendRateCreditId(fourK)).toBe("seedance-2-5-extend:4k:per-2s")
+    for (const other of [undefined, "720p", "2k", 7]) expect(seedanceExtendRateCreditId(other)).toBe("seedance-2-5-extend:720p:per-2s")
   })
 
   // Decided 2026-11-13: a client built on an earlier @nodaro/shared still
@@ -282,6 +288,7 @@ describe("seedance-2-5-extend: charged per second sent and added", () => {
       ["seedance-2-5-extend:720p:per-2s:9u", 1710],
       ["seedance-2-5-extend:480p:per-2s:9u", 765],
       ["seedance-2-5-extend:1080p:per-2s:9u", 4275],
+      ["seedance-2-5-extend:4k:per-2s:9u", 6975],
     ])
     for (const row of entry.pricing) {
       const resolution = row.identifier.split(":")[1]!

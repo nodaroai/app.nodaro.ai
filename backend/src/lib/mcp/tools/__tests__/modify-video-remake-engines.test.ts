@@ -165,14 +165,15 @@ describe("modify_video with a Video Remake engine", () => {
     })
   })
 
-  it("sends 4K, the size delivered, to Video Remake, and refuses it for this tool's own models before anything is sent", async () => {
+  it("sends 4K, the size delivered, to Video Remake, and refuses it for this tool's own models but Seedance 2.5 before anything is sent", async () => {
     const { fastify, calls } = stubFastify({ [ESTIMATE]: { statusCode: 200, body: QUOTE } })
     const server = await serverWith(fastify)
     const quoted = await callTool(server, "modify_video", { prompt: "night", video_url: CLIP, model: "nodaro-pulse", resolution: "4k" })
     expect(quoted.isError).toBeFalsy()
     expect(calls[0]!.payload).toEqual({ videoUrl: CLIP, roles: [], postPrompt: "night", engine: "kling-4", resolution: "4k" })
     calls.length = 0
-    const edit = await callTool(server, "modify_video", { prompt: "night", video_url: CLIP, model: "seedance-2-5", resolution: "4k" })
+    // Seedance 2.5 renders 4K itself (decided 2026-11-25); another model of this tool's own refuses it.
+    const edit = await callTool(server, "modify_video", { prompt: "night", video_url: CLIP, model: "wan-videoedit", resolution: "4k" })
     expect(edit.isError).toBe(true)
     expect(calls).toEqual([])
   })

@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
+import { fourKSpellingPreHandler } from "../lib/four-k-spelling.js"
 import { z } from "zod"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { insertJob } from "../lib/insert-job.js"
@@ -10,6 +11,7 @@ import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/re
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { withResolvedModel } from "../lib/job-resolved-model.js"
+import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
 import { VIDEO_TO_VIDEO_NODE_PROVIDERS, SEEDANCE_VIDEO_EDIT_SHAPE, SEEDANCE_VIDEO_EDIT_TASK_TYPE, isSeedanceVideoEditProvider, videoToVideoProviderOf } from "@nodaro/shared/models"
 import { uiResolutionFill } from "@nodaro/shared/video"
 import { buildSeedanceVideoEditPrompt } from "@nodaro/prompts/assembly"
@@ -53,8 +55,8 @@ export const videoToVideoBody = z.object({
   provider: z.enum(VIDEO_TO_VIDEO_NODE_PROVIDERS).optional(),
   // Wan / Wan Flash params
   duration: z.enum(["5", "10"]).optional(),
-  // 480p is Seedance only (checked below).
-  resolution: z.enum(["480p", "720p", "1080p"]).optional(),
+  // 480p is Seedance only, 4K Seedance 2.5 only (checked below).
+  resolution: z.enum(["480p", "720p", "1080p", "4k"]).optional(),
   // Wan Flash's audio track; Seedance's generated sound.
   audio: z.boolean().optional(),
   multiShots: z.boolean().optional(),
@@ -77,6 +79,11 @@ export const videoToVideoBody = z.object({
   referenceVideoUrls: z.array(safeUrlSchema).optional(),
   referenceAudioUrls: z.array(safeUrlSchema).optional(),
 }).superRefine((b, ctx) => {
+  // 4K (decided 2026-11-25): only a model whose catalog lists it (Seedance 2.5,
+  // also the default when no model is named) renders it.
+  if (b.resolution === "4k" && !(MODEL_CATALOG[videoToVideoProviderOf(b.provider)]?.resolutions ?? []).includes("4k")) {
+    ctx.addIssue({ code: "custom", path: ["resolution"], message: "4K is available on Seedance 2.5 only" })
+  }
   // A body naming no model is the default's (a Seedance edit).
   if (isSeedanceVideoEditProvider(videoToVideoProviderOf(b.provider))) return
   if (b.resolution === "480p") {
@@ -375,7 +382,10 @@ const onlyForSeedanceEdit = (precheck: (req: FastifyRequest, reply: FastifyReply
  *   rewritten body — the clip's length, settled to what was rendered.
  */
 export const videoToVideoPricing: RoutePricing = {
-  prechecks: [quoteVideoRemakeEngine, nameDefaultVideoToVideoModel, rewriteSeedanceEdit, ...textToVideoPricing.prechecks.map(onlyForSeedanceEdit)],
+  // Video Remake's engines are answered first; then a 4K spelling (`2160p`,
+  // `UHD`) on Seedance 2.5 (also the default model) is read as `4k` before
+  // anything else checks or prices it (decided 2026-11-27).
+  prechecks: [quoteVideoRemakeEngine, fourKSpellingPreHandler((b) => videoToVideoProviderOf(b.provider)), nameDefaultVideoToVideoModel, rewriteSeedanceEdit, ...textToVideoPricing.prechecks.map(onlyForSeedanceEdit)],
   modelResolver: (req) => {
     if (isSeedanceEdit(req)) return textToVideoPricing.modelResolver(req)
     const provider = runProvider(req)

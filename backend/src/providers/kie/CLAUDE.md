@@ -881,6 +881,22 @@ builds an allow-listed body:
   could not read, which settles on the clip delivered. A clip under 3 s bills
   the 3 s row.
 
+### Seedance 2.5 at 4K (`seedance-2-5`, `resolution: "4k"`, decided 2026-11-25)
+
+- **Every mode** (text, frames, references, edit, extend, lip sync) takes `"4k"`
+  (probed 2026-11-22). The file is HEVC Main 10, `yuv420p10le`, 3840x2160, BT.709
+  SDR (not HDR); it is stored as sent beside a browser-safe preview.
+- **An extension must send `aspect_ratio: "adaptive"`**: any other ratio is
+  refused after about five minutes, uncharged ("`ratio` must be `adaptive`").
+  `resolveSeedanceTaskType` forces it for a declared `extend`. A 4K HEVC 10-bit
+  source is taken as it is. Extend Video offers 4K only for a source whose short
+  side is 2160 or more (`seedanceExtend4kSourceProblem`, @nodaro/render-rules).
+- **Slow**: 4 s took 222 s. `longRenderPollAttempts` (long-render.ts) polls 2 ×
+  56 s per output second (≈56 min for 30 s), and the run is kind `kie-long-video`
+  (75 min), shared with Kling 4.0's 4K / HDR runs.
+- **Only an explicit 4K is 4K** on this model (`4k`, `2160p` or `UHD`, any case, read as `4k` by `explicitFourKOf`; `EXPLICIT_4K_ONLY_VIDEO_MODELS`,
+  @nodaro/shared): a size it does not list lands below 4K, as before 4K existed.
+
 ### Seedance 2.5 edit mode (`runVideoTaskWithSeedanceEditRetry`, video.ts)
 
 A THIRD Seedance shape rule, on top of the frame-mode 422

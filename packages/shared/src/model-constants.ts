@@ -1844,6 +1844,9 @@ export const SEEDANCE_LIP_SYNC_PROVIDERS = new Set<string>([
   "minimax-h3",
 ])
 
+// Seedance 2.5 at 4K: only an explicit 4K is 4K (a leaf module, so the catalog can read it too).
+export { EXPLICIT_4K_ONLY_VIDEO_MODELS, FOUR_K_SPELLINGS, explicitFourKOf, fourKSpellingReason, isFourKResolution, resolutionsALooseRequestMayLandOn } from "./explicit-4k.js"
+
 /** Replicate-based lip-sync providers (video or image+audio via Replicate SDK).
  *  The retired ones ran there too (`RETIRED_LIP_SYNC_PROVIDERS`). */
 export const REPLICATE_LIP_SYNC_PROVIDERS = new Set([

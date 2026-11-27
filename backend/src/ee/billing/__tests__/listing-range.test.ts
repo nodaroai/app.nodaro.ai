@@ -41,8 +41,8 @@ describe("estimateWorkflowListingRange", () => {
   })
 
   it("a value the node's model does not take is priced as the model runs it (normalized)", async () => {
-    // Seedance 2.5 has no 4k: a run snaps it to its nearest band, 1080p.
-    const r = await range([gv({})], [field("gv", "resolution", ["480p", "4k"])])
+    // Seedance 2.5 has no 2k: a run snaps it to its nearest band below 4K, 1080p.
+    const r = await range([gv({})], [field("gv", "resolution", ["480p", "2k"])])
     expect(r.ceiling.preview).toBe((await listing([gv({ resolution: "1080p" })])).preview)
   })
 

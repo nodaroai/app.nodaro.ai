@@ -27,7 +27,9 @@ import { isModelEstimate, isModelRefused, refusedModelMessage } from "@/hooks/us
 import { nodeTypeDefaultLabel } from "@/components/editor/config-panel-label"
 import { NODE_CREDIT_COSTS, estimateNodeCredits, getCostFactors, isExecutableNode, videoToVideoClipRowOf, type RunCreditLine, type RunCreditQuantity } from "./types"
 import { previewRunnable } from "./preview-gate"
-import { isNodaroVideoUpscaleModeCreditId, nodeProviders, TOPAZ_VIDEO_UNIT_CREDIT_ID } from "@nodaro/render-rules"
+import { EXTEND_VIDEO_DEFAULT_PROVIDER, geminiOmniExtendEstimateSource, isNodaroVideoUpscaleModeCreditId, nodeProviders, SEEDANCE_EXTEND_4K_MIN_SHORT_SIDE, seedanceExtend4kSourceProblem, TOPAZ_VIDEO_UNIT_CREDIT_ID } from "@nodaro/render-rules"
+import { canonicalVideoProvider } from "@nodaro/shared/models"
+import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
 import { isExpandedClone } from "@nodaro/shared/workflow"
 import { USE_CASE_FEE_STATIC_CREDITS, expandUseCaseNodes, isUseCaseNodeType, usecaseFeeCreditId, withUseCaseMembers, type UseCaseExpansion } from "@nodaro/render-rules"
 import { speechPriceIdsFor } from "@/lib/speech-estimate"
@@ -123,8 +125,10 @@ export function estimateRunCreditLines(
     // Imagine Video 1.5 takes a start frame only at 1080p): no price either —
     // the line carries no credits, so no total counts a run nobody is charged
     // for — and the refusal's own sentence.
-    // A run the editor's Run refuses before calling the server: a start-frame-only size, or HDR at a size without it.
-    const startFrameOnly = startFrameOnlyRefusal(node, edges) ?? hdrResolutionRefusal(node)
+    // A run the editor's Run refuses before calling the server: a start-frame-only size, HDR at a size
+    // without it, or a Seedance 2.5 Extend at 4K of a source the graph knows is under 4K (decided
+    // 2026-11-25; the rule the server's run estimate reads, `seedanceExtend4kSourceProblem`).
+    const startFrameOnly = startFrameOnlyRefusal(node, edges) ?? hdrResolutionRefusal(node) ?? extend4kRefusal(node, allNodes, edges, rerunIds)
     const unpricedMessage = unpricedId !== undefined ? refusedModelMessage(unpricedId) : startFrameOnly
     // Both factors are shown by the confirm; the units are already in `cost`.
     return {
@@ -162,6 +166,26 @@ function startFrameOnlyRefusal(node: WorkflowNode, edges: WorkflowEdge[]): strin
   const provider = typeof data.provider === "string" ? data.provider : undefined
   const problem = nodeStartFrameOnlyProblem(provider, data, wiredVideoFrames(node.id, edges))
   return problem && provider ? startFrameOnlyText(provider, problem, "vidcfg.startFrameOnlyResolution") : undefined
+}
+
+/**
+ * The sentence a Seedance 2.5 Extend run is refused with when it asks for 4K
+ * and the graph knows its source is under 4K (`seedanceExtend4kSourceProblem`:
+ * its short side under 2160), else undefined. A source of unknown size is
+ * left to the server's own probe.
+ */
+function extend4kRefusal(node: WorkflowNode, allNodes: WorkflowNode[], edges: WorkflowEdge[], rerunIds: ReadonlySet<string>): string | undefined {
+  if (node.type !== "extend-video") return undefined
+  const data = (node.data ?? {}) as { provider?: unknown; resolution?: unknown }
+  const provider = canonicalVideoProvider(String(data.provider ?? EXTEND_VIDEO_DEFAULT_PROVIDER))
+  const frame = geminiOmniExtendEstimateSource(node, allNodes, edges, rerunIds).frame
+  if (!frame || seedanceExtend4kSourceProblem(provider, data.resolution, frame) === undefined) return undefined
+  return tx("vidcfg.extend4kNeeds4kSource", {
+    model: MODEL_CATALOG[provider]?.label ?? provider,
+    min: SEEDANCE_EXTEND_4K_MIN_SHORT_SIDE,
+    w: frame.width,
+    h: frame.height,
+  })
 }
 
 /** Is `node` priced at a metered LLM estimate the server returned (and is it cached)? */

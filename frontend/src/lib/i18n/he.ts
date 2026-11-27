@@ -1718,6 +1718,7 @@ export const he: ChromeDict = {
   "vidcfg.nodaroModeTransparentUnavailableNotice": "ההתקנה הזו לא יכולה להריץ את מצב \"שקוף\", ולכן הרצה במצב הזה תידחה. כדי להריץ כאן, בחרו \"חד\".",
   "vidcfg.descNodaroUpscale": "Nodaro Video Upscale מתאים את הקליפ למסגרת 1080p, 2K או 4K בלי לחתוך, ושומר על קצב הפריימים, האורך והקול שלו. הוא מקבל קליפים של עד 60 שניות ו־50MB. המחיר הוא לפי שנייה של הקליפ, ולכן הסכום המוצג הוא הערכה עד שההרצה מודדת את הקליפ; הסכום שנשמר הוא הסכום שמחויב.",
   "vidcfg.nodaroUpscaleTooLong": "Nodaro Video Upscale מקבל קליפים באורך של עד {max} שנ׳ — האורך של זה {d} שנ׳. קצרו אותו, אחרת ההרצה תידחה.",
+  "vidcfg.extend4kNeeds4kSource": "{model} מאריך ב־4K רק מקור שכבר ב־4K (הצלע הקצרה {min} פיקסלים או יותר) — המקור הזה {w}×{h}. בחרו 1080p או פחות, אחרת ההרצה תידחה.",
   "vidcfg.topazLegacyFactorNote": "נשמר כהגדלה פי {factor} – הקליפ יוגדל לרזולוציה הקרובה ביותר לגודלו פי {factor}. בחרו רזולוציה כדי לקבוע אותה במדויק.",
   "vidcfg.depthSize.small": "קטן (המהיר ביותר)",
   "vidcfg.depthSize.base": "בסיסי",

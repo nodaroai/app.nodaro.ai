@@ -26,7 +26,7 @@ These fields apply to **Seedance 2.5 Edit** and **Seedance 2.5 Flash Edit** (`se
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| Resolution (`v2vResolution`) | Select | 480p | 480p / 720p / 1080p output (Flash: 480p / 720p) |
+| Resolution (`v2vResolution`) | Select | 480p | 480p / 720p / 1080p / 4K output (Flash: 480p / 720p; 4K is Seedance 2.5 only — any other model refuses it) |
 | Draft (`draft`) | Toggle | off | Seedance 2.5 only (Flash has no draft). Render a 480p **draft** of the edit; finalize the take you like at 1080p with Video Upscale → **Seedance 2.5 HD (from draft)**. Locks Resolution to 480p. See [Draft mode](generate-video.md#seedance-25-draft-mode). |
 | Generate Audio (`generateAudio`) | Checkbox | on | Native audio on the generated clip |
 
@@ -261,6 +261,10 @@ Flash's 480p `-ref` rate: **317**<!-- credits: seedance-2-5-flash:8s:480p-ref@1.
 Because the lane *is* a Seedance reference-video run, it is billed exactly like
 one on Generate Video: the price of `clip_seconds + delivered_seconds` seconds
 on the `-ref` ladder for the chosen resolution, as one charge rounded up.
+At 4K (Seedance 2.5 only), a 5 s clip edited into a 5 s clip is billed 10 s
+at the 4K `-ref` rate: **4263**<!-- credits: seedance-2-5:8s:4k-ref@1.25 --> credits. The 4K file is
+H.265 (HEVC) 10-bit, kept as the model made it, with a browser-ready copy for
+previews.
 
 Duration is `Auto`, so an edit renders the source clip's own length. Once the
 clips are measured, the run is **reserved for the longest clip's length rounded

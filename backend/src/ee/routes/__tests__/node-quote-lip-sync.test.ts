@@ -193,6 +193,15 @@ describe("POST /v1/quote prices Lip Sync as its run reserves", () => {
   })
 })
 
+// Decided 2026-11-27: on Seedance 2.5, 2160p and UHD mean 4K — the quote and the run read them alike.
+describe("POST /v1/quote and the run read Seedance 2.5's 4K spellings as 4K", () => {
+  it.each(["4k", "2160p", "UHD"])("Seedance 2.5 Lip Sync at %s: the quote and the run hold the 8 s 4K row", async (resolution) => {
+    const { quote, identifier, reserved } = await quoteThenRun({ provider: "seedance-2-5", imageUrl: "https://cdn.example.com/face.png", audioUrl: "https://cdn.example.com/voice.mp3", resolution })
+    expect(identifier).toBe("seedance-2-5:8s:4k")
+    expect(quote).toMatchObject({ identifier, reserve: reserved })
+  })
+})
+
 describe("POST /v1/quote on LTX 2.5 Fast never fetches the face (decided 2026-11-24)", () => {
   it("a quote with a video as the face returns the voice's price, and the face is never fetched", async () => {
     faceProbe.calls = []

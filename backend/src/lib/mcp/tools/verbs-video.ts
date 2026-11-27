@@ -29,7 +29,7 @@ import {
 import { WIDGET_URI } from "../widgets/registrar.js"
 import { widgetModelOf } from "../widget-models.js"
 import { MODEL_CATALOG, modelIdsByKindMode, SEEDANCE_DRAFT_FINALIZE_PROVIDER, isSeedanceDraftCapable, VIDEO_UPSCALE_RESOLUTIONS } from "@nodaro/shared/model-catalog"
-import { lipSyncResolutions, lipSyncResolutionSummary, VIDEO_DYNAMIC_RANGES } from "@nodaro/shared/models"
+import { EXPLICIT_4K_ONLY_VIDEO_MODELS, explicitFourKOf, isFourKResolution, lipSyncResolutions, lipSyncResolutionSummary, VIDEO_DYNAMIC_RANGES } from "@nodaro/shared/models"
 import { VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, MOTION_TRANSFER_PROVIDERS, LIP_SYNC_PROVIDERS, VIDEO_TO_VIDEO_NODE_PROVIDERS, isSeedanceVideoEditProvider, videoToVideoProviderOf, SEEDANCE_VIDEO_EDIT_SHAPE, SEEDANCE_VIDEO_EDIT_TASK_TYPE, SEEDANCE_REFERENCE_TASK_TYPES, CAPTION_TRANSCRIBE_LANES, TOPAZ_VIDEO_FPS_MAX, TOPAZ_VIDEO_FPS_MIN, VIDEO_UPSCALE_PROVIDERS, NODARO_MOTION_ENGINES, TEXT_TO_VIDEO_PROVIDERS, VIDEO_GEN_PROVIDERS, resolveVideoModeForInputs, EXTEND_VIDEO_PROVIDERS, canonicalVideoProvider, extendHasSoundSwitch, isGrokExtendProvider, type ExtendVideoProvider, NODARO_VIDEO_UPSCALE_PROVIDER, NODARO_VIDEO_UPSCALE_MODES, TOPAZ_RHEA_VIDEO_UPSCALE_PROVIDER } from "@nodaro/shared/models"
 import { ALL_CAPTION_STYLES, CAPTION_LOOK_IDS, SUPPORTED_FONT_NAMES, CAPTION_MAX_WORDS_PER_LINE_MIN, CAPTION_MAX_WORDS_PER_LINE_MAX } from "@nodaro/shared/captions"
 import { COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDL_SOURCE_ROLES, resolveEditPlanSources, describeAudioSyncOffsetIssue, transcriptSpeakerLabels, cameraSwitchEdlProblem, cameraSwitchSpeakerMap, speakerMapResultOf, cleanSpeakerNames, CAMERA_SWITCH_BOUNDS } from "@nodaro/shared/edl"
@@ -153,6 +153,8 @@ const resolutionLines = (r: string): number => (r.toLowerCase() === "4k" ? 2160 
 /** The resolutions the URL models render, as their catalog entries declare them, ascending ("360p" < "1080p" < "4k"). */
 const URL_EXTEND_RESOLUTIONS = [...new Set(URL_EXTEND_MODELS.flatMap((p) => MODEL_CATALOG[p]?.resolutions ?? []))]
   .sort((a, b) => resolutionLines(a) - resolutionLines(b))
+  // Seedance 2.5 Extend reads 2160p and uhd as 4k (decided 2026-11-27); the route refuses them elsewhere.
+  .concat(URL_EXTEND_MODELS.some((p) => EXPLICIT_4K_ONLY_VIDEO_MODELS.has(p)) ? ["2160p", "uhd"] : [])
 /** "a or b", "a, b or c". */
 const orList = (items: readonly string[]): string =>
   items.length > 1 ? `${items.slice(0, -1).join(", ")} or ${items[items.length - 1]}` : (items[0] ?? "")
@@ -1686,7 +1688,9 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
   const remakeEngines = videoRemakeOffered(session) ? NODARO_MOTION_ENGINES : []
   const REMAKE_ENGINE_WHEN_NO_MODEL: (typeof NODARO_MOTION_ENGINES)[number] = "nodaro-prism"
   // The sizes this tool's own models take; Video Remake's engines also deliver 4K, listed only where they are offered.
-  const V2V_OWN_RESOLUTIONS: readonly ("480p" | "720p" | "1080p" | "4k")[] = ["480p", "720p", "1080p"]
+  // Seedance 2.5 renders 4K too (decided 2026-11-25), and reads 2160p / uhd as 4k (decided 2026-11-27).
+  const V2V_OWN_RESOLUTIONS = ["480p", "720p", "1080p", "4k", "2160p", "uhd"] as const
+  const VIDEO_REMAKE_SIZES_AND_4K_SPELLINGS = [...VIDEO_REMAKE_DELIVERED_SIZES, "2160p", "uhd"] as const
   const DIRECT_EDIT_INSTEAD = 'To run an instruction edit at once instead, call modify_video again with model: "seedance-2-5" (or another edit model).'
   server.registerTool(
     "modify_video",
@@ -1742,7 +1746,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
             `(${videoToVideoClipPriceHint()}).`,
           ),
         duration: z.enum(["5", "10"]).optional().describe("Wan / Wan Flash only — 5s or 10s output."),
-        resolution: z.enum(remakeEngines.length ? VIDEO_REMAKE_DELIVERED_SIZES : V2V_OWN_RESOLUTIONS).optional().describe(`seedance-2-5 (480p-1080p; 480p when no model is named), seedance-2-5-flash (480p/720p), Wan / Wan Flash / happyhorse-edit (720p/1080p)${remakeEngines.length ? "; nodaro-prism / nodaro-pulse: the size delivered, 720p (default), 1080p or 4k" : ""}.`),
+        resolution: z.enum(remakeEngines.length ? VIDEO_REMAKE_SIZES_AND_4K_SPELLINGS : V2V_OWN_RESOLUTIONS).optional().describe(`seedance-2-5 (480p-4k, 2160p/uhd = 4k; 480p when no model is named), seedance-2-5-flash (480p/720p), Wan / Wan Flash / happyhorse-edit (720p/1080p)${remakeEngines.length ? "; nodaro-prism / nodaro-pulse: the size delivered, 720p (default), 1080p or 4k" : ""}.`),
         aspect_ratio: z
           .enum(["16:9", "9:16", "4:3", "3:4", "1:1", "21:9"])
           .optional()
@@ -1795,6 +1799,10 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
       if (remakeEngine) {
         // A named engine that is not offered: refused before anything is read.
         if (withheld) return withheld
+        // 2160p / uhd are Seedance 2.5's spellings of 4k, not Video Remake's.
+        if (args.resolution === "2160p" || args.resolution === "uhd") {
+          return { content: [{ type: "text", text: `Model ${remakeEngine} takes resolution 480p, 720p, 1080p or 4k.${instead}` }], isError: true }
+        }
         // Video Remake takes pictures as roles and fixed references, never as these lists:
         // refused rather than quoted without them.
         if (args.reference_image_url || args.reference_image_urls || args.reference_video_urls || args.reference_audio_urls) {
@@ -1834,7 +1842,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           roles: [],
           post_prompt: args.prompt,
           engine: remakeEngine,
-          ...(args.resolution ? { resolution: args.resolution } : {}),
+          ...(args.resolution ? { resolution: args.resolution as (typeof VIDEO_REMAKE_DELIVERED_SIZES)[number] } : {}),
           ...(args.draft !== undefined ? { draft: args.draft } : {}),
         }
         const answer = await videoRemakeQuote({ session, fastify }, run, {
@@ -1846,11 +1854,12 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         if (answer.isError && instead) return { ...answer, content: answer.content.map((c, i) => (i === 0 ? { ...c, text: `${c.text}${instead}` } : c)) }
         return answer
       }
-      // 4K is a size Video Remake's engines deliver; no model of this tool's own renders it.
-      if (args.resolution === "4k") {
-        return errorResult(400, JSON.stringify({ error: { code: "validation_error", message: "resolution 4k is offered on nodaro-prism and nodaro-pulse only." } }))
-      }
       const provider = videoToVideoProviderOf(args.model)
+      // 4K: Video Remake's engines deliver it, and of this tool's own models only
+      // Seedance 2.5 renders it (decided 2026-11-25; 2160p / uhd read as 4k, 2026-11-27).
+      if (isFourKResolution(args.resolution) && explicitFourKOf(provider, args.resolution) === undefined) {
+        return errorResult(400, JSON.stringify({ error: { code: "validation_error", message: "resolution 4k is offered on seedance-2-5, nodaro-prism and nodaro-pulse only." } }))
+      }
       // Seedance edits a REFERENCE video (no v2v endpoint): dispatch through the
       // one Seedance reference-video lane, in edit shape, the clip as {video:1}.
       if (!isSeedanceVideoEditProvider(provider) && (args.reference_image_urls || args.reference_video_urls || args.reference_audio_urls)) {

@@ -314,6 +314,15 @@ describe("/v1/video-to-video with a Seedance edit model", () => {
     expect(quote.expected).toBe(mk(Math.ceil(42.5 * 20)))
   })
 
+  // Decided 2026-11-27: on Seedance 2.5, 2160p and UHD mean 4K — the quote and the run read them alike.
+  it.each(["4k", "2160p", "UHD"])("at %s: the quote and the run both price the 4K edit id", async (resolution) => {
+    const { seedanceVideoEditCreditId } = await import("@nodaro/shared/credits")
+    const { quote, identifier, reserved } = await quoteThenRun("video-to-video", { ...EDIT, resolution })
+    expect(identifier).toBe(seedanceVideoEditCreditId("seedance-2-5", "4k"))
+    expect(quote.identifier).toBe(identifier)
+    expect(quote.reserve).toBe(reserved)
+  })
+
   it("runs on the reference lane with the edit shape — the same job the text-to-video edit makes", async () => {
     const { videoQueue } = await import("../../../lib/queue.js")
     const app = await buildApp()

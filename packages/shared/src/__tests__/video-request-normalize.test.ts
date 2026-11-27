@@ -27,7 +27,11 @@ describe("normalizeVideoRequestParams", () => {
   // R7: nearest band, not the cheapest. A 4k request on a 1080p-max model is
   // 1080p, never 480p.
   it("snaps an off-list resolution to the NEAREST declared band", () => {
-    expect(normalizeVideoRequestParams("seedance-2-5", { resolution: "4k" }).resolution).toBe("1080p")
+    expect(normalizeVideoRequestParams("seedance-2-5-flash", { resolution: "4k" }).resolution).toBe("720p")
+    // Seedance 2.5 renders 4K (decided 2026-11-25), and only an explicit 4K is
+    // 4K on it: an off-list value snaps among the bands below it.
+    expect(normalizeVideoRequestParams("seedance-2-5", { resolution: "4k" }).resolution).toBe("4k")
+    expect(normalizeVideoRequestParams("seedance-2-5", { resolution: "4K" }).resolution).toBe("4k")
     expect(normalizeVideoRequestParams("seedance-2-5", { resolution: "2k" }).resolution).toBe("1080p")
     expect(normalizeVideoRequestParams("seedance-2-5", { resolution: "360p" }).resolution).toBe("480p")
   })
@@ -39,7 +43,9 @@ describe("normalizeVideoRequestParams", () => {
   // exact snapped value, not membership — R7: the nearest band is 1080p, and a
   // `toContain` pin would have hidden a silent downgrade to 480p.
   it("snaps the off-list seedance-2-5 resolutions the t2v route admits, to the NEAREST band", () => {
-    for (const bad of ["2k", "4k", "1440p"]) {
+    // 2160p is a 4K spelling on Seedance 2.5 (decided 2026-11-27), read as 4k.
+    expect(normalizeVideoRequestParams("seedance-2-5", { resolution: "2160p" }).resolution).toBe("4k")
+    for (const bad of ["2k", "1440p", "8K"]) {
       expect(normalizeVideoRequestParams("seedance-2-5", { resolution: bad }).resolution).toBe("1080p")
     }
   })

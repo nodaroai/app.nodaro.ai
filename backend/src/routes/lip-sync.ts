@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
+import { fourKSpellingPreHandler } from "../lib/four-k-spelling.js"
 import { z } from "zod"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { insertJob } from "../lib/insert-job.js"
@@ -372,7 +373,8 @@ export function lipSyncRateLimitSkips(req: Pick<FastifyRequest, "body">): boolea
  * measures the audio and checks a reference voice line.
  */
 export const lipSyncPricing: RoutePricing = {
-  prechecks: [retiredLipSyncProviderPreHandler, lipSyncResolutionPreHandler],
+  // A 4K spelling (`2160p`, `UHD`) on Seedance 2.5 is read as `4k` first (decided 2026-11-27).
+  prechecks: [fourKSpellingPreHandler((b) => (typeof b.provider === "string" ? b.provider : undefined)), retiredLipSyncProviderPreHandler, lipSyncResolutionPreHandler],
   modelResolver: (req) => resolveLipSyncIdentifier(req.body as Record<string, unknown> | undefined, lipSyncMeasureOf(req), req.drivingAudio),
   opts: {
     runModel: jobRunModel("lip-sync"),

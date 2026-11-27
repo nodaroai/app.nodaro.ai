@@ -25,12 +25,21 @@ const ID = "seedance-2-5"
  * reality so a future "the spec sheet says 4K/180s" edit has to re-probe first.
  *
  * Re-probed 2026-08-17 (KIE "Seedance 2.5 now supports 1080P" release):
- * 1080p passes resolution validation; 1440p/2k/4k are still rejected with
- * "not within the range of allowed options", and duration 31 is still refused.
+ * 1080p passes resolution validation and duration 31 is still refused.
+ * Re-probed 2026-11-22: native 4K renders (3840x2160 HEVC Main 10); 2k and
+ * 1440p are not offered.
  */
-describe("seedance-2-5 catalog (probe-verified 2026-08-08, re-probed 2026-08-17)", () => {
-  it("is 480p/720p/1080p — KIE still rejects 4k/2k/1440p the same way it rejects a nonsense value", () => {
-    expect(MODEL_CATALOG[ID].resolutions).toEqual(["480p", "720p", "1080p"])
+describe("seedance-2-5 catalog (probe-verified 2026-08-08, re-probed 2026-08-17 and 2026-11-22)", () => {
+  it("is 480p/720p/1080p/4k — native 4K since 2026-11-25, no 2k or 1440p", () => {
+    expect(MODEL_CATALOG[ID].resolutions).toEqual(["480p", "720p", "1080p", "4k"])
+  })
+
+  it("no other Seedance model gains 4K: only the full Seedance 2 had it before", () => {
+    for (const p of ["seedance-2-fast", "seedance-2-mini", "seedance-2-5-flash", "seedance-2-5-flash-extend", "seedance-2-0-extend"]) {
+      expect(MODEL_CATALOG[p]?.resolutions ?? [], p).not.toContain("4k")
+    }
+    expect(MODEL_CATALOG["seedance-2"].resolutions).toContain("4k")
+    expect(MODEL_CATALOG["seedance-2-5-extend"].resolutions).toEqual(["480p", "720p", "1080p", "4k"])
   })
 
   it("runs 4-30s contiguously — 30 is the probed ceiling (31 was rejected)", () => {
@@ -110,8 +119,18 @@ describe("seedance-2-5 pricing identifiers", () => {
     expect(build(30, "1080p")).toBe("seedance-2-5:30s:1080p")
   })
 
-  it("clamps an unsupported resolution to the top real tier so the id is always seeded", () => {
-    expect(build(8, "4k")).toBe("seedance-2-5:8s:1080p")
+  it("prices 4k at its own tier, with its -ref twin, at every length", () => {
+    expect(build(4, "4k")).toBe("seedance-2-5:4s:4k")
+    expect(build(8, "4k")).toBe("seedance-2-5:8s:4k")
+    expect(build(30, "4k")).toBe("seedance-2-5:30s:4k")
+    expect(build(10, "4k", true)).toBe("seedance-2-5:10s:4k-ref")
+  })
+
+  it("prices a size the model does not list at a seeded tier, never 4k", () => {
+    for (const res of ["2k", "1440p", "8K"]) expect(build(8, res)).not.toContain(":4k")
+    // 2160p and UHD are 4K spellings (decided 2026-11-27), priced on the 4K row.
+    for (const res of ["2160p", "UHD"]) expect(build(8, res)).toBe("seedance-2-5:8s:4k")
+    expect(buildVideoCreditModelIdentifier("seedance-2", 8, undefined, undefined, undefined, "2160p", false)).toBe("seedance-2:8s:480p")
   })
 
   it("selects the cheaper -ref ladder when a reference video is wired", () => {
@@ -122,7 +141,7 @@ describe("seedance-2-5 pricing identifiers", () => {
   it("resolves every catalog duration x resolution x ref-mode to a distinct tier", () => {
     const seen = new Set<string>()
     for (const d of MODEL_CATALOG[ID].durations!) {
-      for (const res of ["480p", "720p", "1080p"]) {
+      for (const res of ["480p", "720p", "1080p", "4k"]) {
         for (const ref of [false, true]) {
           const identifier = build(d, res, ref)
           expect(identifier).toBe(`${ID}:${d}s:${res}${ref ? "-ref" : ""}`)
@@ -130,7 +149,7 @@ describe("seedance-2-5 pricing identifiers", () => {
         }
       }
     }
-    // 27 durations x 3 resolutions x 2 ref-modes, none collapsing onto another.
-    expect(seen.size).toBe(162)
+    // 27 durations x 4 resolutions x 2 ref-modes, none collapsing onto another.
+    expect(seen.size).toBe(216)
   })
 })

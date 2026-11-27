@@ -1663,6 +1663,7 @@ export const de: ChromeDict = {
   "vidcfg.nodaroModeTransparentUnavailableNotice": "Diese Installation kann Transparent nicht ausführen, daher wird ein Lauf in diesem Modus abgelehnt. Wähle Sharp, um ihn hier auszuführen.",
   "vidcfg.descNodaroUpscale": "Nodaro Video Upscale bringt den Clip ohne Zuschnitt in einen 1080p-, 2K- oder 4K-Frame und behält Bildrate, Länge und Ton bei. Es nimmt Clips mit bis zu 60 Sekunden und 50 MB an. Der Preis gilt pro Sekunde des Clips, daher ist der angezeigte Wert eine Schätzung, bis die Ausführung den Clip misst; der reservierte Betrag ist der berechnete Betrag.",
   "vidcfg.nodaroUpscaleTooLong": "Nodaro Video Upscale nimmt Clips mit bis zu {max} s an – dieser hat {d} s. Kürze ihn, sonst wird die Ausführung abgelehnt.",
+  "vidcfg.extend4kNeeds4kSource": "{model} verlängert in 4K nur eine Quelle, die bereits 4K ist (kurze Seite mindestens {min} px) – diese hat {w}×{h}. Wähle 1080p oder weniger, sonst wird die Ausführung abgelehnt.",
   "vidcfg.topazLegacyFactorNote": "Als {factor}× gespeichert – gerendert wird in der Auflösung, die der Clipgröße mal {factor} am nächsten kommt. Wähle eine Auflösung, um sie exakt festzulegen.",
   "vidcfg.depthSize.small": "Klein (am schnellsten)",
   "vidcfg.depthSize.base": "Basis",
