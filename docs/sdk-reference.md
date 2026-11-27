@@ -1503,7 +1503,7 @@ type TrashEntry =
 Newest first. A **removed** item stays until `sessions.restoreItem(session.id,
 job.id)` or `sessions.removeItem(session.id, job.id, { forever: true })`. A
 **deleted** job stays until `purgeAt` (30 days after `deletedAt`), then it is
-deleted for good (a copy saved to the Library stays); `jobs.restore(job.id)` brings it back into
+deleted for good (a copy saved to the Library stays; a video's kept original goes unless a Library item of that video, another job or a run in progress uses it); `jobs.restore(job.id)` brings it back into
 every session it was in, `jobs.delete(job.id, { forever: true })` deletes it
 now. A removed item whose job you also deleted is listed once, as the deleted
 job. A job no session ever held has no tool, so `tool` leaves it out: pass

@@ -1273,7 +1273,7 @@ Removing an item from a session and deleting a job both go to the **Trash**:
   lists and reads by id, status polls, the gallery, session feeds and previews,
   MCP tools and the CLI — and stays restorable for 30 days
   (`POST /v1/jobs/:id/restore` puts it back in every session it was in). After
-  30 days it is deleted for good, as a delete always was (the job and its private media; a copy saved to the Library stays). `DELETE /v1/jobs/:id?forever=true`
+  30 days it is deleted for good, as a delete always was (the job and its private media; a copy saved to the Library stays). A video's kept original (`originalVideoUrl`) is deleted with it unless a Library item of that video, another job or a run still in progress uses it; the preview and the job's other result files stay. `DELETE /v1/jobs/:id?forever=true`
   deletes a job already in the Trash for good now, and answers `409 not_in_trash`
   for a live one. A job that is still running keeps running — cancel it first.
   Nothing is refunded on a delete or when it is deleted for good. OAuth apps need

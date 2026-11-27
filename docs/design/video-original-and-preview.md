@@ -32,7 +32,7 @@ The original keeps its own container and content type (`.mp4`, `.mov`,
 `.webm`, `.mkv`). It is stored at `videos/<id>-master.<ext>`, next to the
 preview at `videos/<id>.mp4`, so it is part of the same job. Retention, an
 app's expunge and the result review find it the same way they find the
-preview (deleting a job for good is the exception: see Storage quota). An
+preview (deleting a job for good finds it differently: see Storage quota). An
 original is kept only for a store with a job of its
 own: a store id that names no job, or names another job than the one the
 worker is running (a plugin passing some other id), keeps none.
@@ -100,17 +100,42 @@ pass):
   its object deleted;
 - an app's expunge, which claims before it clears the job's record, and stops
   before clearing anything when a claim does not run;
-- not yet: deleting a job for good (below) leaves its original, as it leaves
-  its preview;
+- deleting a job for good (below), which cannot claim: the delete itself
+  reads the record, and the original goes unless something still uses it;
 - a result-gate block that deletes the job's files;
 - a job that failed or was cancelled (below).
 
 The retention sweep and an app's expunge give back only recorded bytes: a
 file with no record gives nothing back.
 
-Deleting a job for good (the Trash's "delete forever", the 30-day purge)
-deletes neither its preview nor its original, as a job delete never deleted
-its stored files; both stay charged.
+Deleting a job for good (the Trash's "delete forever", the 30-day purge, a
+workflow or project delete that takes its jobs with it) destroys its record,
+so the delete itself reads it, under the row's lock and in the same
+transaction, and answers both the bytes each owner was charged for it and the
+keys it held. The bytes are given back once, as the delete answered them. Each
+recorded file (a kept original, a watermarked Extend's raw clip) is then
+deleted, giving nothing back a second time, unless something still uses it:
+
+- a library row names it; or, for an original, a library row names the job's
+  preview or another of its files (the original goes with that item, when the
+  item is deleted). A raw clip is not kept for a library item: nothing in the
+  library reads it;
+- the job delivered it as its result (it completed on its original);
+- another job's output names it, under the public host or the fallback host;
+- a job still in flight names the deleted job, or one of its files, in its
+  input (asked before the other jobs' outputs, so a job that completes
+  between the two questions is still seen);
+- it is held as evidence, it was made by the relay target, or the deployment
+  deletes nothing.
+
+A lookup that fails keeps the file. A delete storage does not confirm goes to
+the storage-delete retry pass, which checks less before it tries again: a
+library row naming that very file, and a job made since the failure linking
+its public url. A delete the database refuses deletes nothing, and the answer
+covers only the jobs the delete really took: a job whose workflow or parent
+moved away while the delete ran keeps its files and its charge. The job's preview
+and its other result files stay: a workflow, a copy of one and other places
+can still show their address.
 
 A job that ends while its result is stored never keeps the original:
 
