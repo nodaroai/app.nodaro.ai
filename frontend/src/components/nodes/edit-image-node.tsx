@@ -185,7 +185,7 @@ function EditImageNodeComponent({ id, data, selected }: NodeProps) {
               <Expand className="w-3.5 h-3.5" />
             </button>
             <button type="button" aria-label={t("common.download")} className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-              onClick={(e) => { e.stopPropagation(); const a = document.createElement('a'); a.href = `/v1/image-proxy?url=${encodeURIComponent(activeUrl!)}&download=1`; a.download = `${nodeData.label || 'image'}.png`; a.click() }} title={t("common.download")}>
+              onClick={(e) => { /* download-site: an image result */ e.stopPropagation(); const a = document.createElement('a'); a.href = `/v1/image-proxy?url=${encodeURIComponent(activeUrl!)}&download=1`; a.download = `${nodeData.label || 'image'}.png`; a.click() }} title={t("common.download")}>
               <Download className="w-3.5 h-3.5" />
             </button>
             <button type="button" aria-label={t("cfgshared.copyUrl")} className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"

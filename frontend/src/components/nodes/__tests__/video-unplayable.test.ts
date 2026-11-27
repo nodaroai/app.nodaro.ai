@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest"
 import { act, renderHook } from "@testing-library/react"
-import { isPreviewUnavailableUrl, showsUnplayableNotice, unproxiedUrl, videoDownloadExtension } from "../video-unplayable"
+import { isPreviewUnavailableUrl, showsUnplayableNotice, unproxiedUrl } from "../video-unplayable"
 import { useVideoUnplayable } from "../video-unplayable-notice"
 
 const ORIGINAL = "https://cdn.test/videos/11111111-2222-4333-8444-555555555555-master.mov"
@@ -20,12 +20,6 @@ describe("the preview-unavailable flag on a result url", () => {
     expect(isPreviewUnavailableUrl(ORIGINAL)).toBe(true)
     expect(isPreviewUnavailableUrl(PREVIEW)).toBe(false)
     expect(isPreviewUnavailableUrl(undefined)).toBe(false)
-  })
-
-  it("a download is named by the real file's extension, through the proxy or a relative url too", () => {
-    expect(videoDownloadExtension(PROXIED)).toBe("mov")
-    expect(videoDownloadExtension("/videos/11111111-2222-4333-8444-555555555555-master.webm")).toBe("webm")
-    expect(videoDownloadExtension(PREVIEW)).toBe("mp4")
   })
 
   it("is seen through the app's proxy", () => {

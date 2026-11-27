@@ -38,6 +38,7 @@ import { isValidVideoSfxConnection } from "@/lib/video-sfx-handles"
 import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types"
 import { copyToClipboard, computeDeleteResultUpdates } from "@/lib/utils"
 import type { GeneratedResult, VideoSfxNodeData } from "@/types/nodes"
+import { downloadVideoFile } from "@/lib/video-result-download"
 
 // Stable, module-level `accepts` predicates for each typed handle. Defining
 // these outside the component avoids creating fresh arrow refs on every
@@ -239,7 +240,7 @@ function VideoSfxNodeComponent({ id, data, selected }: NodeProps) {
                   if (shouldPlay) v.play().catch(() => {})
                 }}
               />
-              {unplayableVideo.unplayable && activeUrl && <VideoUnplayableNotice url={activeUrl} label={(nodeData.label as string | undefined) ?? ""} />}
+              {unplayableVideo.unplayable && activeUrl && <VideoUnplayableNotice url={activeUrl} />}
               {/* Top-right: delete */}
               {results.length > 0 && (
                 <div className="absolute top-2 right-2 opacity-0 group-hover/video:opacity-100 transition-opacity">
@@ -277,10 +278,7 @@ function VideoSfxNodeComponent({ id, data, selected }: NodeProps) {
                   className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                   onClick={(e) => {
                     e.stopPropagation()
-                    const a = document.createElement("a")
-                    a.href = `/v1/image-proxy?url=${encodeURIComponent(activeUrl)}&download=1`
-                    a.download = `${(nodeData.label as string) || "video-sfx"}.mp4`
-                    a.click()
+                    downloadVideoFile(activeUrl)
                   }}
                   title={t("cfgshared.download")}
                 >

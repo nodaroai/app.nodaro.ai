@@ -20,6 +20,7 @@ import { WaveformAudioPlayer } from "@/components/audio-player"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { ComponentNodeData } from "@/types/nodes"
 import type { ComponentHandle } from "@nodaro/shared/apps"
+import { downloadVideoFile, isStoredVideoAddress } from "@/lib/video-result-download"
 
 const HANDLE_TYPE_ICON: Record<ComponentHandle["type"], React.ReactNode> = {
   image: <ImageIcon />,
@@ -139,6 +140,11 @@ function ComponentNodeComponent({ id, data, selected }: NodeProps) {
 
   const handleDownload = () => {
     if (!previewValue || typeof previewValue !== "string") return
+    // A video result: its kept original when it has one (lib/video-result-download.ts).
+    if (isStoredVideoAddress(previewValue)) {
+      downloadVideoFile(previewValue)
+      return
+    }
     const a = document.createElement("a")
     a.href = `/v1/image-proxy?url=${encodeURIComponent(previewValue)}&download=1`
     a.download = ""

@@ -607,7 +607,11 @@ rest of the node, which is deliberate: a preset should carry its look.
 
 ## Output files
 
-Some models deliver video a browser cannot show correctly, such as HEVC in 10-bit or an HDR (HLG or PQ) picture. Nodaro keeps the model's file untouched as the result's **original** and plays and passes on a browser-safe H.264 copy. An HDR original's copy is tone-mapped to SDR. The original is in the job's output as `originalVideoUrl` (API, SDK and MCP). A file that is already H.264 8-bit is kept as it is, and a watermarked run keeps only the watermarked file. If the copy cannot be made, the result is the original alone, and the player offers Download if your browser cannot play it. See [Video originals and previews](../../design/video-original-and-preview.md).
+Some models deliver video a browser cannot show correctly, such as HEVC in 10-bit or an HDR (HLG or PQ) picture. Nodaro keeps the model's file untouched as the result's **original** and plays and passes on a browser-safe H.264 copy. An HDR original's copy is tone-mapped to SDR. The original is in the job's output as `originalVideoUrl` (API, SDK and MCP).
+
+**Download gives the original**, everywhere the app offers it (the node, the editor's Library browser, job history, app results and the agent widgets): the file as the model made it, with its own extension (`.mp4`, `.mov`, `.webm` or `.mkv`). For some models that is HEVC 10-bit or HDR, which not every player can open; the app itself plays the browser-friendly copy.
+
+A file that is already H.264 8-bit is kept as it is, and a watermarked run keeps only the watermarked file. If the copy cannot be made, the result is the original alone, and the player offers Download if your browser cannot play it. See [Video originals and previews](../../design/video-original-and-preview.md).
 
 ## Credit pricing
 

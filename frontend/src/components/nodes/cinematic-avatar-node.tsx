@@ -23,6 +23,7 @@ import { resolveCinematicCreditId } from "@nodaro/shared/credits"
 import type { CinematicAvatarData } from "@/types/nodes"
 import { isValidCinematicAvatarConnection } from "@/lib/video-producer-handles"
 import { isVisualPickerType } from "@/lib/parameter-picker-types"
+import { downloadVideoFile } from "@/lib/video-result-download"
 
 // Per-input drop predicates → drive the drag-to-connect "valid candidate"
 // glow on each input pip (mirrors ai-avatar). Same predicate the canvas drop
@@ -181,7 +182,7 @@ function CinematicAvatarNodeComponent({ id, data, selected }: NodeProps) {
               loop={shouldPlay}
               playsInline
             />
-            {unplayableVideo.unplayable && activeUrl && <VideoUnplayableNotice url={activeUrl} label={(nodeData.label as string | undefined) ?? ""} />}
+            {unplayableVideo.unplayable && activeUrl && <VideoUnplayableNotice url={activeUrl} />}
 
             {/* Version badge */}
             {results.length > 1 && (
@@ -216,7 +217,7 @@ function CinematicAvatarNodeComponent({ id, data, selected }: NodeProps) {
               </button>
               <button type="button" aria-label={t("cfgshared.download")}
                 className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-                onClick={(e) => { e.stopPropagation(); const a = document.createElement("a"); a.href = `/v1/image-proxy?url=${encodeURIComponent(activeUrl!)}&download=1`; a.download = `${nodeData.label || "cinematic-avatar"}.mp4`; a.click() }}
+                onClick={(e) => { e.stopPropagation(); downloadVideoFile(activeUrl!) }}
                 title={t("cfgshared.download")}>
                 <Download className="w-3.5 h-3.5" />
               </button>

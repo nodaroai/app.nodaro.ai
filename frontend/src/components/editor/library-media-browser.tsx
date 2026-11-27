@@ -30,6 +30,7 @@ import {
 } from "@/lib/api"
 import { queryKeys } from "@/lib/query-keys"
 import { cn } from "@/lib/utils"
+import { openVideoDownload } from "@/lib/video-result-download"
 import { CachedImage } from "@/components/ui/cached-image"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { useVirtualGrid, rowItems, GRID_BREAKPOINTS } from "@/hooks/use-virtual-grid"
@@ -194,14 +195,19 @@ export function LibraryMediaBrowser({
   }, [user?.id, removeMutation])
 
   const handleDownload = useCallback((asset: LibraryAsset) => {
-    const a = document.createElement("a")
-    a.href = asset.url
-    a.download = asset.filename
-    a.target = "_blank"
-    a.rel = "noopener noreferrer"
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
+    const asBefore = () => {
+      const a = document.createElement("a")
+      a.href = asset.url
+      a.download = asset.filename
+      a.target = "_blank"
+      a.rel = "noopener noreferrer"
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+    }
+    // A video item: the original kept beside it when its job names one (lib/video-result-download.ts).
+    if (asset.type === "video") openVideoDownload(asset.url, asBefore)
+    else asBefore()
   }, [])
 
   const handlePromote = useCallback(async (asset: LibraryAsset) => {

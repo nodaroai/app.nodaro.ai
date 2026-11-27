@@ -1,4 +1,6 @@
 import { mcpServerInfo, widgetJs } from "../deployment-name.js"
+import { config } from "../../config.js"
+import { publishedStorageOrigins } from "../../cdn-host.js"
 
 /**
  * Returns inline JS implementing the MCP UI client protocol over
@@ -208,6 +210,47 @@ export function uiProtocolShim(): string {
         notifySizeChange: function() {
           setTimeout(maybeEmitSize, 0);
         }
+      };
+    })();
+  </script>`
+}
+
+/**
+ * The path of a stored video result's address, as the server reads one
+ * (lib/video-original-keys.ts): a preview `videos/<id>.mp4` or a kept original
+ * `videos/<id>-master.<ext>`, `<id>` headed by its job's UUID. The same shape
+ * the app's Download asks the server about (frontend
+ * lib/video-result-download.ts).
+ */
+export const STORED_VIDEO_PATH = String.raw`/videos/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}[^/]*?(?:\.mp4|-master\.(?:mp4|mov|webm|mkv))$`
+
+/**
+ * Inline JS for a widget's Download of a result (decided 2026-11-22: Download
+ * gives the original video file): `resultDownloadUrl(url)` is the link a
+ * Download opens. An address of a stored video on the deployment's published
+ * storage origin (`publishedStorageOrigins`, one the download route accepts) opens the
+ * app's download route (`<pagesBase>/v1/download?original=1&open=1`), which
+ * saves the original kept beside it when its job names one, and otherwise
+ * sends the tab on to the file itself — what the button opened before. Any
+ * other address is itself.
+ */
+export function downloadLinkShim(pagesBase: string, storageOrigins: readonly string[] = publishedStorageOrigins(config.R2_PUBLIC_URL ?? "")): string {
+  return `<script>
+    (function() {
+      'use strict';
+      var STORED_VIDEO = new RegExp(${JSON.stringify(STORED_VIDEO_PATH)}, 'i');
+      var STORAGE_ORIGINS = ${JSON.stringify(storageOrigins)};
+      var DOWNLOAD_ROUTE = ${JSON.stringify(`${pagesBase.replace(/\/+$/, "")}/v1/download`)};
+      window.resultDownloadUrl = function(url) {
+        try {
+          var parsed = new URL(url);
+          if (STORAGE_ORIGINS.indexOf(parsed.origin) !== -1 && STORED_VIDEO.test(parsed.pathname)) {
+            return DOWNLOAD_ROUTE + '?url=' + encodeURIComponent(url) + '&original=1&open=1';
+          }
+        } catch (e) {
+          // Not an address: itself.
+        }
+        return url;
       };
     })();
   </script>`

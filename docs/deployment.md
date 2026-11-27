@@ -2450,7 +2450,7 @@ logo is dropped with a warning and the rest of `brand` is kept.
   `sso`. Accepts the same forms as `imports.links`; any other value reads as
   `true`.
 
-`/config.js` also carries one key the profile does not set. `mediaOrigin` is
+`/config.js` also carries two keys the profile does not set. `mediaOrigin` is
 the `https://` origin of `R2_PUBLIC_URL` (any path dropped): the host a
 white-label deployment serves its users' media from. It is written only when
 the profile says `header: "white-label"`. The white-label header then draws
@@ -2459,6 +2459,14 @@ apps read the same key through the contract. With any other header, or an
 `R2_PUBLIC_URL` that is not `https://`, the key is absent and `/config.js` is
 unchanged. There is nothing to set: it follows `R2_PUBLIC_URL` at the next
 restart.
+
+`storageOrigins` lists the `https://` origin of `R2_PUBLIC_URL`, which
+`GET /v1/download` accepts. The app's video Download asks the server for a
+result's kept original only for an address on it; every other address keeps
+the download it always had, an address on `R2_PUBLIC_FALLBACK_DOMAIN` included
+(that host is never published, and the server accepts it as before). With
+storage on plain `http://` (a local install) the key is absent. There is
+nothing to set: it follows `R2_PUBLIC_URL` at the next restart.
 
 On a deployment whose pages have a host of their own, `/config.js` also
 carries `flowUiOrigin` and `linkOrigin`, and `legacyUiHosts` too once the

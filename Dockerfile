@@ -1006,6 +1006,10 @@ RUNTIME_SURFACE_PROFILE_RESOLVED="$(node /app/backend/dist/lib/print-surface-pro
 # Same printer, same rules: "" unless the surface is white-label and its public
 # media URL is https (the backend reads both). A failure is the same "".
 RUNTIME_MEDIA_ORIGIN_RESOLVED="$(node /app/backend/dist/lib/print-surface-profile.js --media-origin)" || RUNTIME_MEDIA_ORIGIN_RESOLVED=""
+# Same printer, same rules: the storage origin the deployment publishes to the
+# browser (R2_PUBLIC_URL's https origin, which the download routes accept; never
+# the fallback host), so its video Download asks the server only about that. "" when none.
+RUNTIME_STORAGE_ORIGINS_RESOLVED="$(node /app/backend/dist/lib/print-surface-profile.js --storage-origins)" || RUNTIME_STORAGE_ORIGINS_RESOLVED=""
 # PUBLIC_URL is single-valued, so on a studio answering on more than one
 # hostname it would send every browser's SSE to whichever host it names —
 # cross-origin from all the others. The "/" sentinel says "same origin as the
@@ -1014,7 +1018,7 @@ if [ "$PUBLIC_URL_SAME_ORIGIN" = "true" ]; then RUNTIME_API_URL_EFFECTIVE="/"; e
 # The writer prints the /config.js line to stdout (log line to stderr), so the
 # redirect captures only the payload; on failure the file is left empty, which
 # the frontend reads as "no override" → build-time values.
-if ! RUNTIME_API_URL="$RUNTIME_API_URL_EFFECTIVE" RUNTIME_SUPABASE_URL="$FRONTEND_SUPABASE_URL_EFFECTIVE" RUNTIME_SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" RUNTIME_FREECUT_URL="$FREECUT_URL" RUNTIME_AUDIOMASS_URL="$AUDIOMASS_URL" RUNTIME_DEFAULT_LOCALE="$DEFAULT_LOCALE" RUNTIME_SURFACE_PROFILE="$RUNTIME_SURFACE_PROFILE_RESOLVED" RUNTIME_PREVIEW_STOP_RULE="$PREVIEW_STOP_RULE_ENABLED" RUNTIME_MEDIA_ORIGIN="$RUNTIME_MEDIA_ORIGIN_RESOLVED" RUNTIME_FLOW_UI_ORIGIN="$FLOW_UI_ORIGIN" RUNTIME_LEGACY_UI_HOSTS="$LEGACY_UI_HOSTS" RUNTIME_LINK_ORIGIN="$PUBLIC_URL" \
+if ! RUNTIME_API_URL="$RUNTIME_API_URL_EFFECTIVE" RUNTIME_SUPABASE_URL="$FRONTEND_SUPABASE_URL_EFFECTIVE" RUNTIME_SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" RUNTIME_FREECUT_URL="$FREECUT_URL" RUNTIME_AUDIOMASS_URL="$AUDIOMASS_URL" RUNTIME_DEFAULT_LOCALE="$DEFAULT_LOCALE" RUNTIME_SURFACE_PROFILE="$RUNTIME_SURFACE_PROFILE_RESOLVED" RUNTIME_PREVIEW_STOP_RULE="$PREVIEW_STOP_RULE_ENABLED" RUNTIME_MEDIA_ORIGIN="$RUNTIME_MEDIA_ORIGIN_RESOLVED" RUNTIME_STORAGE_ORIGINS="$RUNTIME_STORAGE_ORIGINS_RESOLVED" RUNTIME_FLOW_UI_ORIGIN="$FLOW_UI_ORIGIN" RUNTIME_LEGACY_UI_HOSTS="$LEGACY_UI_HOSTS" RUNTIME_LINK_ORIGIN="$PUBLIC_URL" \
   node /app/tools/build-runtime-config.mjs > /app/frontend/dist/config.js; then
   echo "[start.sh] WARNING: could not write /app/frontend/dist/config.js — the frontend keeps its build-time URLs"
 fi

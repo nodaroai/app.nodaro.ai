@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { isOurCdnUrl } from "../cdn-host.js"
+import { isOurCdnUrl, publishedStorageOrigins } from "../cdn-host.js"
 
 const PUB = "https://pub-abc.r2.dev"
 const FALLBACK = "assets.example.com"
@@ -31,5 +31,24 @@ describe("isOurCdnUrl", () => {
   })
   it("rejects a non-URL string", () => {
     expect(isOurCdnUrl("not a url", PUB, "")).toBe(false)
+  })
+})
+
+describe("publishedStorageOrigins: the storage origin the browser is told about", () => {
+  it("is the public URL's https origin, never the fallback host", () => {
+    expect(publishedStorageOrigins("https://cdn.example.com/bucket")).toEqual(["https://cdn.example.com"])
+  })
+
+  it("names nothing for plain http storage, no storage or a malformed value", () => {
+    expect(publishedStorageOrigins("http://localhost:3000/storage/nodaro-assets")).toEqual([])
+    expect(publishedStorageOrigins("")).toEqual([])
+    expect(publishedStorageOrigins("not a url")).toEqual([])
+  })
+
+  it("every origin it names is one the server accepts; the fallback host stays accepted but unpublished", () => {
+    const [publicUrl, fallback] = ["https://cdn.example.com", "pub-1.r2.dev"]
+    for (const origin of publishedStorageOrigins(publicUrl)) expect(isOurCdnUrl(`${origin}/videos/a.mp4`, publicUrl, fallback)).toBe(true)
+    expect(isOurCdnUrl("https://pub-1.r2.dev/videos/a.mp4", publicUrl, fallback)).toBe(true)
+    expect(publishedStorageOrigins(publicUrl)).not.toContain("https://pub-1.r2.dev")
   })
 })

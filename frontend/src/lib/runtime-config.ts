@@ -378,3 +378,15 @@ export function runtimeMediaOrigin(): string | undefined {
   const value = runtime().mediaOrigin
   return isHttpsOrigin(value) ? value : undefined
 }
+
+/**
+ * The https origins of the deployment's own storage that its download routes
+ * accept, as `/config.js` names them (the backend's published list:
+ * `publishedStorageOrigins`, backend lib/cdn-host.ts). Empty when the file names none
+ * (a local dev server, storage on plain http): every video Download then
+ * keeps the link it always had.
+ */
+export function runtimeStorageOrigins(): readonly string[] {
+  const value = runtime().storageOrigins
+  return Array.isArray(value) ? value.filter(isHttpsOrigin) : []
+}

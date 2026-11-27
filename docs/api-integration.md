@@ -1663,6 +1663,27 @@ assembled file. The ordered clips stay available. A delivery with
 MCP job views (`get_job`, `wait_for_job`) carry it in `outputData.originalVideoUrl`;
 `outputUrl` is the playable file. See the [design note](./design/video-original-and-preview.md).
 
+**Download in the app gives the original.** Every Download the app offers for a
+video result (canvas nodes, the editor's Library browser, job history, app
+results, the agent widgets) saves the original when the job kept one, under
+its own extension and content type, and the file itself otherwise. The app and
+its players keep using `videoUrl`. The route behind it is public:
+
+| Request | Answer |
+|---------|--------|
+| `GET /v1/download?url=<address>` | The file at the address, as an attachment (unchanged). |
+| `GET /v1/download?url=<address>&original=1` | For a video result's address, the original its completed job records beside that file, as an attachment named `<id>-original.<ext>` (`.mp4`, `.mov`, `.webm` or `.mkv`) with its own content type. If storage cannot give the original (it answers 404 or a server error, or the fetch fails before any answer), the file at the address instead. Otherwise the file at the address. An address that is itself a kept original's (`videos/<id>-master.<ext>`) is served as it is, as an original, with no job read, as the plain route always served it. |
+| `GET /v1/download?url=<address>&original=1&open=1` | The original as above when there is one; otherwise a `302` to the address itself. |
+
+The address must be one of the platform's own storage addresses (`403`
+otherwise), and a restricted file answers `451 content_restricted`, the
+original included. A job in the Trash, a watermarked run and a result with no
+`originalVideoUrl` download the file itself. No answer to `original=1` is
+cached (`Cache-Control: private, no-store`). A `HEAD` returns the headers
+without reading the file. Requests with `original=1` are limited to 120 a
+minute from one caller (`429 rate_limit_exceeded` past that, not cached either);
+a request without it is not limited.
+
 ## 4i. A workflow's view link
 
 A workflow's creator can open a **read-only view of its canvas** to anyone

@@ -21,6 +21,7 @@ import { useMediaEditor, MediaEditorModal } from "@/components/editor/media-edit
 import { StorageExceededModal } from "@/ee/components/credits/StorageExceededModal"
 import { CachedImage } from "@/components/ui/cached-image"
 import type { UploadVideoData, GeneratedResult } from "@/types/nodes"
+import { downloadVideoFile } from "@/lib/video-result-download"
 
 const HANDLES = [
   { id: "in",    type: "target" as const, position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
@@ -282,10 +283,7 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
               <button type="button" aria-label={t("common.download")} className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                 onClick={(e) => {
                   e.stopPropagation()
-                  const a = document.createElement('a')
-                  a.href = '/v1/image-proxy?url=' + encodeURIComponent(videoUrl) + '&download=1'
-                  a.download = (nodeData.label || 'video') + '.mp4'
-                  a.click()
+                  downloadVideoFile(videoUrl)
                 }} title={t("common.download")}>
                 <Download className="w-3.5 h-3.5" />
               </button>

@@ -37,6 +37,7 @@ import { useFileUpload } from "@/hooks/use-file-upload"
 import { StorageExceededModal } from "@/ee/components/credits/StorageExceededModal"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { copyToClipboard } from "@/lib/utils"
+import { openVideoDownload } from "@/lib/video-result-download"
 import { resolveEdgeValuesForTableColumn } from "@/components/editor/workflow-editor/node-input-resolver"
 
 /** Hex color per column type for the typed-handle pip. Single source of
@@ -75,6 +76,16 @@ const ACCEPTS_BY_COLUMN_TYPE: Record<LoopColumnType, (t: string) => boolean> = {
   "audio-url": ACCEPTS_AUDIO_URL,
   "json":      ACCEPTS_JSON,
   "text":      ACCEPTS_TEXT,
+}
+
+/**
+ * A video cell's Download: its kept original when it has one
+ * (lib/video-result-download.ts); an address that cannot have one as before.
+ */
+function downloadLoopVideoCell(cell: string): void {
+  openVideoDownload(cell, () => {
+    const a = document.createElement("a"); a.href = cell; a.download = "video.mp4"; a.click()
+  })
 }
 
 const DEFAULT_GALLERY_COLS = 3
@@ -604,7 +615,7 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
             <Expand className="w-3 h-3" />
           </button>
           <div className={actionRowClass}>
-            <button type="button" className={actionBtnClass} onClick={(e) => { e.stopPropagation(); const a = document.createElement("a"); a.href = `/v1/image-proxy?url=${encodeURIComponent(cell)}&download=1`; a.download = "image.png"; a.click() }} title={t("cfgshared.download")}><Download className={actionIconClass} /></button>
+            <button type="button" className={actionBtnClass} onClick={(e) => { /* download-site: an image cell */ e.stopPropagation(); const a = document.createElement("a"); a.href = `/v1/image-proxy?url=${encodeURIComponent(cell)}&download=1`; a.download = "image.png"; a.click() }} title={t("cfgshared.download")}><Download className={actionIconClass} /></button>
             <button type="button" className={actionBtnClass} onClick={(e) => { e.stopPropagation(); copyToClipboard(cell, t("node.urlCopied")) }} title={t("cfgshared.copyUrl")}><Link className={actionIconClass} /></button>
           </div>
         </div>
@@ -648,7 +659,7 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
             <Expand className="w-3 h-3" />
           </button>
           <div className={actionRowClass}>
-            <button type="button" className={actionBtnClass} onClick={(e) => { e.stopPropagation(); const a = document.createElement("a"); a.href = cell; a.download = "video.mp4"; a.click() }} title={t("cfgshared.download")}><Download className={actionIconClass} /></button>
+            <button type="button" className={actionBtnClass} onClick={(e) => { e.stopPropagation(); downloadLoopVideoCell(cell) }} title={t("cfgshared.download")}><Download className={actionIconClass} /></button>
             <button type="button" className={actionBtnClass} onClick={(e) => { e.stopPropagation(); copyToClipboard(cell, t("node.urlCopied")) }} title={t("cfgshared.copyUrl")}><Link className={actionIconClass} /></button>
           </div>
         </div>

@@ -69,6 +69,7 @@ export function copyUrl(url: string) {
 
 export function downloadFile(url: string, filename: string) {
   const a = document.createElement("a")
+  // download-site: the direct link of an app card's image or sound; a video goes through openVideoDownload
   a.href = url
   a.download = filename
   a.target = "_blank"

@@ -63,7 +63,7 @@ function AudioOutputCardImpl({ label, status, url, nodeId, elementSize, actions,
         <>
           <div className="flex items-center gap-3 bg-muted/30 rounded-lg p-3 border border-border">
             <WaveformAudioPlayer url={url} variant="compact" className="flex-1" />
-            <GlassButton onClick={() => downloadFile(url, `${label.replace(/\s+/g, "-").toLowerCase()}.mp3`)} title={t("common.download")}>
+            <GlassButton /* download-site: a sound */ onClick={() => downloadFile(url, `${label.replace(/\s+/g, "-").toLowerCase()}.mp3`)} title={t("common.download")}>
               <Download className="w-3.5 h-3.5" />
             </GlassButton>
           </div>

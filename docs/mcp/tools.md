@@ -1852,6 +1852,11 @@ widget; image assets also surface Animate / Edit / Recreate follow-up
 buttons and click-to-zoom fullscreen. For purely-programmatic metadata (no
 rendering) prefer `get_asset`.
 
+The Download button of a video, here and in the gallery, app-run and job
+widgets, opens the app's download link: it saves the original file the job
+kept (`outputData.originalVideoUrl`; HEVC 10-bit or HDR for some models) and
+otherwise opens the playable file as before.
+
 **Input:** `{ job_id: string }`
 
 ---

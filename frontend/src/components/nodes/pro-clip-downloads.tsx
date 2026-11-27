@@ -1,7 +1,7 @@
 import { Download, Play } from "lucide-react"
 import { useT } from "@/lib/i18n"
 import type { DeliveredVideoClip } from "@/lib/run-result-identity"
-import { downloadVideoFile } from "./video-unplayable"
+import { downloadVideoFile } from "@/lib/video-result-download"
 
 export function ProClipDownloads({ clips, inline = false }: { clips?: readonly DeliveredVideoClip[]; inline?: boolean }) {
   const t = useT()
@@ -16,7 +16,7 @@ export function ProClipDownloads({ clips, inline = false }: { clips?: readonly D
               <Play size={14} />{t("common.play")} · {clip.segment}
             </a>
             <button type="button" className="flex items-center gap-1 rounded p-1 hover:bg-muted"
-              onClick={() => downloadVideoFile(clip.url, `segment-${clip.segment}`)}>
+              onClick={() => downloadVideoFile(clip.url)}>
               <Download size={14} />{t("common.download")} · {clip.segment}
             </button>
           </div>

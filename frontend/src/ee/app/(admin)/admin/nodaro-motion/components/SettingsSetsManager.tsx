@@ -59,6 +59,7 @@ function download(name: string, body: unknown): void {
   const url = URL.createObjectURL(new Blob([`${JSON.stringify(body, null, 2)}\n`], { type: "application/json" }))
   const a = document.createElement("a")
   a.href = url
+  // download-site: a file this page made (a JSON or text export), no stored result
   a.download = exportFileName(name)
   a.click()
   setTimeout(() => URL.revokeObjectURL(url), 0)

@@ -421,6 +421,7 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
     a.href = url
+    // download-site: a file this page made (a JSON or text export), no stored result
     a.download = `${nodeType}-presets.json`
     a.click()
     URL.revokeObjectURL(url)

@@ -6,6 +6,7 @@ import { creditUnitLabel } from "@/lib/credit-units"
 import { useAppRunnerStore } from "@/hooks/use-app-runner-store"
 import { usePresentationStore } from "@/hooks/use-presentation-store"
 import { getNodeLabel, getOutputType } from "@/lib/presentation-utils"
+import { videoDownloadLinkProps } from "@/lib/video-result-download"
 import { useT } from "@/lib/i18n"
 import { type RunSlot, type RunSlotNodeState } from "@/components/app-runner/types"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
@@ -389,7 +390,8 @@ function ChatMessage({
               </button>
             )}
             {isDone && downloadUrl && (
-              <a href={downloadUrl} download className="inline-flex items-center gap-1 hover:text-foreground">
+              // A stored video: its kept original when it has one (lib/video-result-download.ts).
+              <a {...videoDownloadLinkProps(downloadUrl)} className="inline-flex items-center gap-1 hover:text-foreground">
                 <Download className="h-3 w-3" /> {tr("common.download")}
               </a>
             )}

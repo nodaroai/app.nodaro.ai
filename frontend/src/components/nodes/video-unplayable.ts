@@ -1,16 +1,7 @@
-/**
- * The stored file a player's url names: `url` itself, or the file a
- * `/v1/image-proxy?url=…` link reads through the app's proxy.
- */
-export function unproxiedUrl(url: string): string {
-  try {
-    const parsed = new URL(url, "https://x.invalid")
-    if (parsed.pathname.endsWith("/v1/image-proxy")) return parsed.searchParams.get("url") ?? url
-  } catch {
-    // Not a url: itself.
-  }
-  return url
-}
+import { unproxiedUrl } from "@/lib/video-result-download"
+
+// The stored file a player's url names (one spelling for every reader of it).
+export { unproxiedUrl }
 
 /**
  * Whether a result's url is a kept original standing in for a preview that
@@ -47,26 +38,4 @@ const CANNOT_PLAY_CODES: ReadonlySet<number> = new Set([3, 4])
  */
 export function showsUnplayableNotice(error: { readonly code: number } | null | undefined, url: string | undefined): boolean {
   return error != null && CANNOT_PLAY_CODES.has(error.code) && isPreviewUnavailableUrl(url)
-}
-
-/**
- * The file extension a video download is saved under: the stored file's own
- * (a kept original may be `.mov`, `.webm`, `.mkv`), read from the real key
- * even when the player's url is proxied or relative; else `.mp4`.
- */
-export function videoDownloadExtension(url: string): string {
-  try {
-    const ext = /\.([a-z0-9]{2,4})$/i.exec(new URL(unproxiedUrl(url), "https://x.invalid").pathname)?.[1]?.toLowerCase()
-    return ext && ["mp4", "mov", "webm", "mkv"].includes(ext) ? ext : "mp4"
-  } catch {
-    return "mp4"
-  }
-}
-
-/** Download `url` through the app's download proxy, named `<label>.<its extension>`. */
-export function downloadVideoFile(url: string, label: string): void {
-  const a = document.createElement("a")
-  a.href = `/v1/image-proxy?url=${encodeURIComponent(unproxiedUrl(url))}&download=1`
-  a.download = `${label || "video"}.${videoDownloadExtension(url)}`
-  a.click()
 }

@@ -18,13 +18,13 @@ function registered(): Map<string, Read> {
 }
 
 describe("widget resource versions", () => {
-  it("the current version is v5, and the job card it serves has the price-quote state", async () => {
-    expect(WIDGET_URI.jobVideo).toBe("ui://nodaro/widget/v5/job-video")
+  it("the current version is v6, and the job card it serves has the price-quote state", async () => {
+    expect(WIDGET_URI.jobVideo).toBe("ui://nodaro/widget/v6/job-video")
     const page = await registered().get(WIDGET_URI.jobVideo)!(new URL(WIDGET_URI.jobVideo))
     expect(page.contents[0]!.text).toContain("quote-price")
   })
 
-  it.each(["ui://nodaro/widget/job-video", "ui://nodaro/widget/v2/job-video", "ui://nodaro/widget/v3/job-video", "ui://nodaro/widget/v4/job-video"])(
+  it.each(["ui://nodaro/widget/job-video", "ui://nodaro/widget/v2/job-video", "ui://nodaro/widget/v3/job-video", "ui://nodaro/widget/v4/job-video", "ui://nodaro/widget/v5/job-video"])(
     "%s still answers, with the current page",
     async (uri) => {
       const pages = registered()

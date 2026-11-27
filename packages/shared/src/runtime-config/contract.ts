@@ -29,6 +29,7 @@ export const RUNTIME_CONFIG_KEYS = Object.freeze([
   "moderation",
   "previewStopRule",
   "mediaOrigin",
+  "storageOrigins",
   "flowUiOrigin",
   "legacyUiHosts",
   "linkOrigin",
@@ -240,6 +241,13 @@ export interface NodaroRuntimeConfig {
    * beyond its own site.
    */
   readonly mediaOrigin?: string
+  /**
+   * The https origins of the deployment's own storage it publishes, each one
+   * its download routes accept (`https://cdn.example.com`). A video Download
+   * asks the server only about an address on one of them; absent, every
+   * Download keeps the link it always had.
+   */
+  readonly storageOrigins?: readonly string[]
   /**
    * The https origin of the app's pages' own host, when this deployment gives
    * them one. Alone (with `linkOrigin`), every host keeps serving the pages
@@ -757,6 +765,10 @@ export function parseRuntimeConfig(raw: unknown): NodaroRuntimeConfig {
   if (isRecord(raw.moderation) && raw.moderation.uploadImage === true) out.moderation = { uploadImage: true }
   if (raw.previewStopRule === true) out.previewStopRule = true
   if (isHttpsOrigin(raw.mediaOrigin)) out.mediaOrigin = raw.mediaOrigin
+  if (Array.isArray(raw.storageOrigins)) {
+    const origins = raw.storageOrigins.filter(isHttpsOrigin)
+    if (origins.length > 0) out.storageOrigins = origins
+  }
   if (isHttpsOrigin(raw.flowUiOrigin)) out.flowUiOrigin = raw.flowUiOrigin
   if (Array.isArray(raw.legacyUiHosts)) {
     const hosts = raw.legacyUiHosts.filter(isLegacyUiHost)

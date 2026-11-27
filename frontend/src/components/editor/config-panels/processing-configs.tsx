@@ -91,6 +91,7 @@ import { useApplyEdlRenders } from "@/hooks/use-apply-edl-renders"
 import { RunUpToHereNotice } from "./run-up-to-here-notice"
 import { applyEdlRenderSettings } from "@/lib/apply-edl-render-input"
 import { loopVideoRepeatCount, loopVideoRepeatCountEdit } from "@/lib/loop-video-count"
+import { videoDownloadLinkProps } from "@/lib/video-result-download"
 import {
   editPlanModeUnavailableReason,
   refreshEditPlanModesIfStale,
@@ -1371,7 +1372,7 @@ export function SplitMediaConfig({ data, onUpdate }: ConfigProps<SplitMediaData>
                     className="w-3.5 h-3.5"
                   />
                   <span className="text-[11px] text-muted-foreground">{t("proccfg.chunk", { n: i + 1 })}</span>
-                  <a href={url} download className="text-[11px] text-primary-ink hover:underline ms-auto" onClick={(e) => e.stopPropagation()}>{t("proccfg.download")}</a>
+                  <a /* download-site: a sound part of a split */ href={url} download className="text-[11px] text-primary-ink hover:underline ms-auto" onClick={(e) => e.stopPropagation()}>{t("proccfg.download")}</a>
                 </div>
                 <WaveformAudioPlayer url={url} variant="compact" className="w-full" />
               </div>
@@ -1411,7 +1412,7 @@ export function SplitMediaConfig({ data, onUpdate }: ConfigProps<SplitMediaData>
                     className="w-3.5 h-3.5"
                   />
                   <span className="text-[11px] text-muted-foreground">{t("proccfg.chunk", { n: i + 1 })}</span>
-                  <a href={url} download className="text-[11px] text-primary-ink hover:underline ms-auto" onClick={(e) => e.stopPropagation()}>{t("proccfg.download")}</a>
+                  <a {...videoDownloadLinkProps(url)} className="text-[11px] text-primary-ink hover:underline ms-auto" onClick={(e) => e.stopPropagation()}>{t("proccfg.download")}</a>
                 </div>
                 <video controls src={url} className="w-full rounded" style={{ maxHeight: '80px' }} />
               </div>

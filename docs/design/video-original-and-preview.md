@@ -225,9 +225,66 @@ gallery and the library players do not show the message yet.
 
 ## Download
 
-Download should give the original when there is one. The API and MCP expose
-it now. Moving the editor's Download buttons onto it is a follow-up (see
-below).
+**Download gives the original** wherever the app offers it for a video
+result, and the app keeps playing the preview. Every surface
+holds only the address it plays, so the server finds the original from it:
+`GET /v1/download?url=<address>&original=1` serves the original that the
+job named by the address's key records beside that very preview. The job
+must be completed and not in the Trash. Its output's `videoUrl` must name
+the preview asked for, and its `originalVideoUrl` a kept original beside it
+(`videos/<id>-master.<ext>`). The original is saved as
+`<id>-original.<ext>` (the storage key keeps `-master`), with its own
+extension and content type. If storage cannot give it (a 404 or a server
+error, or a fetch that fails before any answer), the preview asked for is
+served instead. Anything else is the file itself, as before:
+an H.264 8-bit result, a watermarked run, an upload, a plugin output, a job
+in the Trash or one that cannot be read. For a preview the job's record is the proof,
+never what storage happens to hold: an original no completed output names
+beside that preview is never given in its place. An address that is itself
+a kept original's key is served as it is, with no job read, as the plain
+route always served it. The original passes the same two checks as the address
+asked for (the storage allowlist and the content restrictions). Its fetch
+may run for up to 15 minutes, against the usual 2.
+
+Each surface keeps its own way of downloading (one helper in the app,
+`frontend/src/lib/video-result-download.ts`, carries all of them):
+
+- The canvas nodes, their result overlay, the unplayable notice, Pro clip
+  parts and the public gallery already saved through the app's own route.
+  They still do, now asking for the original.
+- The editor's Library browser, job history, the results gallery, app
+  result cards, the agent widgets, the chat view, split parts and a loop's
+  video cells opened the file itself. They now open the route in a new tab
+  with `open=1`. An original is saved (the browser closes the tab). With no
+  original the route redirects the tab to the file itself, so the file
+  still comes straight from storage. An address that is not an https
+  address of a stored video keeps that surface's own download.
+- Iteration results ("Download all" too) fetch the original's bytes when
+  there is one and save them under its own extension; otherwise they fetch
+  the file itself as before.
+
+A Library item (the editor's Library browser; the Library page has no
+Download) gives the original by the same rule: its file's key names
+the job that made it. An item saved from a node's result names the same
+file, so it finds the original too. An item that is the original itself (a
+job that completed on its original) downloads itself. An item whose job was
+deleted for good, or is in the Trash, downloads its preview.
+
+`frontend/src/lib/__tests__/video-download-sites.test.ts` fails any download
+site that neither goes through the helper nor states (`download-site: <why>`)
+that it is not a video result's.
+
+Files are named by the server (`Content-Disposition`), which browsers
+prefer over a link's own `download` name: `<id>.mp4` for a preview,
+`<id>-original.mov` (or `.mp4`, `.webm`, `.mkv`) for an original. No answer
+to `original=1` is cached, a `HEAD` reads only the file's headers, the fetch
+stops when the caller goes away, and the route takes at most 120 requests
+with `original=1` a minute from one caller (a request without it is not
+counted, as before). The app sends a video address to the route only when
+it is on the deployment's published storage origin (`R2_PUBLIC_URL`'s, which
+`/config.js` names as `storageOrigins`; the fallback host is not published)
+and its path is a stored video's, headed by a job id; any other video keeps
+its surface's own download.
 
 ## Editing nodes
 
@@ -256,8 +313,6 @@ owner.
 
 ## Not covered yet
 
-- Editor Download buttons that give the original, and a guard that keeps new
-  buttons on the same helper.
 - Reading the original when editing: an Extend join writing 10-bit HEVC, and
   editing nodes reading the original and tone-mapping HDR input themselves.
   Today the shared audio merge (Merge Video & Audio, Generate Video's audio

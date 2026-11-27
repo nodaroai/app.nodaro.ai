@@ -185,8 +185,9 @@ describe("GenerateVideoProNode — content-policy rewrite disclosure", () => {
     const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {})
     try {
       fireEvent.click(screen.getByRole("button", { name: /Download · 2/i }))
-      expect(click.mock.instances[0]).toHaveProperty("download", "segment-2.mp4")
-      expect((click.mock.instances[0] as unknown as HTMLAnchorElement).href).toContain(encodeURIComponent(clips[1]!.url))
+      // An address on no storage this deployment names keeps the proxy link (lib/video-result-download.ts); the server names the file.
+      expect(click.mock.instances[0]).toHaveProperty("download", "")
+      expect((click.mock.instances[0] as unknown as HTMLAnchorElement).href).toContain(`/v1/image-proxy?url=${encodeURIComponent(clips[1]!.url)}&download=1`)
     } finally {
       click.mockRestore()
     }
