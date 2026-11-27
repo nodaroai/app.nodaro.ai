@@ -9025,6 +9025,15 @@ claimed or saved for 90 seconds can be taken by another tab; `takeover: true`
 takes it at once. `GET /v1/editor-projects/:id` tells a tab whether a live
 holder has the project (`held`).
 
+A tab gives the claim up with `POST /:id/release`, or with its last save:
+a save carrying `x-release: 1` releases the claim once it is stored (see
+[Saving](#saving)). A page that is closing should use the save: the browser
+sends both requests at once, and a release that reaches the server first makes
+the save behind it `409 not_holder`. The claim answer's `release_on_save: true`
+says the deployment takes `x-release`; on one that does not, the header fails
+the browser's preflight check for a request from another origin, so send it
+only after a claim answer has said so.
+
 ### Content, hashes and limits
 
 A project's content is one JSON value. Its hash is the SHA-256, as 64
@@ -9048,7 +9057,7 @@ names is refused `422 hash_mismatch` and nothing is stored.
 | Project creates per credential (`POST /v1/editor-projects`) | 30 a minute (`429` past it) |
 | Live projects per person | 500 (`409 too_many_projects` past it; deleted projects do not count) |
 | Stored project files per person | 2 GB: the saved content of every live project plus all their versions (`413 project_storage_full` past it; deleted projects do not count). A save counts its new file less the file it replaces, and a save of the content already saved is never refused |
-| Heavy requests per user at a time | 1 save, cut, restore or version read (`429 busy` for a second, see below) |
+| Heavy requests per user at a time | 1 save, cut, restore or version read (`429 busy` for a second, see below); a save carrying `x-release` waits up to 5 seconds for its turn, at most 4 of a user's at a time on each server instance |
 | Version request body (cut, restore) | 16 KB |
 | Versions per project | 50, then up to 200 in all (see [Versions](#versions)) |
 | Names and labels | 1 to 120 characters; a version's author 1 to 60 |
@@ -9063,6 +9072,13 @@ second. Send saves one at a time (wait for each answer before the next), as
 the editor does; reading the saved content (`GET /:id/file` without
 `?version`) is never refused `busy`. `busy` is also the answer, rarely, when
 the server has no capacity free for the work within 10 seconds.
+
+A save carrying `x-release` is the exception: it is what a page sends as it
+closes, and nobody is left to send it again. It waits up to 5 seconds for the
+request running before it to finish, then runs after it. Past those 5 seconds, when 4 of your saves with `x-release`
+already wait on the same server instance, or when the bodies of every user's waiting saves on that instance would
+pass 64 MB, it is `429 busy` like any other. The limits are kept by each instance of the API: requests that reach
+different instances do not wait for each other.
 
 **Work that would cost too much.** Parsing, patching, hashing and comparing
 content runs under a time and a memory limit. A save whose own work passes
@@ -9079,11 +9095,11 @@ whole with `PUT`, or make it smaller. A version read that passes them is
 | `GET` | `/v1/editor-projects/:id` | — | `{ id, name, revision, updated_at, held, versions }` |
 | `PATCH` | `/v1/editor-projects/:id` | `{ name }` | `{ id, name }` |
 | `DELETE` | `/v1/editor-projects/:id` | — | `{ deleted: true }` |
-| `POST` | `/v1/editor-projects/:id/claim` | `{ holder, takeover? }` | `{ held: true }`, or `409 held_elsewhere` |
+| `POST` | `/v1/editor-projects/:id/claim` | `{ holder, takeover? }` | `{ held: true, release_on_save: true }`, or `409 held_elsewhere` |
 | `POST` | `/v1/editor-projects/:id/release` | `{ holder }` | `{ released }` (`false` when that holder did not hold it) |
 | `GET` | `/v1/editor-projects/:id/file` | query `version` (optional) | the content's gzip |
-| `PUT` | `/v1/editor-projects/:id/file` | the whole content, gzip | `{ revision, saved, version? }` |
-| `PATCH` | `/v1/editor-projects/:id/file` | a JSON Patch, gzip | `{ revision, saved, version? }` |
+| `PUT` | `/v1/editor-projects/:id/file` | the whole content, gzip | `{ revision, saved, version?, released? }` |
+| `PATCH` | `/v1/editor-projects/:id/file` | a JSON Patch, gzip | `{ revision, saved, version?, released? }` |
 | `POST` | `/v1/editor-projects/:id/versions` | `{ label, author, holder }` | `{ number }`, or `{ number: null, unchanged: true }` |
 | `POST` | `/v1/editor-projects/:id/versions/:n/restore` | `{ holder }` | `{ revision }`, `{ revision, unchanged: true }`, or `{ revision, repaired: true }` |
 
@@ -9119,6 +9135,7 @@ Both saves send `content-type: application/gzip` and these headers:
 | `x-content-hash` | yes | The hash of the content the project will have after this save. |
 | `x-base-hash` | `PATCH` only | The hash of the saved content the patch was computed from. |
 | `x-cut-version` | no | A version label, URI-encoded, 1 to 120 characters once decoded and trimmed (blank is `400 validation_error`): after the save, a version of this save's content is cut with this label and author `you` (see [Versions](#versions)). |
+| `x-release` | no | `1`: once the save is stored (and its version cut, with `x-cut-version`), the claim is given up for this holder. Any other value is `400 validation_error`. |
 
 - **`PUT`** sends the gzip of the whole content.
 - **`PATCH`** sends the gzip of an RFC 6902 JSON Patch (an array of
@@ -9141,6 +9158,41 @@ another save landed before the version was cut, when the user has already
 cut 30 versions in the last minute, or when a version would take the user's
 stored project files past 2 GB (the save still stands either way). A version that
 cannot be cut never fails the save.
+
+With `x-release: 1`, the answer also carries `released`: `true` when the claim
+was given up, `false` when this holder no longer held it (or the release
+failed; the save still stands). Only a save answered `200` releases, `saved:
+false` included; a refused save (`not_holder`, `base_mismatch`, `too_large`,
+`hash_mismatch`, anything else) keeps the claim, which then lapses after 90
+seconds. Since a save from a holder that no longer holds the claim is refused
+`not_holder`, a save that reaches the server after the release is never stored
+over the last one. Two uses at close:
+
+- **A save is still on its way:** send its content again with `x-release`. Once
+  the first copy has landed, the second finds its content already saved
+  (`saved: false`) and releases; if the first never arrives, the second stores
+  it.
+- **A newer edit while a `PATCH` is on its way:** send it as two `PATCH`es,
+  both with `x-release`: first the one from the saved content, then the one
+  from the content on its way. Each is fenced by its `x-base-hash`, as is the
+  `PATCH` on its way, so at most one applies and the others are refused.
+  Read in that order, one applies however the save on its way lands (before
+  both, between them, after both, or never); read the other way round, both
+  are refused when that save lands between them. While a `PUT` is on its way,
+  send the `PATCH` from its content, or the whole content when there is no
+  difference: never the `PATCH` from the saved content, since a `PUT` carries
+  no base and could land over it.
+- **Nothing new to save:** a `PATCH` with an empty patch (`[]`) whose
+  `x-base-hash` and `x-content-hash` are both the saved content's hash changes
+  nothing, cuts the version `x-cut-version` names, and releases. It takes its
+  turn like any save, so its release never lands beside another save of yours
+  still running on that instance: with `x-release` it waits for that save (up
+  to 5 seconds, then `429 busy`); without it, it is `429 busy` at once. In its
+  turn it is answered from the project's record without reading the saved
+  content, so it is never `422 too_complex`, `422 upload_blocked` or
+  `500 file_missing` (its version is not cut when the saved file is gone). If
+  the saved content is not that hash when its turn comes, it is
+  `409 base_mismatch` and releases nothing.
 
 ### Versions
 
