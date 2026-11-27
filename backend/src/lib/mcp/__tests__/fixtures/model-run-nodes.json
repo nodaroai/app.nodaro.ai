@@ -106,6 +106,7 @@
  "ltx-2.5-fast": "character creature generate-video image-to-video lip-sync location object text-to-video video-to-video",
  "ltx-2.5-pro": "character creature generate-video image-to-video location object text-to-video video-to-video",
  "luma-modify": "video-to-video",
+ "magi-2": "character creature generate-video generate-video-pro image-to-video location object text-to-video video-to-video",
  "minimax": "character creature generate-music generate-video image-to-video location object text-to-video video-to-video",
  "minimax-h3": "character creature generate-video generate-video-pro image-to-video lip-sync location object text-to-video video-to-video",
  "minimax-h3-image": "character creature face generate-image location object reference-board",

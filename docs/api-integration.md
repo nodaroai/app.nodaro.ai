@@ -1176,7 +1176,7 @@ Three video-specific rules:
 
 A few models **ignore** an unsupported resolution and render a fixed default
 instead of the nearest band — `minimax-h3` renders 2K for anything that is not
-`768P`, the `wan-3` family, `vidu-q4`, `kling-4` / `kling-4-keyframes` / `kling-4-flash` and `pixverse-v6-max` render 720p, `ltx-2.5-fast` / `ltx-2.5-pro` render 1080p, and `grok-imagine-video-1.5` renders 480p (all described under
+`768P`, the `wan-3` family, `vidu-q4`, `kling-4` / `kling-4-keyframes` / `kling-4-flash` and `pixverse-v6-max` render 720p, `ltx-2.5-fast` / `ltx-2.5-pro` and `magi-2` render 1080p, and `grok-imagine-video-1.5` renders 480p (all described under
 [Seedance 2 video capabilities](#seedance-2-video-capabilities)).
 For those the correction targets the band the provider will actually produce, so
 the price still matches the render. Each such model declares this in the catalog
@@ -3575,6 +3575,30 @@ so a value the model doesn't support is ignored, never a 400:
   not change the model.
   The `fps` field is read only by a model with a frame-rate setting; every
   other model ignores it, and it is not recorded on their jobs.
+- **`magi-2`** (MAGI-2, by Sand AI) is one id over three provider task
+  models, picked by what the request carries: `POST /v1/text-to-video` with
+  nothing else runs text-to-video at `aspectRatio` `16:9` (default), `21:9`,
+  `4:3`, `1:1`, `3:4` or `9:16` (another ratio is moved to the nearest of
+  them); `POST /v1/generate-video` with an `imageUrl` (and an optional
+  `endFrameUrl`) runs image-to-video — the clip starts on the image, keeps its
+  shape (`aspectRatio` is not sent) and ends on the end frame; and any
+  `referenceImageUrls` (≤ 10), `referenceVideoUrls` (≤ 5) or
+  `referenceAudioUrls` (≤ 5) on either route runs reference-to-video at
+  `aspectRatio`, with frames joining the reference images after yours and
+  named in the prompt (an `endFrameUrl` alone is folded the same way). A
+  prompt with reference audio alone is a valid request. Reference videos must
+  be MP4 or MOV, each 2–30 s and 30 s together; reference audio 2–30 s a clip
+  and 30 s together (audio that is not MP3 or WAV is converted to MP3). A
+  request over these limits or the counts is a 400 before anything is held
+  (`too_many_references`, `video_format_unsupported`, `video_too_long`,
+  `audio_too_short`, `audio_too_long`, `audio_total_too_long`). `duration`
+  4–30, any whole second (default 5); `resolution` is always `1080p` (anything
+  else renders and bills 1080p); `seed` a whole number 0–2147483647 (anything
+  else, `-1` included, is left out); `prompt` up to 15,000 characters, quoted
+  text spoken as dialogue. Sound is made with the picture unless
+  `sound: false` (or `generateAudio: false`), at the same price either way. A
+  `negativePrompt` is dropped. Priced per second (`magi-2:<N>s:1080p`); runs
+  on free credits as a 4 s clip.
 - **`grok-imagine-video-1.5`** (Grok Imagine 1.5) needs an `imageUrl`: it is
   the exact first frame. An `endFrameUrl` is the exact last frame, and the
   **same URL as both** makes a seamless loop. Up to **4** in-between frames go

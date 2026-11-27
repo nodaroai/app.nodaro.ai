@@ -2,13 +2,15 @@ import {
   SEEDANCE_2_REF_LIMITS,
   VIDEO_REF_LIMITS_BY_PROVIDER,
   VIDEO_REF_VIDEO_DURATION_LIMITS,
+  VIDEO_REF_VIDEO_FORMATS,
   VIDEO_REF_VIDEO_PICTURE_LIMITS,
   checkCharacterClipDurations,
   checkRefVideoDurations,
   refVideoAspectProblem,
+  refVideoFormatProblem,
 } from "@nodaro/shared/models"
 import { characterVideoUrls, pricedReferenceVideoUrls } from "@nodaro/shared/video"
-import { probeMediaDuration, probeVideoSource } from "../providers/video/ffmpeg-utils.js"
+import { probeMediaDuration, probeMediaFormatAndDuration, probeVideoSource } from "../providers/video/ffmpeg-utils.js"
 import { isOwnMediaUrl } from "./fetch-own-media.js"
 
 /**
@@ -259,7 +261,7 @@ export type RefVideoDurationCheck =
    *  is set only when it is not `video_too_long`: a character's clip the probe
    *  could not read (`character_video_unreadable`), or a clip whose shape the
    *  model does not take (`video_aspect_unsupported`). */
-  | { ok: false; durationsSec: number[]; message: string; code?: "character_video_unreadable" | "video_aspect_unsupported" }
+  | { ok: false; durationsSec: number[]; message: string; code?: "character_video_unreadable" | "video_aspect_unsupported" | "video_format_unsupported" }
 
 /**
  * Probe the connected reference videos and check them against the provider's
@@ -314,7 +316,27 @@ export async function probeAndCheckRefVideoDurations(args: {
   const check = checkRefVideoDurations(provider, durationsSec)
   if (!check.ok) return { ok: false, durationsSec, message: check.message }
   const shape = await refVideoShapeProblem(provider, urls)
-  return shape === undefined ? { ok: true, durationsSec } : { ok: false, durationsSec, message: shape, code: "video_aspect_unsupported" }
+  if (shape !== undefined) return { ok: false, durationsSec, message: shape, code: "video_aspect_unsupported" }
+  const format = await refVideoContainerProblem(provider, urls)
+  return format === undefined ? { ok: true, durationsSec } : { ok: false, durationsSec, message: format, code: "video_format_unsupported" }
+}
+
+/**
+ * Why `provider` cannot take one of these reference videos for its CONTAINER
+ * (`refVideoFormatProblem`, @nodaro/shared: MAGI-2 takes MP4 or MOV), as a
+ * finished sentence, or undefined. Only a provider with a format rule
+ * (`VIDEO_REF_VIDEO_FORMATS`) is probed, each clip it would be sent at once
+ * (at most its cap). A clip whose format cannot be read is not refused.
+ */
+export async function refVideoContainerProblem(provider: string, referenceVideoUrls: readonly unknown[]): Promise<string | undefined> {
+  if (!VIDEO_REF_VIDEO_FORMATS[provider]) return undefined
+  const probes = await Promise.allSettled(refVideoProbeCandidates(provider, referenceVideoUrls).map((url) => probeMediaFormatAndDuration(url)))
+  for (const probe of probes) {
+    if (probe.status !== "fulfilled") continue
+    const problem = refVideoFormatProblem(provider, probe.value.formatNames)
+    if (problem) return problem
+  }
+  return undefined
 }
 
 /**

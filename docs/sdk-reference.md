@@ -3879,6 +3879,15 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > clip is as long as the audio, charged at its measured length rounded up to a
 > whole second (`duration` is not read). See
 > [LTX 2.5](nodes/ai-video/generate-video.md#ltx-25--fast-and-pro).
+> **MAGI-2** (`magi-2`) runs `run("text-to-video")` prompt-only at
+> `aspectRatio` `16:9` (default) / `21:9` / `4:3` / `1:1` / `3:4` / `9:16`, and
+> `run("generate-video")` with an `imageUrl` as the first frame (an
+> `endFrameUrl` ends the clip; no `aspectRatio` is sent). Any
+> `referenceImageUrls` (≤ 10), `referenceVideoUrls` (≤ 5, MP4 / MOV) or
+> `referenceAudioUrls` (≤ 5) switch either call to its reference mode, the
+> frames joining the references. `duration` 4–30 (default 5), always 1080p,
+> `seed` 0–2147483647, sound on unless `sound: false` (the same price), no
+> negative prompt. See [MAGI-2](nodes/ai-video/generate-video.md#magi-2).
 > **Grok Imagine 1.5** (`grok-imagine-video-1.5`) needs `imageUrl` (the exact
 > first frame); `endFrameUrl` is the exact last frame, the same URL as both
 > makes a seamless loop, and up to 4 in-between frames go in

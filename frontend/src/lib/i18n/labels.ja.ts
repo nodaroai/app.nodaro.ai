@@ -722,6 +722,7 @@ const MODEL_DESCRIPTIONS_JA: Record<string, string> = {
   "High-speed Wan 3.0, 2–30s, 480p/720p/1080p, native audio, image/video/audio refs": "高速版 Wan 3.0、2〜30 秒、480p/720p/1080p、ネイティブオーディオ、画像／動画／オーディオのリファレンス",
   "ShengShu Vidu Q4, 3\u201316s, 540p\u20134K, native audio, start frame or 15 image + 3 MP3 audio refs": "ShengShu Vidu Q4、3〜16 秒、540p〜4K、ネイティブオーディオ、開始フレームまたは画像リファレンス 15 枚 + MP3 オーディオリファレンス 3 本",
   "ShengShu Vidu Q4, 3\u201316s, 540p\u20134K, native audio (image required)": "ShengShu Vidu Q4、3〜16 秒、540p〜4K、ネイティブオーディオ（画像が必要）",
+  "Sand AI MAGI-2, 4–30s, 1080p, sound in one pass, first/last frame or image/video/audio refs": "Sand AI MAGI-2、4〜30 秒、1080p、映像と音声を一度に生成、開始／終了フレームまたは画像／動画／オーディオのリファレンス",
   "Kuaishou Kling 4.0, 3\u201330s, 720p/1080p, native audio, image/video/character/voice refs": "Kuaishou Kling 4.0、3〜30 秒、720p/1080p、ネイティブオーディオ、画像／動画／キャラクター／ボイスのリファレンス",
   "Kuaishou Kling 4.0, 3\u201330s, start + up to 8 in-between + end frames, native audio": "Kuaishou Kling 4.0、3〜30 秒、開始フレーム + 中間フレーム最大 8 枚 + 終了フレーム、ネイティブオーディオ",
   "Kuaishou Kling 4.0 Flash, 3\u201320s, 720p, native audio, start frame or image/video/character refs, voice per character": "Kuaishou Kling 4.0 Flash、3〜20 秒、720p、ネイティブオーディオ、開始フレームまたは画像／動画／キャラクターのリファレンス、キャラクターごとのボイス",

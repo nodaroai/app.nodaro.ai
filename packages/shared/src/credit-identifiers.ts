@@ -31,6 +31,8 @@ import {
   normalizeKling4Resolution,
   isKling4FlashProvider,
   KLING_4_FLASH_RESOLUTION,
+  isMagi2Provider,
+  MAGI_2_RESOLUTION,
   isGrokVideo15Provider,
   normalizeGrokVideo15Resolution,
   isPixverseV6MaxProvider,
@@ -569,6 +571,8 @@ function wireNormalizedResolution(provider: string, resolution: string | undefin
   if (isKling4Provider(provider)) return normalizeKling4Resolution(resolution)
   // Kling 4.0 Flash renders 720p whatever it is asked (its runner sends 720p).
   if (isKling4FlashProvider(provider)) return KLING_4_FLASH_RESOLUTION
+  // MAGI-2 renders 1080p whatever it is asked (every task model takes only 1080p).
+  if (isMagi2Provider(provider)) return MAGI_2_RESOLUTION
   if (isGrokVideo15Provider(provider)) return normalizeGrokVideo15Resolution(resolution)
   if (isPixverseV6MaxProvider(provider)) return normalizePixverseV6MaxQuality(resolution)
   if (isLtx25Provider(provider)) return normalizeLtx25Resolution(provider, resolution)

@@ -387,6 +387,8 @@ export const MAX_VIDEO_PROMPT_CHARS_BY_PROVIDER: Record<string, number> = {
   // LTX 2.5 — 1-5000 chars on every endpoint (docs.kie.ai/market/ltx/2-5-*).
   "ltx-2.5-fast": 5000,
   "ltx-2.5-pro": 5000,
+  // MAGI-2 — 1-15000 chars on every task model (docs.kie.ai MAGI-2 pages).
+  "magi-2": 15000,
   // PixVerse V6 Extend — 3-5000 chars (docs.kie.ai/market/pixverse/extend);
   // its prompt is sent as written, so the whole cap is the user's.
   "pixverse-v6-extend": 5000,
@@ -1233,6 +1235,9 @@ export const IMAGE_TO_VIDEO_PROVIDERS = [
   // endpoints. No text-to-video mode: also listed in TEXT_TO_VIDEO_PROVIDERS's
   // image-required section so the t2v route answers with the friendly 400.
   "vidu-q4",
+  // MAGI-2 — one id over three KIE task models (text / image / reference to
+  // video); listed here AND in TEXT_TO_VIDEO_PROVIDERS's main section.
+  "magi-2",
   // Kling 4.0 — two ids, one per KIE endpoint (reference-to-video and
   // keyframe-to-video). Each endpoint also runs with no image, so each id is
   // listed here AND in TEXT_TO_VIDEO_PROVIDERS's main section (like wan-3).
@@ -1303,6 +1308,8 @@ export const TEXT_TO_VIDEO_PROVIDERS = [
   "kling-4-flash",
   // PixVerse V6 Max — a real text-to-video endpoint runs an image-less request.
   "pixverse-v6-max",
+  // MAGI-2 — a real text-to-video task model runs an image-less request.
+  "magi-2",
   // LTX 2.5 — a real text-to-video endpoint per tier.
   "ltx-2.5-fast",
   "ltx-2.5-pro",
@@ -2423,6 +2430,9 @@ export const DURATION_PRICED_PROVIDERS = new Set([
   // Vidu Q4 — per-second billing at five resolution rates, identical on both
   // endpoints and with audio on or off.
   "vidu-q4",
+  // MAGI-2 — per-second billing at 1080p, one rate on all three task models,
+  // with or without sound and whatever references it carries.
+  "magi-2",
   // Kling 4.0 — per-second billing at two resolution rates (plus a reference-
   // video rate on `kling-4`, see VIDEO_REF_RATE_PROVIDERS).
   "kling-4",
@@ -2614,6 +2624,23 @@ export function normalizeViduQ4Resolution(resolution: string | undefined): "540p
     default: return VIDU_Q4_DEFAULT_RESOLUTION
   }
 }
+
+/**
+ * MAGI-2 family — Sand AI's model on KIE. One Nodaro id covers three KIE task
+ * models (`magi-2/text-to-video`, `magi-2/image-to-video`,
+ * `magi-2/reference-to-video`); the provider layer picks one by what is wired.
+ * Exact-membership set, like the other family predicates.
+ */
+export const MAGI_2_PROVIDERS = new Set<string>([
+  "magi-2",
+])
+
+export function isMagi2Provider(provider: string | undefined): boolean {
+  return !!provider && MAGI_2_PROVIDERS.has(provider)
+}
+
+/** The one resolution MAGI-2 renders, on every task model (schema enum `1080p`). */
+export const MAGI_2_RESOLUTION = "1080p"
 
 /**
  * Kling 4.0 family — two Nodaro ids over KIE's two Kling 4.0 endpoints:
@@ -3342,6 +3369,11 @@ export const VIDEO_REF_AUDIO_RULES: Record<string, RefAudioRule | undefined> = {
   // still refused before anything is held. Seedance 2.5 itself also takes AAC
   // and OGG, so it has no row here.
   "seedance-2-5-flash": { formats: ["wav", "mp3"], convertsTo: "mp3", minSec: 2, maxSec: 30, maxTotalSec: 30 },
+  // MAGI-2: "Reference audio clips: up to 5 public URLs (MP3 / WAV). Each clip
+  // must be 2–30 seconds long, and all reference audio clips together at most
+  // 30 seconds" (docs.kie.ai MAGI-2 reference-to-video). A clip in another
+  // format is converted to MP3 before it is sent, as on Seedance 2.5 Flash.
+  "magi-2": { formats: ["wav", "mp3"], convertsTo: "mp3", minSec: 2, maxSec: 30, maxTotalSec: 30 },
 }
 
 /** One probed reference-audio clip. A field the probe could not read is absent. */
@@ -3513,6 +3545,10 @@ export const VIDEO_REF_LIMITS_BY_PROVIDER: Record<
   // reference audio clips (MP3 only, each 3-12s — VIDEO_REF_AUDIO_RULES), and
   // no reference videos (docs.kie.ai/market/vidu-q4/reference-to-video).
   "vidu-q4": { images: 15, audio: 3 },
+  // MAGI-2 — reference-to-video takes up to 10 images, 5 videos and 5 audio
+  // clips; frames are not taken beside them (wired frames join the images). A
+  // request with more is refused before anything is held.
+  "magi-2": { images: 10, videos: 5, audio: 5, requestRefusesOverLimit: true },
   // Multi-image reference providers.
   // `characters` = the dedicated identity input (KIE `character_ids`, max 3).
   // It is NOT an image-reference lane: it draws from the SAME 7-unit budget as
@@ -3692,6 +3728,9 @@ export const VIDEO_REF_VIDEO_DURATION_LIMITS: Record<string, RefVideoDurationLim
   // between 2 and 20 seconds, got 45", docs.kie.ai/market/kling/v4-flash-reference-to-video).
   // A 2 s floor per clip makes the combined floor hold too.
   "kling-4-flash": { minSec: 2, maxSec: 20, maxTotalSec: 20 },
+  // MAGI-2 — "Each video must be 2–30 seconds long, and all reference videos
+  // together at most 30 seconds" (docs.kie.ai MAGI-2 reference-to-video).
+  "magi-2": { minSec: 2, maxSec: 30, maxTotalSec: 30 },
 }
 
 /**
@@ -3720,6 +3759,31 @@ export interface RefVideoPictureLimit {
 
 export const VIDEO_REF_VIDEO_PICTURE_LIMITS: Record<string, RefVideoPictureLimit | undefined> = {
   "seedance-2-5-flash": { minPixels: 409_600, maxPixels: 927_408, minAspect: 0.4, maxAspect: 2.5, minFps: 24, maxFps: 60 },
+}
+
+/**
+ * The containers a provider takes a reference video in, in ffprobe's
+ * `format_name` spelling (an MP4 and a MOV both read "mov,mp4,m4a,…"). Only
+ * providers with a documented rule are listed; a clip in another container is
+ * refused before anything is held ({@link refVideoFormatProblem}). MAGI-2:
+ * "Reference videos: up to 5 public URLs (MP4 / MOV)".
+ */
+export const VIDEO_REF_VIDEO_FORMATS: Record<string, readonly string[] | undefined> = {
+  "magi-2": ["mp4", "mov"],
+}
+
+/**
+ * Why `provider` cannot take a reference video whose probe read `formatNames`,
+ * as a finished sentence, or undefined when it can. A provider with no row, or
+ * a clip whose format could not be read, is never refused: a failed probe must
+ * not refuse a run.
+ */
+export function refVideoFormatProblem(provider: string, formatNames: readonly string[] | undefined): string | undefined {
+  const formats = VIDEO_REF_VIDEO_FORMATS[provider]
+  if (!formats || !formatNames || formatNames.length === 0) return undefined
+  if (formatNames.some((f) => formats.includes(f))) return undefined
+  const want = formats.map((f) => f.toUpperCase()).join(" or ")
+  return `This model takes reference videos as ${want} files only, and one is in another format. Convert it to ${want} and run again.`
 }
 
 /** "2.5:1" for a ratio at or above 1, "1:2.5" below it. */
@@ -3882,6 +3946,9 @@ export const RESOLUTION_DURATION_PRICING: Record<string, readonly string[]> = {
   // PRICING_DEFAULT_RESOLUTION, and normalizeViduQ4Resolution pins the same
   // 720p at the wire.
   "vidu-q4": ["540p", "720p", "1080p", "2k", "4k"],
+  // MAGI-2 — per-second billing at its one resolution, the same rate on all
+  // three task models (no reference or audio dimension).
+  "magi-2": ["1080p"],
   // Kling 4.0 — per-second billing at three resolution rates on both endpoints.
   // `kling-4` adds a `-ref` rate for a run with a reference video
   // (VIDEO_REF_RATE_PROVIDERS).
@@ -4026,7 +4093,7 @@ export function videoProviderRequiresImage(provider: string | undefined): boolea
  * its reference images — i.e. an end frame with no start frame is a reference
  * the model actually receives, not a half-formed frame pair.
  *
- * The Seedance 2.x, MiniMax Hailuo 3 and Wan 3 families all assemble their KIE
+ * The Seedance 2.x, MiniMax Hailuo 3, Wan 3 and MAGI-2 families all assemble their KIE
  * input through the shared `resolveSeedance2Inputs` (`@nodaro/prompts`), whose
  * reference mode takes a lone last frame as the sole reference image plus a
  * closing-frame prompt hint. NOTHING else does: VEO ships `[imageUrl,
@@ -4041,7 +4108,7 @@ export function videoProviderRequiresImage(provider: string | undefined): boolea
  * family here; one that does not keeps the honest `image_required` 400.
  */
 export function videoProviderFoldsLoneEndFrame(provider: string): boolean {
-  return isSeedance2Provider(provider) || isMinimaxH3Provider(provider) || isWan3Provider(provider) || isGeminiOmniPerSecondProvider(provider)
+  return isSeedance2Provider(provider) || isMinimaxH3Provider(provider) || isWan3Provider(provider) || isMagi2Provider(provider) || isGeminiOmniPerSecondProvider(provider)
 }
 
 /**
@@ -4407,6 +4474,12 @@ export const VIDEO_AUDIO_CAPABILITY: Record<string, VideoAudioCapability> = {
   // `audio_driven` would reroute the Story→Video dialogue pipeline. Audio is
   // priced into the uniform per-second rate (no `:audio` composite).
   "vidu-q4": { mode: "ambient", field: "audio", defaultOn: true },
+  // MAGI-2 — the boolean `generate_audio` lever (KIE default true), the same
+  // price on or off. Its schema says dialogue in quotes is spoken, but it is
+  // classified "ambient" on the Wan 3.0 rule until a live probe verifies
+  // lip-synced speech (`native_speech` / `audio_driven` would reroute the
+  // Story→Video dialogue pipeline).
+  "magi-2": { mode: "ambient", field: "generateAudio", defaultOn: true },
   // Kling 4.0 — native audio on both endpoints, no lever: neither schema has
   // an audio switch (the reference endpoint's `keep_original_sound` only picks
   // between a reference video's own sound and generated sound). Classified
@@ -4634,6 +4707,8 @@ export const VIDEO_VARIABLE_PRICING: Record<string, "duration" | "duration+audio
   // Vidu Q4 — per-second billing at five resolution rates; no reference or
   // audio dimension.
   "vidu-q4": "duration+resolution",
+  // MAGI-2 — per-second at its one resolution; no reference or audio dimension.
+  "magi-2": "duration+resolution",
   // Kling 4.0 — per-second at two resolution rates; `kling-4` adds the
   // reference-video rate.
   "kling-4": "duration+resolution+ref",
@@ -4945,6 +5020,8 @@ export const PRICING_DEFAULT_RESOLUTION: Record<string, string> = {
   // Vidu Q4 — KIE renders 720p when `resolution` is omitted, and
   // normalizeViduQ4Resolution pins the same tier for anything unknown.
   "vidu-q4": "720p",
+  // MAGI-2 — 1080p is its only tier.
+  "magi-2": MAGI_2_RESOLUTION,
   // Kling 4.0 — KIE renders 720p when `resolution` is omitted, and
   // normalizeKling4Resolution pins the same tier for anything unknown.
   "kling-4": "720p",
@@ -5021,6 +5098,12 @@ const WAN_3_DURATION_TIERS: Array<{ maxSeconds: number; suffix: string }> = Arra
 const VIDU_Q4_DURATION_TIERS: Array<{ maxSeconds: number; suffix: string }> = Array.from(
   { length: 14 },
   (_, i) => ({ maxSeconds: i + 3, suffix: `${i + 3}s` }),
+)
+
+/** MAGI-2 per-second tiers — one per allowed duration (4-30s), all three task models. */
+const MAGI_2_DURATION_TIERS: Array<{ maxSeconds: number; suffix: string }> = Array.from(
+  { length: 27 },
+  (_, i) => ({ maxSeconds: i + 4, suffix: `${i + 4}s` }),
 )
 
 /** Kling 4.0 per-second tiers — one per allowed duration (3-30s), both ids. */
@@ -5132,6 +5215,7 @@ export const VIDEO_DURATION_TIERS: Record<string, Array<{ maxSeconds: number; su
   "wan-3": WAN_3_DURATION_TIERS,
   "wan-3-prime": WAN_3_DURATION_TIERS,
   "vidu-q4": VIDU_Q4_DURATION_TIERS,
+  "magi-2": MAGI_2_DURATION_TIERS,
   "kling-4": KLING_4_DURATION_TIERS,
   "kling-4-keyframes": KLING_4_DURATION_TIERS,
   "kling-4-flash": KLING_4_FLASH_DURATION_TIERS,

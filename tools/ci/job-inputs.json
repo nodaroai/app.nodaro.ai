@@ -1002,6 +1002,7 @@
         "backend/src/providers/kie/long-render.ts",
         "backend/src/providers/kie/ltx-2-5.ts",
         "backend/src/providers/kie/luma-client.ts",
+        "backend/src/providers/kie/magi-2.ts",
         "backend/src/providers/kie/models.ts",
         "backend/src/providers/kie/omni-character.ts",
         "backend/src/providers/kie/pixverse-v6-max.ts",

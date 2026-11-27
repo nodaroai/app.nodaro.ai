@@ -1812,6 +1812,20 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   "vidu-q4:3s:4k": 470, "vidu-q4:4s:4k": 630, "vidu-q4:5s:4k": 780, "vidu-q4:6s:4k": 940, "vidu-q4:7s:4k": 1100,
   "vidu-q4:8s:4k": 1250, "vidu-q4:9s:4k": 1410, "vidu-q4:10s:4k": 1560, "vidu-q4:11s:4k": 1720, "vidu-q4:12s:4k": 1880,
   "vidu-q4:13s:4k": 2030, "vidu-q4:14s:4k": 2190, "vidu-q4:15s:4k": 2340, "vidu-q4:16s:4k": 2500,
+  // ── MAGI-2 (KIE magi-2/text-to-video + image-to-video + reference-to-video) ──
+  //    ONE per-second ladder for all three task models, for sound on or off and
+  //    whatever references a run carries (decided 2026-11-26): credits = 44 × seconds,
+  //    rounded UP to the next 10. 1080p is the only resolution. ONE ROW PER SECOND
+  //    across 4-30s — the tier lookup snaps UP and falls back to the LAST tier.
+  //    The bare id is the DEFAULT render (5s @ 1080p, the catalog's defaultDuration).
+  //    Machine-generated with its model_pricing migration — never edit one value by hand.
+  "magi-2": 220,                  // (5s 1080p default render)
+  "magi-2:4s:1080p": 180, "magi-2:5s:1080p": 220, "magi-2:6s:1080p": 270, "magi-2:7s:1080p": 310, "magi-2:8s:1080p": 360,
+  "magi-2:9s:1080p": 400, "magi-2:10s:1080p": 440, "magi-2:11s:1080p": 490, "magi-2:12s:1080p": 530, "magi-2:13s:1080p": 580,
+  "magi-2:14s:1080p": 620, "magi-2:15s:1080p": 660, "magi-2:16s:1080p": 710, "magi-2:17s:1080p": 750, "magi-2:18s:1080p": 800,
+  "magi-2:19s:1080p": 840, "magi-2:20s:1080p": 880, "magi-2:21s:1080p": 930, "magi-2:22s:1080p": 970, "magi-2:23s:1080p": 1020,
+  "magi-2:24s:1080p": 1060, "magi-2:25s:1080p": 1100, "magi-2:26s:1080p": 1150, "magi-2:27s:1080p": 1190, "magi-2:28s:1080p": 1240,
+  "magi-2:29s:1080p": 1280, "magi-2:30s:1080p": 1320,
   // ── Kling 4.0 (KIE kling-4.0/reference-to-video + kling-4.0/keyframe-to-video) ──
   //    Two ids, one per endpoint, ONE ROW PER SECOND across 3-30s at 720p /
   //    1080p (4K below): credits = KIE cr/s × seconds × 2.5, rounded UP to the next 10

@@ -16,7 +16,7 @@ Existing workflows continue to work — `text-to-video` nodes auto-migrate to `g
 
 ## Pricing & parameters
 
-All text-to-video pricing examples (VEO 3.x, Gemini Omni, Kling, Seedance 2, Hailuo Standard, Bytedance, MiniMax, Wan 2.6 / 2.7 / **3.0**, HappyHorse, Runway, …), per-provider parameter tables, and the dispatch rules that route a wireless node to `text-to-video` mode are documented on the [Generate Video](./generate-video.md) page.
+All text-to-video pricing examples (VEO 3.x, Gemini Omni, Kling, Seedance 2, Hailuo Standard, Bytedance, MiniMax, Wan 2.6 / 2.7 / **3.0**, **MAGI-2**, HappyHorse, Runway, …), per-provider parameter tables, and the dispatch rules that route a wireless node to `text-to-video` mode are documented on the [Generate Video](./generate-video.md) page.
 
 `/v1/text-to-video` remains a live API route and behaves identically to the
 unified node. A resolution, aspect ratio or duration the wired model does not

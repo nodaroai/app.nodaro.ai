@@ -26,7 +26,7 @@ import { VIDEO_DURATION_AUTO, isAutoVideoDuration, getModel, isSeedanceDraftCapa
 import { getLipSyncMaxAudioSeconds, motionTransferResolution } from "@nodaro/shared/credits"
 import { videoCharacterClipsBilledAsReferenceVideo, videoCharacterRefProblem, videoCharacterRefUnits, videoCharacterVoiceCap } from "@nodaro/shared/video"
 import { resolveSeedance2Inputs, resolveGeminiOmniI2vInputs, resolveVeoI2vInputs, placeFramesAfterReferences } from "@nodaro/prompts/assembly"
-import { isGeminiOmniPerSecondProvider, isPixverseV6MaxProvider, isLtx25Provider, pricedOutputDurationSec, type Ltx25Provider, QUEUED_VIDEO_TO_VIDEO_JOB_PROVIDER } from "@nodaro/shared/models"
+import { isGeminiOmniPerSecondProvider, isPixverseV6MaxProvider, isLtx25Provider, isMagi2Provider, pricedOutputDurationSec, type Ltx25Provider, QUEUED_VIDEO_TO_VIDEO_JOB_PROVIDER } from "@nodaro/shared/models"
 import { GEMINI_OMNI_12_RATE_USD_PER_SEC, buildGeminiOmni12Request, geminiOmni12FrameAspect, geminiOmni12SendsRealFrames, prepareGeminiOmni12Source } from "./gemini-omni-12.js"
 import {
   createSanitizedError,
@@ -44,6 +44,7 @@ import { buildKling4Request, kling4PollAttempts } from "./kling4.js"
 import { buildGrokVideo15Request } from "./grok-video-15.js"
 import { buildPixverseV6MaxRequest } from "./pixverse-v6-max.js"
 import { buildLtx25AudioRequest, buildLtx25Request } from "./ltx-2-5.js"
+import { buildMagi2Request, magi2CostUsd, magi2FrameAspect, magi2NamesShape } from "./magi-2.js"
 import { kling4CostUsd } from "./kling4-cost.js"
 import { runRunwayTask, runAlephTask } from "./runway-client.js"
 import { runLumaModifyTask } from "./luma-client.js"
@@ -2462,6 +2463,89 @@ async function runLtx25(
   return { url: videoUrl, cost: tierCostUsd, ...(taskId && { kieTaskId: taskId }), ...(providerMs !== undefined && { providerMs }) }
 }
 
+/**
+ * MAGI-2 — ONE Nodaro id over three KIE task models (text / image / reference
+ * to video). The body and the task model come from the pure
+ * `buildMagi2Request` (magi-2.ts); this runner prepares the media first:
+ * reference images through the shared size normalization (the frames the
+ * caller passes are already normalized by imageToVideo), and reference audio
+ * that is not WAV or MP3 converted to MP3 (`reference-audio-convert.ts`,
+ * `VIDEO_REF_AUDIO_RULES["magi-2"]`). Reference videos go as they came: their
+ * container (MP4 / MOV), length and count were checked before the hold.
+ */
+async function runMagi2(
+  modelConfig: KieModelConfig,
+  /** OUR Nodaro key (NOT modelConfig.model, the KIE id) for the egress seam. */
+  modelKey: string,
+  prompt: string | undefined,
+  duration: number | undefined,
+  aspectRatioValue: string | undefined,
+  startFrameUrl: string | undefined,
+  endFrameUrl: string | undefined,
+  options: ProviderOptions | undefined,
+  reconcileOpts: ReconcileOpts | undefined,
+  logLabel: string,
+): Promise<ProviderResult> {
+  const requested = duration !== undefined && duration > 0 ? duration : pricedOutputDurationSec(modelKey, undefined)
+  const snapped = snapToAllowedDuration(requested, modelConfig.allowedDurations ?? [])
+  if (duration !== undefined && duration > 0 && snapped !== duration) {
+    console.log(`[KIE.ai] ${logLabel}: duration ${duration}s not allowed, snapped to ${snapped}s`)
+  }
+  const normalizedOptions = await normalizeReferenceImages(modelKey, options)
+  // A reference run needs an aspect ratio. When the request names none and a
+  // frame is wired, the clip follows the frame's shape (decided 2026-11-27).
+  // A frame that cannot be measured leaves the 16:9 default; it never fails the run.
+  const frameUrl = startFrameUrl ?? endFrameUrl
+  let frameAspectRatio: string | undefined
+  if (frameUrl && !magi2NamesShape(aspectRatioValue)) {
+    const size = await probeImageSource(frameUrl).then((probe) => probe.size, () => undefined)
+    frameAspectRatio = magi2FrameAspect(size?.width, size?.height)
+  }
+  const { model, input, droppedRefImages } = buildMagi2Request({
+    prompt: prompt ?? "",
+    durationSec: snapped,
+    aspectRatio: aspectRatioValue,
+    frameAspectRatio,
+    startFrameUrl,
+    endFrameUrl,
+    referenceImageUrls: normalizedOptions?.referenceImageUrls,
+    referenceVideoUrls: normalizedOptions?.referenceVideoUrls,
+    referenceAudioUrls: normalizedOptions?.referenceAudioUrls,
+    seed: options?.seed,
+    sound: options?.sound,
+    generateAudio: options?.generateAudio,
+  })
+  if (droppedRefImages > 0) {
+    console.log(`[KIE.ai] ${logLabel}: dropped ${droppedRefImages} trailing reference image(s) to fit the 10-image cap`)
+  }
+  if ((options?.characterReferences?.length ?? 0) > 0) {
+    console.log(`[KIE.ai] ${logLabel}: ignored character references — this model takes none`)
+  }
+  await convertSeedanceReferenceAudio(input, modelKey)
+
+  const tierCostUsd = magi2CostUsd(snapped)
+  console.log(`[KIE.ai] ${logLabel} (${model}) input:`, JSON.stringify(input, null, 2))
+  const { resultJson, taskId, providerMs, rawRecordInfo } = await runKieTask(
+    model, input, MAX_POLL_ATTEMPTS_VIDEO, options?.onProgress,
+    { ...reconcileOpts, modelKey, dimensions: { ...reconcileOpts?.dimensions, ...deriveKieEgressDimensions(input) } },
+  )
+  const videoUrl = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
+  if (!videoUrl) {
+    throw createSanitizedError(`${logLabel} task succeeded but no URL found`, "Video generation")
+  }
+  console.log(`[KIE.ai] ${logLabel} completed: ${videoUrl} (tier cost: $${tierCostUsd.toFixed(4)})`)
+  // What KIE should bill beside what it reports, so a staging run measures the rate.
+  logCreditAudit({
+    modelKey,
+    expectedKieCredits: Math.round((tierCostUsd / KIE_CREDIT_USD) * 10) / 10,
+    modelConfig: { duration: snapped, resolution: input.resolution, provider: modelKey },
+    rawResponseSample: rawRecordInfo,
+    actualKieCredits: extractCreditFields(rawRecordInfo)?.credits as number | undefined,
+    notes: `${model} ${modelKey} ${String(input.resolution)}`,
+  })
+  return { url: videoUrl, cost: tierCostUsd, ...(taskId && { kieTaskId: taskId }), ...(providerMs !== undefined && { providerMs }) }
+}
+
 export class KieVideoProvider
   implements
     ImageToVideoProvider,
@@ -2933,6 +3017,25 @@ export class KieVideoProvider
       )
     }
 
+    // MAGI-2 — bespoke builder (magi-2.ts): three task models picked by what is
+    // wired, explicit allow-list bodies with an integer duration. MUST stay above
+    // the generic createTask path. The frames are the ones normalized above; a
+    // run with neither frame nor reference takes the text-to-video config.
+    if (isMagi2Provider(provider)) {
+      return runMagi2(
+        effectiveImageUrl || effectiveEndFrameUrl ? modelConfig : (KIE_TEXT_TO_VIDEO_MODELS[provider] ?? modelConfig),
+        provider,
+        effectivePrompt,
+        duration,
+        options?.aspectRatio,
+        effectiveImageUrl,
+        effectiveEndFrameUrl,
+        options,
+        reconcileOpts,
+        `MAGI-2 (${provider})`,
+      )
+    }
+
     // Standard createTask endpoint for other providers
     const input: Record<string, unknown> = {
       ...(modelConfig.extraParams ?? {}),
@@ -3377,6 +3480,24 @@ export class KieVideoProvider
         options,
         reconcileOpts,
         `LTX 2.5 t2v (${provider})`,
+      )
+    }
+
+    // MAGI-2 — the same bespoke builder as its image lane: no frame, so the
+    // text-to-video task model, or the reference model when references are
+    // wired. MUST stay above the generic createTask path.
+    if (isMagi2Provider(provider)) {
+      return runMagi2(
+        modelConfig,
+        provider,
+        effectivePrompt,
+        duration,
+        aspectRatio ?? options?.aspectRatio,
+        undefined,
+        undefined,
+        options,
+        reconcileOpts,
+        `MAGI-2 t2v (${provider})`,
       )
     }
 

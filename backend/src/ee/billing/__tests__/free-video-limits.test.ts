@@ -75,6 +75,19 @@ describe("free-credit video limits — blocked models", () => {
     expect(freeVideoRefusal({ provider: "seedance-2-5-flash", duration: 4 }, ON)).not.toBeNull()
   })
 
+  it("MAGI-2 is open by the default rule (decided 2026-11-26): 4 s at 1080p, its only resolution", () => {
+    expect(FREE_OPEN_VIDEO_MODELS).not.toContain("magi-2")
+    expect(freeVideoModelRefusal("magi-2", ON)).toBeNull()
+    expect(freeVideoRefusal({ provider: "magi-2", duration: 4, resolution: "1080p" }, ON)).toBeNull()
+    expect(freeVideoRefusal(freeVideoRequestOf({ provider: "magi-2", duration: 4, resolution: "1080p" })!, ON)).toBeNull()
+    // An omitted resolution is its one tier, 1080p — open too.
+    expect(freeVideoRefusal({ provider: "magi-2", duration: 4 }, ON)).toBeNull()
+    // Longer than 4 s, Auto length, or no length named (its default is 5 s) are refused.
+    expect(freeVideoRefusal({ provider: "magi-2", duration: 5, resolution: "1080p" }, ON)).not.toBeNull()
+    expect(freeVideoRefusal({ provider: "magi-2", duration: VIDEO_DURATION_AUTO, resolution: "1080p" }, ON)).not.toBeNull()
+    expect(freeVideoRefusal({ provider: "magi-2", resolution: "1080p" }, ON)).not.toBeNull()
+  })
+
   it("Kling 4.0 Flash is the one open Kling model (decided 2026-11-11), and only it", () => {
     expect(freeVideoModelRefusal("kling-4-flash", ON)).toBeNull()
     for (const id of ["kling-4", "kling-4-keyframes", "kling-3.0", "kling"]) {
