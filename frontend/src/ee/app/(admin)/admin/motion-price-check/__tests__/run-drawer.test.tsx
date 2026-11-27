@@ -93,6 +93,7 @@ function run(over: Partial<MotionPriceRun> = {}): MotionPriceRun {
     engine: "prism",
     style: "flex",
     resolution: "720p",
+    deliveredResolution: "720p",
     draft: false,
     lengthSec: 12.4,
     held: 1200,
@@ -179,7 +180,7 @@ const DETAIL: MotionPriceRunDetail = {
   },
 }
 const FULL_QUALITY: MotionPriceRunDetail = {
-  run: run({ id: idOf(4), trendName: "Rooftop", fullQuality: true, draftJobId: idOf(9), resolution: "1080p", kieUsd: null }),
+  run: run({ id: idOf(4), trendName: "Rooftop", fullQuality: true, draftJobId: idOf(9), resolution: "1080p", deliveredResolution: "4k", kieUsd: null }),
   quote: {
     totalCredits: 335,
     expectedCredits: null,
@@ -399,7 +400,8 @@ describe("Admin → Motion price check: a run's drill-down", () => {
     expect(within(dialog).getByText("2026-11-02 09:05 · ops@nodaro.example")).toBeInTheDocument()
     expect(factOf(dialog, "Engine")).toHaveTextContent(/^Prism$/)
     expect(factOf(dialog, "Style")).toHaveTextContent(/^Flex$/)
-    expect(factOf(dialog, "Resolution")).toHaveTextContent(/^720p$/)
+    expect(factOf(dialog, "Engine size")).toHaveTextContent(/^720p$/)
+    expect(factOf(dialog, "Delivered")).toHaveTextContent(/^720p$/)
     expect(factOf(dialog, "Clip")).toHaveTextContent(/^12\.4 s$/)
     expect(factOf(dialog, "Status")).toHaveTextContent(/^completed$/)
     expect(factOf(dialog, "Held")).toHaveTextContent(/^1,200$/)
@@ -419,14 +421,17 @@ describe("Admin → Motion price check: a run's drill-down", () => {
     expect(draft.closest("p")).toHaveTextContent(`Draft ${idOf(9)}`)
     // A whole id wraps at a phone's width.
     expect(tokens(draft)).toContain("break-all")
-    expect(factOf(dialog, "Resolution")).toHaveTextContent(/^1080p$/)
+    // Made at 1080p, delivered at 4K.
+    expect(factOf(dialog, "Engine size")).toHaveTextContent(/^1080p$/)
+    expect(factOf(dialog, "Delivered")).toHaveTextContent(/^4K$/)
     expect(factOf(dialog, "Paid $")).toHaveTextContent(/^\$12\.10$/)
   })
 
-  it("a draft's resolution says so; KIE real shows for a run KIE charged nothing", async () => {
-    const detail = { ...DETAIL, run: run({ resolution: "480p", draft: true, kieUsd: 0, email: null }) }
+  it("a draft's engine size says so; KIE real shows for a run KIE charged nothing", async () => {
+    const detail = { ...DETAIL, run: run({ resolution: "480p", deliveredResolution: null, draft: true, kieUsd: 0, email: null }) }
     const dialog = await openDrawer(detail)
-    expect(factOf(dialog, "Resolution")).toHaveTextContent(/^480p \(draft\)$/)
+    expect(factOf(dialog, "Engine size")).toHaveTextContent(/^480p \(draft\)$/)
+    expect(factOf(dialog, "Delivered")).toHaveTextContent(/^—$/)
     expect(factOf(dialog, "Paid $")).toHaveTextContent(/KIE real$/)
     // No email: the account's id.
     expect(within(dialog).getByText(`2026-11-02 09:05 · ${USER_ID}`)).toBeInTheDocument()

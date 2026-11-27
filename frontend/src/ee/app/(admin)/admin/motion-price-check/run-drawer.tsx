@@ -56,6 +56,7 @@ import {
   formatSeconds,
   formatUsd,
   formatWhen,
+  deliveredLabel,
   resolutionLabel,
   runName,
   styleLabel,
@@ -174,10 +175,11 @@ const ROW = "border-b border-border/50 last:border-0"
 function RunFacts({ run }: { run: MotionPriceRun }) {
   return (
     <div className="space-y-4">
-      <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-5">
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-6">
         <Fact label="Engine">{engineLabel(run.engine)}</Fact>
         <Fact label="Style">{styleLabel(run.style)}</Fact>
-        <Fact label="Resolution">{resolutionLabel(run.resolution, run.draft)}</Fact>
+        <Fact label="Engine size">{resolutionLabel(run.resolution, run.draft)}</Fact>
+        <Fact label="Delivered">{deliveredLabel(run.deliveredResolution)}</Fact>
         <Fact label="Clip">{run.lengthSec === null ? NONE : `${formatSeconds(run.lengthSec)} s`}</Fact>
         <Fact label="Status">{run.status || NONE}</Fact>
       </dl>

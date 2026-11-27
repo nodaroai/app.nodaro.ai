@@ -48,7 +48,7 @@ const KINDS: readonly Option<MotionPriceFilters["kind"]>[] = [
   { value: "hand", label: "Hand" },
 ]
 const RESOLUTIONS: readonly Option<MotionPriceFilters["resolution"]>[] = [
-  { value: "all", label: "All resolutions" },
+  { value: "all", label: "All engine sizes" },
   { value: "480p", label: "480p" },
   { value: "720p", label: "720p" },
   { value: "1080p", label: "1080p" },
@@ -146,7 +146,7 @@ export function FiltersBar({
         <Choice label="Style" value={value.style} options={STYLES} onChange={(style) => set({ style })} />
         <Choice label="Kind" value={value.kind} options={KINDS} onChange={(kind) => set({ kind })} />
         <Choice
-          label="Resolution"
+          label="Engine size"
           value={value.resolution}
           options={RESOLUTIONS}
           onChange={(resolution) => set({ resolution })}

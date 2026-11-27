@@ -12,9 +12,9 @@ import { Button } from "@/components/ui/button"
 import { RemakeFaultChips } from "@/ee/components/admin/remake-fault-chips"
 import type { RemakeFaultRun } from "@/ee/lib/remake-faults-api"
 import { JobPageLink } from "../jobs/job-detail-view"
-import { engineLabel, formatCount, formatWhen, resolutionLabel } from "../motion-price-check/format"
+import { deliveredLabel, engineLabel, formatCount, formatWhen, resolutionLabel } from "../motion-price-check/format"
 
-const COLUMNS = ["When", "Who", "Engine", "Resolution", "Status", "Faults", "Job"] as const
+const COLUMNS = ["When", "Who", "Engine", "Engine size", "Delivered", "Status", "Faults", "Job"] as const
 const CELL = "whitespace-nowrap p-2 align-top"
 
 function FaultRow({ run }: { run: RemakeFaultRun }) {
@@ -40,6 +40,7 @@ function FaultRow({ run }: { run: RemakeFaultRun }) {
         )}
       </td>
       <td className={CELL}>{resolutionLabel(run.resolution, run.draft)}</td>
+      <td className={CELL}>{deliveredLabel(run.deliveredResolution)}</td>
       <td className={CELL}>{run.status}</td>
       <td className="min-w-64 p-2 align-top">
         <RemakeFaultChips faults={run.faults} />

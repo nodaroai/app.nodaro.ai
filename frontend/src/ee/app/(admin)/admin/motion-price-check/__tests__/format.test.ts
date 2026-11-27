@@ -23,6 +23,7 @@ import {
   formatWhen,
   rangeProblem,
   rangeToIso,
+  deliveredLabel,
   resolutionLabel,
   styleLabel,
 } from "../format"
@@ -61,6 +62,9 @@ describe("Motion price check — figures", () => {
     expect(resolutionLabel("480p", true)).toBe("480p (draft)")
     expect(resolutionLabel("720p", false)).toBe("720p")
     expect(resolutionLabel(null, false)).toBe("—")
+    expect(deliveredLabel("4k")).toBe("4K")
+    expect(deliveredLabel("1080p")).toBe("1080p")
+    expect(deliveredLabel(null)).toBe("—")
   })
 
   it("times read in local time", () => {

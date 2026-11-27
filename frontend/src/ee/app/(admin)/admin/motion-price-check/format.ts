@@ -62,10 +62,16 @@ export const styleLabel = (style: string): string => STYLE_NAMES.get(style) ?? s
 export const runName = (run: Pick<MotionPriceRun, "kind" | "trendName">): string =>
   run.kind === "trend" ? (run.trendName ?? "Trend") : "Hand"
 
-/** A resolution as the page names it; a draft's says so. */
+/** The engine's size as the page names it; a draft's says so. */
 export function resolutionLabel(resolution: string | null, draft: boolean): string {
   if (resolution === null) return NONE
   return draft ? `${resolution} (draft)` : resolution
+}
+
+/** The size delivered as the page names it: "4K" for "4k", the others as they are spelled. */
+export function deliveredLabel(size: string | null): string {
+  if (size === null) return NONE
+  return size === "4k" ? "4K" : size
 }
 
 const pad = (n: number): string => String(n).padStart(2, "0")

@@ -70,7 +70,10 @@ export interface RemakeFaultRun {
   status: string
   fullQuality: boolean
   engine: "prism" | "pulse"
+  /** The size the engine made the run at (480p, 720p, 1080p); null where none is recorded. */
   resolution: string | null
+  /** The size delivered (it may be "4k"); for a run that has not completed, the size asked where it is known, else null. */
+  deliveredResolution: string | null
   draft: boolean
   worst: RemakeFaultSeverity
   faults: RemakeFault[]
@@ -101,6 +104,7 @@ function runOf(row: Rec): RemakeFaultRun | null {
     fullQuality: row.full_quality === true,
     engine: row.engine === "pulse" ? "pulse" : "prism",
     resolution: str(row.resolution),
+    deliveredResolution: str(row.delivered_resolution),
     draft: row.draft === true,
     worst: faults[0]?.severity ?? severityOf(row.worst),
     faults,

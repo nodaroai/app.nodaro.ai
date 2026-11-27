@@ -103,6 +103,8 @@ INSERT INTO server_only (sig) VALUES
   ('admin_motion_style(jsonb)'),
   ('admin_motion_task_ids(timestamptz,timestamptz)'),
   ('admin_motion_tree(uuid[],jsonb,text[])'),
+  ('admin_remake_delivered_resolution(jsonb,jsonb,text)'),
+  ('admin_remake_engine_resolution(jsonb,jsonb)'),
   ('allocate_workspace_credits(uuid,uuid,integer,uuid)'),
   ('app_analytics_one_run_since()'),
   ('app_analytics_recount_retried_runs()'),

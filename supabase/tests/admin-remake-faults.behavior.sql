@@ -1,5 +1,6 @@
 -- ============================================================================
--- Behavioral proof: the admin Remake faults list (migration 694) — every
+-- Behavioral proof: the admin Remake faults list (migration 694; each row's
+-- two sizes are migration 731's, proven in admin-remake-sizes.behavior.sql) — every
 -- Video Remake run of a range that recorded a fault, filtered and paged.
 --
 -- Runs AFTER the whole migration chain, as `postgres`, in a transaction that
@@ -126,7 +127,8 @@ SELECT pg_temp.assert_json('101: faults read and ordered', (SELECT r->'faults' F
     {"kind":"brand_new","severity":"warning"}]');
 SELECT pg_temp.assert_json('101: the row', (SELECT r - 'faults' - 'created_at' FROM jsonb_array_elements(pg_temp.list()->'rows') r WHERE r->>'id' LIKE '%694101'),
   '{"id":"00000000-0000-4000-8000-000000694101","user_id":"00000000-0000-4000-8000-000000694001","email":"rf-owner@rf.test",
-    "job_type":"cast-swap","status":"failed","full_quality":false,"engine":"prism","resolution":"720p","draft":true,"worst":"blocked"}');
+    "job_type":"cast-swap","status":"failed","full_quality":false,"engine":"prism","resolution":"720p",
+    "delivered_resolution":"720p","draft":true,"worst":"blocked"}');
 SELECT pg_temp.assert_json('102: a Full Quality Pulse try', (SELECT jsonb_build_object('fq', r->'full_quality', 'engine', r->'engine', 'worst', r->'worst')
                                                                FROM jsonb_array_elements(pg_temp.list()->'rows') r WHERE r->>'id' LIKE '%694102'),
   '{"fq":true,"engine":"pulse","worst":"warning"}');

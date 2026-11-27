@@ -22,7 +22,10 @@ export interface RemakeFaultRun {
   status: string
   fullQuality: boolean
   engine: RemakeEngine
+  /** The size the engine made the run at (480p, 720p, 1080p); null where none is recorded. */
   resolution: string | null
+  /** The size delivered ("4k" for 4K); for a run that has not completed, the size asked where it is known, else null. */
+  deliveredResolution: string | null
   draft: boolean
   /** The worst severity among its faults. */
   worst: CastSwapFaultSeverity

@@ -1,7 +1,7 @@
 /**
  * Admin → Motion price check: the totals over every filtered run of the
- * range, in the API's order: All, then each engine, resolution and style,
- * with the resolutions shown by number (480p, 720p, 1080p).
+ * range, in the API's order: All, then each engine, engine size and style,
+ * with the engine sizes shown by number (480p, 720p, 1080p).
  * A group's figures sum its settled runs only (a run in flight counts in
  * "unsettled" alone), so a group with none reads "—". In its own scroll box
  * (`Scroll`), named by the section's heading, so a phone scrolls the table and
@@ -14,7 +14,8 @@ import { Scroll } from "./scroll-box"
 
 const DIMENSIONS: Readonly<Record<Exclude<MotionPriceTotal["dimension"], "all">, string>> = {
   engine: "Engine",
-  resolution: "Resolution",
+  // By the engine's size: a 4K delivery made at 1080p is a 1080p run here.
+  resolution: "Engine size",
   style: "Style",
 }
 
