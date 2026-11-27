@@ -3760,7 +3760,7 @@ Needs `workflows:execute` · Nodaro Cloud only.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `video_url` | string (URL) | yes | The source clip, 4–30 s. |
+| `video_url` | string (URL) | yes | The source clip, 4–30 s (where offered: 2–30 s, or up to 10 min with a part). |
 | `roles` | object[] | yes | At most 15 roles, any kinds (name each place if several); 30 images sent. At least one role with images, a reference, a pre_prompt or post_prompt — or, on a nodaro-prism Flex run where the engine takes style-only runs, an art_style alone (restyles the whole clip). |
 | `roles[].kind` | string | yes | One of `person`, `pet`, `product`, `location`. |
 | `roles[].name` | string |  | Who in the video, e.g. "the woman that attacks". Unset: named by its first image (needs one). At most 200 characters. |
@@ -3783,6 +3783,8 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | `post_prompt` | string |  | Extra instructions. Mention a role as {role:N}, N 1-based over roles (empty roles count). At most 4000 characters. |
 | `preview` | boolean |  | true = render 4 s from preview_start. |
 | `preview_start` | number |  | Seconds, default 0; preview_start + 4 must fit the clip. At least 0. |
+| `portion_start` | number |  | Seconds: run only the part starting here; with portion_sec, not preview. Where offered (else portion_unavailable). At least 0. |
+| `portion_sec` | number |  | The part's length in seconds; priced by it. Above 0. |
 | `engine` | string |  | Default "nodaro-prism" (Nodaro Prism). "nodaro-pulse" (Nodaro Pulse): no draft, no Full Quality. Where offered, at a lower price (else flash_not_offered): "nodaro-prism-flash" (at most 10 images) and "nodaro-pulse-flash" (at most 20 s); neither has a draft or Full Quality. Their sizes: see resolution. One of `nodaro-prism`, `nodaro-pulse`, `nodaro-prism-flash`, `nodaro-pulse-flash`. |
 | `style` | string |  | "precise" (default) follows the clip exactly; "motion" follows the clip's movement and takes the looks from the photos, more freely than precise. Its price may differ: the quote shows it. An admin may force "motion" for the engine, which overrides this. One of `precise`, `motion`. |
 | `art_style` | string |  | An art style on Nodaro Prism (Flex; a Precise call may run as Flex): a "style" picker catalog id (get_picker_catalog "style"), e.g. "pop-art". The prompt takes its video wording. With no role images and no references it restyles the whole clip, where the engine takes style-only runs (Flex). Pulse takes none. From 1 to 100 characters. |

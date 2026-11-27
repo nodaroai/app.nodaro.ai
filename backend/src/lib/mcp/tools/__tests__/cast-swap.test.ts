@@ -1182,3 +1182,79 @@ describe("video_remake: resolution is the size delivered", () => {
     }
   })
 })
+
+describe("video_remake: a part of the clip", () => {
+  afterEach(() => _resetPluginSupportsForTests())
+  const run = { statusCode: 202, body: { jobId: "job-part" } }
+  const { preview: _p, preview_start: _ps, ...WHOLE } = ARGS
+  const { preview: _bp, previewStart: _bps, ...WHOLE_BODY } = BODY
+
+  it("lists portion_start and portion_sec, seconds, and says where they are offered", async () => {
+    const { fastify } = stubFastify({})
+    const tool = (await listTools(serverWith(fastify))).find((t) => t.name === "video_remake")!
+    const props = (tool.inputSchema as { properties: Record<string, { type?: string; minimum?: number; exclusiveMinimum?: number; description?: string }> }).properties
+    expect(props.portion_start).toMatchObject({ type: "number", minimum: 0 })
+    expect(props.portion_sec).toMatchObject({ type: "number", exclusiveMinimum: 0 })
+    expect(props.portion_start!.description).toContain("portion_unavailable")
+    expect(tool.description).toContain("portion_start")
+  })
+
+  it("sends portionStart and portionSec to the quote and the run where the loaded engine takes a part", async () => {
+    setPluginSupports({ castSwap: { portion: true } as never })
+    const { fastify, calls } = stubFastify({ "/v1/video-remake/estimate": { statusCode: 200, body: QUOTE }, "/v1/video-remake": run })
+    await callTool(serverWith(fastify), "video_remake", { ...WHOLE, portion_start: 42.5, portion_sec: 12 })
+    const res = await callTool(serverWith(fastify), "video_remake", { ...WHOLE, portion_start: 42.5, portion_sec: 12, confirm: true })
+    expect(res.isError).toBeFalsy()
+    expect(calls.map((c) => c.url)).toEqual(["/v1/video-remake/estimate", "/v1/video-remake"])
+    for (const call of calls) expect(call.payload).toEqual({ ...WHOLE_BODY, portionStart: 42.5, portionSec: 12 })
+  })
+
+  it("leaves every other rule of a part to the route: one field alone, or with a preview, is sent as given", async () => {
+    setPluginSupports({ castSwap: { portion: true } as never })
+    const refused = { statusCode: 400, body: { error: { code: "portion_incomplete", message: "Send portionStart and portionSec together." } } }
+    const { fastify, calls } = stubFastify({ "/v1/video-remake/estimate": refused })
+    const res = await callTool(serverWith(fastify), "video_remake", { ...WHOLE, portion_start: 3 })
+    expect(res.isError).toBe(true)
+    expect(res.content[0]!.text).toContain("portion_incomplete")
+    expect(calls.map((c) => c.payload)).toEqual([{ ...WHOLE_BODY, portionStart: 3 }])
+    const withPreview = stubFastify({ "/v1/video-remake/estimate": { statusCode: 400, body: { error: { code: "portion_with_preview", message: "A part is not a preview." } } } })
+    await callTool(serverWith(withPreview.fastify), "video_remake", { ...ARGS, portion_start: 3, portion_sec: 8 })
+    expect(withPreview.calls.map((c) => c.payload)).toEqual([{ ...BODY, portionStart: 3, portionSec: 8 }])
+  })
+
+  it("refuses portion_unavailable, asking nothing, where the engine does not declare it (it would run the whole clip)", async () => {
+    for (const castSwap of [undefined, {}, { portion: false }, { upscaleChoice: true }]) {
+      _resetPluginSupportsForTests()
+      if (castSwap) setPluginSupports({ castSwap: castSwap as never })
+      for (const part of [{ portion_start: 0, portion_sec: 10 }, { portion_start: 5 }, { portion_sec: 10 }]) {
+        for (const confirm of [undefined, true]) {
+          const { fastify, calls } = stubFastify({ "/v1/video-remake/estimate": { statusCode: 200, body: QUOTE }, "/v1/video-remake": run })
+          const res = await callTool(serverWith(fastify), "video_remake", { ...WHOLE, ...part, ...(confirm ? { confirm } : {}) })
+          expect(res.isError, JSON.stringify({ castSwap, part, confirm })).toBe(true)
+          expect(res.content[0]!.text).toContain("[portion_unavailable]")
+          expect(calls).toEqual([])
+        }
+      }
+    }
+  })
+
+  it("refuses a negative start or a length that is not positive before anything is asked", async () => {
+    setPluginSupports({ castSwap: { portion: true } as never })
+    for (const part of [{ portion_start: -1, portion_sec: 5 }, { portion_start: 0, portion_sec: 0 }, { portion_start: 0, portion_sec: -3 }]) {
+      const { fastify, calls } = stubFastify({ "/v1/video-remake/estimate": { statusCode: 200, body: QUOTE } })
+      const res = await callTool(serverWith(fastify), "video_remake", { ...WHOLE, ...part })
+      expect(res.isError, JSON.stringify(part)).toBe(true)
+      expect(calls).toEqual([])
+    }
+  })
+
+  it("sends a body without the fields when neither is named, on every engine", async () => {
+    for (const castSwap of [undefined, { portion: true }]) {
+      _resetPluginSupportsForTests()
+      if (castSwap) setPluginSupports({ castSwap: castSwap as never })
+      const { fastify, calls } = stubFastify({ "/v1/video-remake/estimate": { statusCode: 200, body: QUOTE } })
+      await callTool(serverWith(fastify), "video_remake", ARGS)
+      expect(calls.map((c) => c.payload)).toEqual([BODY])
+    }
+  })
+})

@@ -2393,7 +2393,7 @@ sideBySide(jobId: string): Promise<VideoRemakeSideBySide> // POST /v1/video-rema
 
 ```ts
 interface VideoRemakeParams {
-  videoUrl: string                 // the source clip, 4–30 s
+  videoUrl: string                 // the source clip, 4–30 s (where offered: 2–30 s, or up to 10 min with a part; see below)
   roles: Array<
     | { kind: "person"; name: string; images: string[] | null
         body?: "new" | "original"; outfit?: "new" | "original"; hair?: "new" | "original";
@@ -2411,6 +2411,8 @@ interface VideoRemakeParams {
   postPrompt?: string              // your own words; mention a role as {role:N}, N 1-based over roles
   preview?: boolean                // true = run on 4 s of the clip
   previewStart?: number            // seconds, default 0
+  portionStart?: number            // a part of the clip: where it starts, seconds ≥ 0, with portionSec; where styleChoice() answers portion
+  portionSec?: number              // the part's length in seconds (see A part of the clip below)
   engine?: VideoRemakeEngineChoice    // "nodaro-prism" (default) | "nodaro-pulse", or where offered "nodaro-prism-flash" | "nodaro-pulse-flash" (see below)
   style?: VideoRemakeStyle            // "precise" (default) | "motion" (see below)
   direction?: { style: string }    // an art style, a `style` picker id, nodaro-prism only: Flex (see Style only), or Precise where styleChoice() says so
@@ -2561,10 +2563,30 @@ as `{}`), the deployment's engine does not deliver resolutions yet:
 `"720p"` or `"1080p"`, Nodaro Pulse `"720p"` (default) or `"1080p"`, Nodaro
 Prism Flash `"480p"` (default) or `"720p"`, Nodaro Pulse Flash `"720p"`.
 
+**A part of the clip, and short clips** (each where the deployment's engine
+has it switched on; read any answer other than `true`, a missing one included,
+as off). Where `styleChoice()` answers `portion: true`, `run()`, `estimate()`
+and `planRoles()` take `portionStart` (seconds, at least 0) and `portionSec`
+(seconds), always together: an ordinary run of that part, not a preview,
+priced by its length (quote with the same part you will run). With a part (or
+a 4 s `preview`) the source may be longer than 30 s, up to 10 minutes. The job
+records both in `input_data`, and the completed output's `durationSec`
+(`VideoRemakeJobOutput`) is the part's length. Refusals, each `400`:
+`portion_unavailable` (not offered here), `portion_incomplete` (one field
+alone), `portion_with_preview`, `portion_not_for_trends`,
+`portion_out_of_range` (the part does not fit the clip, or its length is
+outside a run's limits), `source_too_long` (over 10 minutes) and
+`long_source_unpriceable` (a source over 30 s whose length could not be read).
+Where `styleChoice()` answers `shortClips: true`, a clip of 2–30 s is accepted
+instead of 4–30 s: a clip shorter than the engine's shortest output is
+lengthened, run and cut back, and priced at the lengthened length; a 4 s
+preview of a clip under 4 s is still refused `preview_out_of_range`. The
+estimate is the authority on a clip's length (`clip_out_of_range`).
+
 **A forced style** (`styleChoice()`, `VideoRemakeStyleChoice`): Nodaro may fix
 an engine's style for everyone as Motion, and every `run()` and `estimate()` on it then
 uses that style whatever `style` says. `styleChoice()` answers
-`{ engines: { "nodaro-prism": VideoRemakeStyleChoiceOption, "nodaro-pulse": VideoRemakeStyleChoiceOption }, styleOnly?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, preciseArtStyle?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, preciseArtStyleAlone?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, customStyle?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, planRoles?: boolean, planRolesPreviz?: boolean, previz?: boolean, roleFace?: boolean, flash?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, resolutions?: { [engineChoice]?: VideoRemakeResolution[] } }`,
+`{ engines: { "nodaro-prism": VideoRemakeStyleChoiceOption, "nodaro-pulse": VideoRemakeStyleChoiceOption }, styleOnly?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, preciseArtStyle?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, preciseArtStyleAlone?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, customStyle?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, planRoles?: boolean, planRolesPreviz?: boolean, previz?: boolean, roleFace?: boolean, flash?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, resolutions?: { [engineChoice]?: VideoRemakeResolution[] }, portion?: boolean, shortClips?: boolean }`,
 each engine `"user"` (the caller chooses), `"precise"` or `"flex"`
 (`style: "motion"`, fixed as above). `"precise"` changes no request: Nodaro's
 own apps run Precise on that engine and hide their style control, and every
@@ -2757,15 +2779,16 @@ minutes, so `planRoles()` waits 200 s by default whatever the client's
 `timeoutMs`; pass `{ timeoutMs }` as its second argument to wait another time,
 or `{ signal }` to cancel.
 
-`planRoles({ videoUrl, prompt, images, engine?, roles?, references?, preview?, previewStart?, clipKind?, previz? })`
+`planRoles({ videoUrl, prompt, images, engine?, roles?, references?, preview?, previewStart?, portionStart?, portionSec?, clipKind?, previz? })`
 (`POST /v1/video-remake/plan-roles`): `prompt` is the request, at most 4000
 characters, in any language, and may be empty or left out (the images alone
 are enough); `images` are 1–30 public http(s) PNG, JPEG, WebP
 or GIF pictures of at most 10 MB each, in the order the person gave them;
 `roles` and `references` are what you already have (never changed or repeated,
-and counted against a run's limits); `engine`, `preview` and `previewStart` as
-a run takes them (Nodaro Pulse sends fewer images; a preview is planned from
-its own 4 s). It answers `VideoRemakePlannedRoles`:
+and counted against a run's limits); `engine`, `preview`, `previewStart`,
+`portionStart` and `portionSec` as a run takes them (Nodaro Pulse sends fewer
+images; a preview is planned from its own 4 s, and a part of the clip from
+that part). It answers `VideoRemakePlannedRoles`:
 
 - `prompt`: the request, untouched;
 - `roles`: the NEW roles, each exactly as `run()` takes one (`name` says which
@@ -2804,7 +2827,9 @@ Refusals (`VideoRemakePlanRolesRefusalCode`): `401 unauthorized`,
 `400 validation_error`, `400 unsafe_url`, `403 plan_roles_not_available` (not
 offered here: set the roles yourself; a server from before it answers 404),
 `403 model_not_available` / `403 node_not_available`, `400 video_unreadable`,
-`400 clip_out_of_range` (not 4–30 s), `400 preview_out_of_range`,
+`400 clip_out_of_range` (not 4–30 s, or 2–30 s where `shortClips` is `true`),
+`400 preview_out_of_range`, a part of the clip's refusals (see A part of the
+clip above),
 `400 image_unreadable` (an image could not be fetched, is too large or is not
 a picture; the envelope's `details.index`, read as
 `err.details.details.index`, says which), `502 plan_roles_failed` (try again,
@@ -3036,8 +3061,10 @@ a `prePrompt` or `postPrompt` over 4,000 characters (`validation_error`), a `{ro
 1..`roles.length` (empty roles count), a raw `{image:` / `{video:` / `{audio:` token in a role's `name`, the
 `prePrompt` or the `postPrompt`, a prompt that would build too long
 (`prompt_too_long`: a `{role:N}` reads as the role's name when it sends no
-images), a clip outside 4–30 s, or a preview past the clip's end
-(`previewStart + 4` > its length); also for an invalid body
+images), a clip outside 4–30 s (2–30 s where `styleChoice()` answers
+`shortClips: true`), or a preview past the clip's end
+(`previewStart + 4` > its length), and a part of the clip's own refusals (see
+A part of the clip, and short clips); also for an invalid body
 (`validation_error`), an address that is not public http(s) (`unsafe_url`) or a
 clip whose length cannot be read (`video_unreadable`). Other refusals: `401`,
 `402 insufficient_credits` (`run()` only), `404` (a `sessionId` you may not use),

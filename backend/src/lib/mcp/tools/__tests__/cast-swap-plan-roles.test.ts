@@ -558,3 +558,25 @@ describe("video_remake with reference_image_urls where roles are not planned", (
     }
   })
 })
+
+describe("video_remake with reference_image_urls and a part of the clip", () => {
+  it("plans the roles from that part and quotes it, where the engine takes a part", async () => {
+    setPluginSupports({ castSwap: { roleKinds: [], fixedReferences: true, fullQuality: true, resolutions: ["720p"], trendRun: true, planRoles: true, portion: true } as never })
+    const { fastify, calls } = stubFastify(routes())
+    const res = await callTool(serverWith(fastify), "video_remake", { ...ARGS, portion_start: 20, portion_sec: 10 })
+    expect(res.isError).toBeFalsy()
+    expect(urls(calls)).toEqual(["/v1/video-remake/plan-roles", "/v1/video-remake/estimate"])
+    expect(calls[0]!.payload).toEqual({ videoUrl: CLIP, prompt: REQUEST, images: [ANNA, BEACH], portionStart: 20, portionSec: 10 })
+    expect(calls[1]!.payload).toMatchObject({ portionStart: 20, portionSec: 10 })
+    // The arguments to confirm with keep the part.
+    expect((res.structuredContent as { arguments: Record<string, unknown> }).arguments).toMatchObject({ portion_start: 20, portion_sec: 10, confirm: true })
+  })
+
+  it("asks nothing, not even the plan, where the engine does not take a part", async () => {
+    const { fastify, calls } = stubFastify(routes())
+    const res = await callTool(serverWith(fastify), "video_remake", { ...ARGS, portion_start: 20, portion_sec: 10 })
+    expect(res.isError).toBe(true)
+    expect(res.content[0]!.text).toContain("[portion_unavailable]")
+    expect(calls).toEqual([])
+  })
+})

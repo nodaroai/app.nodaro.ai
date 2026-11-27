@@ -112,6 +112,18 @@
  * names it (lib/video-remake-delivered-resolution.ts). An engine that does not
  * deliver resolutions yet (`castSwap.deliveredResolution` absent) reads
  * `resolution` as its own size, and the quote's text names what it answers.
+ *
+ * A part of the clip (`portion_start`, `portion_sec`, in seconds, decided
+ * 2026-11-25): an ordinary run of that length, priced by it, sent as
+ * `portionStart` / `portionSec` to the run, the quote and the plan of the
+ * roles. Only an engine that declares `castSwap.portion` takes them
+ * (lib/video-remake-portion.ts): an engine without it would drop the fields
+ * and quote and run (and charge for) the whole clip, so a call that names
+ * either is answered `portion_unavailable` before anything is asked, as for a
+ * 3D previz clip. Every other rule of a part (both fields together, not with
+ * `preview`, inside the clip, a source of at most 10 minutes) is the route's.
+ * The tool has no quote of its own beside `video_remake`: a call without
+ * `confirm` is the estimate.
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import type { FastifyInstance } from "fastify"
@@ -155,6 +167,7 @@ import { amountsNote, amountWord, statedAmount, statedAmountRecord, unitFields }
 import { statedName } from "../deployment-name.js"
 import { checkIntentArg, intentMismatchSentence, runIntentArg, videoRemakeIntentMismatch } from "./_video-remake-intent.js"
 import { VIDEO_REMAKE_DELIVERED_SIZES, deliveredSizeLabel, deliveredSizeOfQuote, type VideoRemakeDeliveredSize } from "../../video-remake-delivered-resolution.js"
+import { loadedEngineTakesPortion } from "../../video-remake-portion.js"
 
 const executeGate: ToolGate = { required: ["workflows:execute"] }
 
@@ -451,6 +464,11 @@ const PREVIZ_UNAVAILABLE = {
   isError: true as const,
 }
 
+const PORTION_UNAVAILABLE = {
+  content: [{ type: "text" as const, text: "Running a part of the clip is not available on this deployment. Send the whole clip (4–30 s) with no portion_start or portion_sec, or a 4 s preview. [portion_unavailable]" }],
+  isError: true as const,
+}
+
 /** Whether a refusal is the route's own "a 3D previz clip is not accepted here". */
 const previzNotAvailable = (statusCode: number, body: string): boolean => statusCode === 403 && /"previz_not_available"/.test(body)
 
@@ -506,6 +524,7 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor }: Re
         "By default each person, pet and product's images are first made into one clean reference picture (extra credits, about a minute; prepare_references: false skips it). " +
         "Without `confirm` it returns the PRICE QUOTE only (nothing is charged): show the credits to the user, and call again with `confirm: true` only once they accept. " +
         "That returns a job id: poll it with wait_for_job. `preview: true` renders 4 s first, a cheaper check of the look. " +
+        "Where offered, portion_start + portion_sec run a part of the clip (a source up to 10 min), priced by its length. " +
         'engine picks the engine: "nodaro-prism" (Nodaro Prism, the default) or "nodaro-pulse" (Nodaro Pulse; no draft); resolution is the size delivered, 720p by default, up to 4k. ' +
         "Image and video URLs must be http(s): upload local files with the upload tools first." +
         (recastOffered(session) ? ` ${RECAST_POINTER}` : "") +
@@ -514,7 +533,7 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor }: Re
       // takes an older client's `kling_length` as `motion_length` and ignores `face_masking`
       // (the payload is built field by field). Only the listed keys are in the tool list.
       inputSchema: z.looseObject({
-        video_url: z.string().url().describe("The source clip, 4–30 s."),
+        video_url: z.string().url().describe("The source clip, 4–30 s (where offered: 2–30 s, or up to 10 min with a part)."),
         roles: z
           .array(
             z.discriminatedUnion("kind", [
@@ -580,6 +599,16 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor }: Re
           .describe("Extra instructions. Mention a role as {role:N}, N 1-based over roles (empty roles count)."),
         preview: z.boolean().optional().describe("true = render 4 s from preview_start."),
         preview_start: z.number().min(0).optional().describe("Seconds, default 0; preview_start + 4 must fit the clip."),
+        portion_start: z
+          .number()
+          .min(0)
+          .optional()
+          .describe("Seconds: run only the part starting here; with portion_sec, not preview. Where offered (else portion_unavailable)."),
+        portion_sec: z
+          .number()
+          .positive()
+          .optional()
+          .describe("The part's length in seconds; priced by it."),
         engine: castSwapEngineArg
           .optional()
           .describe(
@@ -715,6 +744,10 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor }: Re
         args.previz_sound !== undefined ||
         args.roles.some((role) => (role as { subject?: unknown }).subject !== undefined)
       if (previzNamed && !loadedEngineTakesPreviz()) return PREVIZ_UNAVAILABLE
+      // A part of the clip: an engine that does not declare it drops the fields and would quote and run (and charge
+      // for) the whole clip, so it is never sent them (quote, plan or run). Every other rule of a part is the route's.
+      const portionNamed = args.portion_start !== undefined || args.portion_sec !== undefined
+      if (portionNamed && !loadedEngineTakesPortion()) return PORTION_UNAVAILABLE
       // Loose reference images: roles are planned from the prompt, on the quote only.
       const looseImages = args.reference_image_urls
       if (looseImages !== undefined) {
@@ -758,6 +791,9 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor }: Re
         ...(args.post_prompt !== undefined ? { postPrompt: args.post_prompt } : {}),
         ...(args.preview !== undefined ? { preview: args.preview } : {}),
         ...(args.preview_start !== undefined ? { previewStart: args.preview_start } : {}),
+        // Sent as given (both or one: the route refuses an incomplete part, `portion_incomplete`).
+        ...(args.portion_start !== undefined ? { portionStart: args.portion_start } : {}),
+        ...(args.portion_sec !== undefined ? { portionSec: args.portion_sec } : {}),
         ...(flash !== undefined ? { engine: flash } : engine !== undefined ? { engine } : {}),
         ...(args.style !== undefined ? { style: args.style } : {}),
         // The art style's id alone, never another `direction` key; when one applies is the route's to say.
@@ -805,6 +841,9 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor }: Re
               ...(body.references !== undefined ? { references: body.references } : {}),
               ...(args.preview !== undefined ? { preview: args.preview } : {}),
               ...(args.preview_start !== undefined ? { previewStart: args.preview_start } : {}),
+              // A part of the clip: planned from that part, as the run will be made of it.
+              ...(body.portionStart !== undefined ? { portionStart: body.portionStart } : {}),
+              ...(body.portionSec !== undefined ? { portionSec: body.portionSec } : {}),
               // A 3D previz clip is stated to the plan only where the engine plans one's roles (any other refuses the
               // key): the run's own statement and options. Elsewhere the plan is an ordinary clip's, as before.
               ...(body.clipKind !== undefined && loadedEngineTakesPlanRolesPreviz() ? { clipKind: body.clipKind, ...(body.previz !== undefined ? { previz: body.previz } : {}) } : {}),

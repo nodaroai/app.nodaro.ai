@@ -5575,6 +5575,24 @@ export interface PluginSupports {
      */
     readonly upscaleNext?: PluginCastSwapUpscaleNext
     /**
+     * A part of the clip (decided 2026-11-25): a run, its estimate and the plan-roles route take
+     * `portionStart` (seconds, at least 0) and `portionSec` (seconds), an ordinary run of that length
+     * priced by it (not a preview: refused with `preview: true`, `portion_with_preview`; never on a
+     * trend run, `portion_not_for_trends`). With a part the source clip may be longer than 30 s, up to
+     * 10 minutes. The job's input echoes both fields, and the completed output's `durationSec` is the
+     * part's length. Declared only while the deployment's engine switch is on (read at load); where it
+     * is off the engine refuses the fields, 400 `portion_unavailable`. Absent: none of this
+     * (lib/video-remake-portion.ts).
+     */
+    readonly portion?: boolean
+    /**
+     * Short clips (decided 2026-11-25): the accepted clip length is 2–30 s instead of 4–30 s (a clip
+     * under the engine's shortest output is padded in time, run and cut back, priced at the padded
+     * length). Declared only while the deployment's engine switch is on. Absent: 4–30 s
+     * (lib/video-remake-portion.ts).
+     */
+    readonly shortClips?: boolean
+    /**
      * Video Remake's delivered resolution (2026-11-26): a run and its estimate that carry no `upscale`
      * key read `resolution` as the size DELIVERED (`"480p" | "720p" | "1080p" | "4k"`), however the engine
      * makes it; the estimate's and the completed job's `resolution` answer the size delivered, and the

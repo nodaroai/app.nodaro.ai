@@ -1180,3 +1180,45 @@ describe("resolution: the size delivered", () => {
     expect((await older.videoRemake.styleChoice()).resolutions ?? {}).toEqual({})
   })
 })
+
+describe("a part of the clip and short clips", () => {
+  it("sends portionStart and portionSec on run and estimate as given", async () => {
+    const part: Pick<VideoRemakeParams, "portionStart" | "portionSec"> = { portionStart: 42.5, portionSec: 12 }
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ totalCredits: 20, breakdown: { references: 0 }, settlesLower: false })).mockReturnValueOnce(mockOk({ jobId: "j-part" }, 202))
+    const client = make(fetchMock)
+    await client.videoRemake.estimate({ ...params, ...part })
+    await client.videoRemake.run({ ...params, ...part })
+    for (const [, init] of fetchMock.mock.calls as [string, RequestInit][]) {
+      expect(JSON.parse(init.body as string)).toMatchObject(part)
+    }
+  })
+
+  it("planRoles sends the part, and nothing of it when it is left out", async () => {
+    const plan = { prompt: "", roles: [], references: [], postPrompt: "", removed: [], unresolved: [] }
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk(plan)).mockReturnValueOnce(mockOk(plan))
+    const client = make(fetchMock)
+    const base: VideoRemakePlanRolesParams = { videoUrl: "https://cdn.example.com/clip.mp4", images: ["https://cdn.example.com/a.png"] }
+    await client.videoRemake.planRoles({ ...base, portionStart: 60, portionSec: 10 })
+    await client.videoRemake.planRoles(base)
+    const bodies = (fetchMock.mock.calls as [string, RequestInit][]).map(([, init]) => JSON.parse(init.body as string))
+    expect(bodies[0]).toEqual({ ...base, portionStart: 60, portionSec: 10 })
+    expect(bodies[1]).toEqual(base)
+  })
+
+  it("styleChoice passes portion and shortClips through, typed; an older server's answer has neither", async () => {
+    const answer: VideoRemakeStyleChoice = { engines: { "nodaro-prism": "user", "nodaro-pulse": "user" }, portion: true, shortClips: false }
+    const got = await make(vi.fn().mockReturnValueOnce(mockOk(answer))).videoRemake.styleChoice()
+    const portion: boolean | undefined = got.portion
+    const shortClips: boolean | undefined = got.shortClips
+    expect([portion, shortClips]).toEqual([true, false])
+    const older = await make(vi.fn().mockReturnValueOnce(mockOk({ engines: answer.engines }))).videoRemake.styleChoice()
+    expect(older.portion === true || older.shortClips === true).toBe(false)
+  })
+
+  it("types the refusals of a part and a completed part's length", () => {
+    const codes: VideoRemakePlanRolesRefusalCode[] = ["portion_unavailable", "portion_incomplete", "portion_with_preview", "portion_out_of_range", "source_too_long", "long_source_unpriceable"]
+    expect(codes).toHaveLength(6)
+    const output: VideoRemakeJobOutput = { videoUrl: "https://cdn.example.com/out.mp4", durationSec: 12 }
+    expect(output.durationSec).toBe(12)
+  })
+})

@@ -6166,10 +6166,10 @@ length, with its own cast and new music, and can change the motion itself.
 |---|---|---|
 | `POST` | `/v1/video-remake/estimate` | Quote a run in credits before starting it. Free: nothing is created or reserved. Returns `{ engine, totalCredits, expectedCredits, breakdown, privacyCredits?, settlesLower, firstRemakeOffer?, resolution? }`: `totalCredits` is held when the run starts, `expectedCredits` is what it is expected to be charged (`firstRemakeOffer`: see [First Remake on us](#first-remake-on-us); `resolution`, the size the run delivers: see The size delivered below). |
 | `POST` | `/v1/video-remake` | Start the run. Returns `202 { jobId }`; follow the job like any other (`GET /v1/jobs/:id`). Takes an `Idempotency-Key` (see below). |
-| `GET` | `/v1/video-remake/style-choice` | Whether you choose a run's `style`, per engine, or it is fixed as Motion (`"precise"` sets only what Nodaro's own apps run), whether the engine takes a style-only run, whether a Precise run takes an art style (see Style below), whether a run may state a 3D previz clip (`previz`, see A 3D previz clip below), whether such a clip's roles can be planned (`planRolesPreviz`, see Roles planned from the prompt below), whether a person role may keep its own face (`roleFace`, see The Face chip below), whether each engine's Flash choice is offered (`flash`, see Flash choices below), and the sizes each engine choice delivers here (`resolutions`, see The size delivered below). Public: no sign-in needed. |
+| `GET` | `/v1/video-remake/style-choice` | Whether you choose a run's `style`, per engine, or it is fixed as Motion (`"precise"` sets only what Nodaro's own apps run), whether the engine takes a style-only run, whether a Precise run takes an art style (see Style below), whether a run may state a 3D previz clip (`previz`, see A 3D previz clip below), whether such a clip's roles can be planned (`planRolesPreviz`, see Roles planned from the prompt below), whether a person role may keep its own face (`roleFace`, see The Face chip below), whether each engine's Flash choice is offered (`flash`, see Flash choices below), and the sizes each engine choice delivers here (`resolutions`, see The size delivered below), whether a run takes a part of the clip (`portion`) and whether a clip of 2 s or more is accepted (`shortClips`; both under A part of the clip, and short clips below). Public: no sign-in needed. |
 | `GET` | `/v1/video-remake/advanced` | Whether the Video Remake page shows its Advanced options (see below). Public: no sign-in needed. |
 | `POST` | `/v1/video-remake/describe-style` | Put an image's visual style into words, for a run's custom style (see A custom style below). Body `{ imageUrl, note? }`; returns `{ text, medium?, tones? }`. Free: no job, nothing charged. Signed in; 10 calls a minute per account. |
-| `POST` | `/v1/video-remake/plan-roles` | Plan a run's roles from a request in the person's own words and loose reference images (see Roles planned from the prompt below). Body `{ videoUrl, prompt, images, engine?, roles?, references?, preview?, previewStart?, clipKind?, previz? }`; returns `{ prompt, roles, references, postPrompt, removed, unresolved }`. Free: no job, nothing charged. Signed in; 6 calls a minute and 60 a day per account. |
+| `POST` | `/v1/video-remake/plan-roles` | Plan a run's roles from a request in the person's own words and loose reference images (see Roles planned from the prompt below). Body `{ videoUrl, prompt, images, engine?, roles?, references?, preview?, previewStart?, portionStart?, portionSec?, clipKind?, previz? }`; returns `{ prompt, roles, references, postPrompt, removed, unresolved }`. Free: no job, nothing charged. Signed in; 6 calls a minute and 60 a day per account. |
 | `POST` | `/v1/video-remake/intent` | Check, before a run, whether the request's typed words ask for something Video Remake does (see Checking the request first below). Same body as the estimate and the run; returns `{ checked, fits, code? }`. Free: no job, nothing charged; never refuses a run. Signed in; 12 calls a minute per account. Only where the deployment has it switched on (elsewhere `checked: false`). |
 | `GET` | `/v1/video-remake/art-styles` | The art styles the Video Remake page offers, each with its name and preview clip (see below). Public: no sign-in needed. |
 | `GET` | `/v1/video-remake/previews` | Before-and-after previews of what Video Remake does, each with its clips, stills, title and caption (see below). Public: no sign-in needed. |
@@ -6201,7 +6201,8 @@ it out of a preview — not sent, prepared or charged; a full run ignores both),
 and optionally `references` (see below), `prePrompt` (your own
 words placed at the start of the prompt, before the role instructions; it
 mentions roles as `{role:N}`, like `postPrompt`), `postPrompt`, `preview`,
-`previewStart`, `engine` (see below), `style` (see below), `direction` (an art
+`previewStart`, `portionStart` and `portionSec` (a part of the clip, where the
+deployment offers it: see A part of the clip, and short clips below), `engine` (see below), `style` (see below), `direction` (an art
 style from the catalog, or a custom style in your own words, see below), `resolution` (the size the video is delivered at: `"720p"` — the default —
 `"1080p"` or `"4k"`; on a Flash choice `"720p"` — the default — or `"1080p"`;
 see The size delivered below), `draft` (off by default; `true` makes a
@@ -6275,6 +6276,35 @@ engine does not deliver resolutions yet, and `resolution` is the size it
 makes: Nodaro Prism `"480p"` (the default), `"720p"` or `"1080p"`, Nodaro
 Pulse `"720p"` (the default) or `"1080p"`, Nodaro Prism Flash `"480p"` (the
 default) or `"720p"`, Nodaro Pulse Flash `"720p"`.
+
+**A part of the clip, and short clips.** Two choices a deployment may turn on
+for its engine. Each is off unless `GET /v1/video-remake/style-choice` answers
+it `true`; read every other answer, a missing one included, as off: the clip is
+then 4–30 s, whole, as above.
+
+- **A part of the clip** (where `style-choice` answers `portion: true`; one
+  boolean, not per engine; a server from before it leaves it out, read that as
+  `false`). A run, its estimate and `POST /v1/video-remake/plan-roles` take
+  `portionStart` (where the part starts, in seconds, at least 0) and
+  `portionSec` (its length, in seconds), always together. The run is an
+  ordinary run of that part, not a preview, and is priced by the part's
+  length: quote with the same two fields you will run with. With a part (or a
+  4 s `preview`) the source clip may be longer than 30 s, up to 10 minutes. The
+  job records both fields in `input_data`, and the completed job's output
+  `durationSec` is the part's length. Refusals, each `400` before anything is
+  held: `portion_unavailable` (not offered here), `portion_incomplete` (one
+  field without the other), `portion_with_preview` (with `preview: true`),
+  `portion_not_for_trends` (a trend run), `portion_out_of_range` (the part does
+  not fit the clip, or its length is outside a run's limits),
+  `source_too_long` (a source over 10 minutes) and `long_source_unpriceable`
+  (a source over 30 s whose length could not be read to price the part).
+- **Short clips** (where `style-choice` answers `shortClips: true`; one
+  boolean; an engine that does not say leaves it `false`). The clip may be 2–30 s instead of 4–30 s. A clip
+  shorter than the engine's shortest output is lengthened, run and cut back to
+  its own length, and is priced at the lengthened length (the estimate shows
+  it). A 4 s preview of a clip shorter than 4 s is still refused
+  `preview_out_of_range`. The estimate is the authority on the length a clip
+  may have: a clip outside it answers `clip_out_of_range`.
 
 **Flash choices.** Where Nodaro offers it, each engine also has a Flash
 choice beside it: `"nodaro-prism-flash"` (Nodaro Prism Flash) and
@@ -6468,7 +6498,8 @@ image replaces. Nothing runs: the answer is ordinary `roles` and
 `references` and a `postPrompt`, for you to show and then send to the
 estimate and the run as any others.
 
-Body (strict): `videoUrl` (the clip, 4–30 s); `prompt` (the request, at most 4000
+Body (strict): `videoUrl` (the clip, 4–30 s, or as A part of the clip, and
+short clips above allows); `prompt` (the request, at most 4000
 characters, in any language; it may say nothing of an image, be empty or be
 left out, the images alone being enough; e.g. "put the first photo in place of the
 woman on the left, use the second as the room, and make it rain"); `images` (1–30
@@ -6477,7 +6508,9 @@ order the person gave them); and, optional, `engine` (as a run takes it;
 Nodaro Pulse sends fewer images), `roles` and `references` (what you already
 have, as a run takes them: never changed or repeated, and counted against a
 run's limits), `preview` / `previewStart` (as a run takes them: a preview is
-planned from its own 4 s).
+planned from its own 4 s), `portionStart` / `portionSec` (as a run takes them,
+where `style-choice` answers `portion: true`: the plan is made from that part
+alone).
 
 ```json
 {
@@ -6537,7 +6570,10 @@ minute and 60 in 24 hours (both `429 rate_limit_exceeded`, with
 `400 unsafe_url` (not a public http(s) address), `403
 plan_roles_not_available` (not offered here: set the roles yourself),
 `403 model_not_available` / `403 node_not_available`, `400 video_unreadable`,
-`400 clip_out_of_range` (not 4–30 s), `400 preview_out_of_range`,
+`400 clip_out_of_range` (not 4–30 s, or 2–30 s where `shortClips` is `true`),
+`400 preview_out_of_range`, a run's own refusals of a part of the clip
+(`400 portion_unavailable`, `portion_incomplete`, `portion_with_preview`,
+`portion_out_of_range`, `source_too_long`, `long_source_unpriceable`),
 `400 image_unreadable` (an image could not be fetched, is too large or is not
 a picture; `error.details.index` is its position in `images`, from 0) and
 `502 plan_roles_failed` (try again, or set the roles yourself).
@@ -6846,7 +6882,14 @@ Refusals, all before anything is charged (bodies are
 | `400` | `invalid_role_mention` | `prePrompt` or `postPrompt` mentions `{role:N}` with N outside 1..`roles.length`. N counts every role in `roles`, empty ones included (`{role:1}` is `roles[0]`). Also any `{role:N}` in a reference's `line`: a line describes the thing itself. |
 | `400` | `unsafe_url` | `videoUrl`, a role image or a reference image is not a public http(s) address. |
 | `400` | `video_unreadable` | The clip's length could not be read (not a playable video). |
-| `400` | `clip_out_of_range` | The clip is shorter than 4 s or longer than 30 s. |
+| `400` | `clip_out_of_range` | The clip is shorter than 4 s or longer than 30 s (where `style-choice` answers `shortClips: true`, shorter than 2 s; with a part of the clip or a preview where it answers `portion: true`, a source over 30 s is judged by the part or the preview instead, up to `source_too_long`). |
+| `400` | `portion_unavailable` | `portionStart` or `portionSec` where this deployment does not run a part of the clip (`style-choice` answers `portion` false or leaves it out). |
+| `400` | `portion_incomplete` | One of `portionStart` and `portionSec` without the other. |
+| `400` | `portion_with_preview` | A part of the clip with `preview: true`: a part is an ordinary run, not a preview. |
+| `400` | `portion_not_for_trends` | A part of the clip on a trend run. |
+| `400` | `portion_out_of_range` | The part does not fit the clip (`portionStart` + `portionSec` past its end), or its length is outside a run's limits. |
+| `400` | `source_too_long` | A source clip over 10 minutes. |
+| `400` | `long_source_unpriceable` | A source clip over 30 s whose length could not be read to price the part. |
 | `400` | `unnamed_role_needs_picture` | A person, pet or product role with no `name` (left out or empty) and no image: an unnamed role is named by its first picture, so it needs one. |
 | `400` | `role_name_required` | A trend run with an unnamed role: a trend's roles are always named (only a direct run's may leave `name` out). |
 | `400` | `no_roles_in_preview` | A preview that would change nothing, judged on what it sends: no role kept in it (`inPreview` not `false`) that has images, no fixed reference, no `prePrompt` or `postPrompt` and no art style. Each of those counts, so a preview with every role left out is still run when it has a reference, a prompt or, where `styleOnly` is answered `true`, an art style (an engine from before style-only runs refuses that last one, with a message that does not name an art style). "The preview would change nothing: keep a role with images in it (inPreview), or add a fixed reference, a pre or post prompt, or an art style (Flex on Nodaro Prism)." |

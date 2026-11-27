@@ -51,8 +51,12 @@ import type { NodaroClientCore } from "../core.js"
  * than 10 images in the run, across every role and fixed reference);
  * `raw_reference_token` (also in a reference's `line`),
  * `invalid_role_mention` (also any `{role:N}` in a reference's `line`),
- * `unsafe_url`, `video_unreadable`, `clip_out_of_range` (4–30 s),
- * `preview_out_of_range`, `unnamed_role_needs_picture` (a role with no name
+ * `unsafe_url`, `video_unreadable`, `clip_out_of_range` (4–30 s; 2–30 s
+ * where `styleChoice()` answers `shortClips` true),
+ * `preview_out_of_range`, with a part of the clip `portion_unavailable`,
+ * `portion_incomplete`, `portion_with_preview`, `portion_not_for_trends`,
+ * `portion_out_of_range`, `source_too_long` and `long_source_unpriceable`
+ * (see `portionStart`), `unnamed_role_needs_picture` (a role with no name
  * and no image), `no_roles_in_preview` (a preview that would change nothing,
  * judged on what it sends: no role kept in it with images, no fixed
  * reference, no `prePrompt` or `postPrompt` and no art style), `prompt_too_long`
@@ -293,7 +297,13 @@ export interface VideoRemakeFaceMasking {
 
 /** The body of `POST /v1/video-remake` and `POST /v1/video-remake/estimate`. */
 export interface VideoRemakeParams {
-  /** The source clip, 4–30 seconds. */
+  /**
+   * The source clip, 4–30 seconds. Where {@link VideoRemakeStyleChoice.shortClips}
+   * is `true`, 2–30 seconds. With a part ({@link portionStart} and
+   * {@link portionSec}) or a 4 s `preview`, where
+   * {@link VideoRemakeStyleChoice.portion} is `true`, the source may be longer
+   * than 30 s, up to 10 minutes.
+   */
   videoUrl: string
   /**
    * Who and what to swap: at most 15 roles in all, in any mix of person,
@@ -336,7 +346,8 @@ export interface VideoRemakeParams {
    *
    * The route answers 400, before charging, for an N outside 1..`roles.length`,
    * for a raw `{image:` / `{video:` / `{audio:` token in the pre or post prompt
-   * or a role's `name`, for a clip outside 4–30 s, and for a preview past the clip's
+   * or a role's `name`, for a clip outside 4–30 s (2–30 s where
+   * {@link VideoRemakeStyleChoice.shortClips} is `true`), and for a preview past the clip's
    * end (`previewStart + 4` > its length).
    */
   postPrompt?: string
@@ -344,6 +355,23 @@ export interface VideoRemakeParams {
   preview?: boolean
   /** Where the preview starts, in seconds. Default 0. */
   previewStart?: number
+  /**
+   * Run a part of the clip: where it starts, in seconds (at least 0). Send
+   * it with {@link portionSec}. The run is an ordinary run of that part (not
+   * a preview), priced by its length, and its completed output's
+   * `durationSec` is the part's length; the job records both fields in its
+   * `input_data`. Only where {@link VideoRemakeStyleChoice.portion} is
+   * `true`; elsewhere 400 `portion_unavailable`. Refused, each 400:
+   * `portion_incomplete` (one field without the other),
+   * `portion_with_preview` (with `preview: true`), `portion_not_for_trends`
+   * (a trend run), `portion_out_of_range` (the part does not fit the clip, or
+   * its length is outside a run's limits), `source_too_long` (a source over
+   * 10 minutes) and `long_source_unpriceable` (a source over 30 s whose
+   * length could not be read to price the part).
+   */
+  portionStart?: number
+  /** The part's length in seconds, with {@link portionStart}. */
+  portionSec?: number
   /**
    * The engine (see {@link VideoRemakeEngine}), or where it is offered its
    * Flash choice (see {@link VideoRemakeFlashEngine}). Default
@@ -494,6 +522,8 @@ export interface VideoRemakeJobOutput {
   videoUrl?: string
   /** The engine the run used, by its public id. */
   engine?: VideoRemakeEngineChoice
+  /** The video's length in seconds: on a run of a part ({@link VideoRemakeParams.portionStart}), the part's length. */
+  durationSec?: number
   /**
    * The size the video was delivered at (see {@link VideoRemakeResolution}).
    * Rarely smaller than the size asked for, when that size could not be
@@ -669,7 +699,12 @@ export interface VideoRemakeDescribedStyle {
 
 /** What {@link VideoRemakeResource.planRoles} takes. */
 export interface VideoRemakePlanRolesParams {
-  /** The clip, a public http(s) URL, 4–30 s. */
+  /**
+   * The clip, a public http(s) URL, 4–30 s (2–30 s where
+   * {@link VideoRemakeStyleChoice.shortClips} is `true`; up to 10 minutes
+   * with a part or a preview where {@link VideoRemakeStyleChoice.portion} is
+   * `true`).
+   */
   videoUrl: string
   /**
    * The request in the person's own words, at most 4000 characters, in any
@@ -693,6 +728,15 @@ export interface VideoRemakePlanRolesParams {
   preview?: boolean
   /** Where the preview starts, in seconds (default 0); `previewStart + 4` must fit the clip. */
   previewStart?: number
+  /**
+   * The part of the clip the run will be made of (see
+   * {@link VideoRemakeParams.portionStart}): the plan is then made from that
+   * part alone. Send the same part to the estimate and the run. Only where
+   * {@link VideoRemakeResource.styleChoice} answers `portion` true.
+   */
+  portionStart?: number
+  /** The part's length in seconds, with {@link portionStart}. */
+  portionSec?: number
   /**
    * What the clip is, as the run will state it (see
    * {@link VideoRemakeClipKind}). `"previz"` says it is a 3D previz: the plan
@@ -828,8 +872,13 @@ export interface VideoRemakePlannedRoles {
  * - `model_not_available` / `node_not_available` (403): Video Remake is not
  *   offered to this account;
  * - `video_unreadable` (400): the clip's length could not be read;
- * - `clip_out_of_range` (400): the clip is not 4–30 s long;
+ * - `clip_out_of_range` (400): the clip is not 4–30 s long (2–30 s where
+ *   {@link VideoRemakeStyleChoice.shortClips} is `true`);
  * - `preview_out_of_range` (400): `previewStart + 4` does not fit the clip;
+ * - with a part of the clip, a run's own refusals of one (see
+ *   {@link VideoRemakeParams.portionStart}): `portion_unavailable`,
+ *   `portion_incomplete`, `portion_with_preview`, `portion_out_of_range`,
+ *   `source_too_long` and `long_source_unpriceable` (each 400);
  * - `image_unreadable` (400): an image could not be fetched, is larger than
  *   10 MB, or is not a PNG, JPEG, WebP or GIF (the envelope's `details.index`, read as
  *   `NodaroError.details.details.index`: its position in `images`, from 0);
@@ -858,6 +907,12 @@ export type VideoRemakePlanRolesRefusalCode =
   | "video_unreadable"
   | "clip_out_of_range"
   | "preview_out_of_range"
+  | "portion_unavailable"
+  | "portion_incomplete"
+  | "portion_with_preview"
+  | "portion_out_of_range"
+  | "source_too_long"
+  | "long_source_unpriceable"
   | "image_unreadable"
   | "plan_roles_failed"
   | "previz_not_available"
@@ -1192,6 +1247,26 @@ export interface VideoRemakeStyleChoice {
    * server: treat it as `{}`.
    */
   resolutions?: Partial<Record<VideoRemakeEngineChoice, VideoRemakeResolution[]>>
+  /**
+   * Whether a run, its estimate and {@link VideoRemakeResource.planRoles}
+   * take a part of the clip here ({@link VideoRemakeParams.portionStart} and
+   * {@link VideoRemakeParams.portionSec}): one answer for the deployment, not
+   * per engine, `true` only where the deployment's engine has it switched on.
+   * Elsewhere a run or estimate that sends either field is refused 400
+   * `portion_unavailable`. Absent from an older server: `false` (offer no
+   * part of the clip).
+   */
+  portion?: boolean
+  /**
+   * Whether a clip of 2 seconds or more is accepted here (a clip shorter
+   * than the engine's shortest output is lengthened, run and cut back, and
+   * priced at the lengthened length), instead of 4 seconds or more. One
+   * answer for the deployment, `true` only where the deployment's engine has
+   * it switched on and says so. Absent, or `false`: the clip must be 4–30 s;
+   * the estimate stays the authority (a clip outside the range answers
+   * `clip_out_of_range`).
+   */
+  shortClips?: boolean
 }
 
 /**
@@ -1397,7 +1472,10 @@ export class VideoRemakeResource {
    * ({@link planRoles}), its `planRolesPreviz` whether a 3D previz clip's
    * roles can be planned too, and its `previz` whether a run may state a 3D previz
    * clip here (`clipKind: "previz"`), and its `roleFace` whether a person role
-   * may keep its own face here (`face: "original"`).
+   * may keep its own face here (`face: "original"`), its `resolutions` the
+   * sizes each engine choice delivers, its `portion` whether a run takes a part
+   * of the clip (`portionStart`, `portionSec`) and its `shortClips` whether a
+   * clip of 2 s or more is accepted.
    * Public (no sign-in needed); the answer may be up to a minute old.
    */
   styleChoice(): Promise<VideoRemakeStyleChoice> {
@@ -1472,6 +1550,8 @@ export class VideoRemakeResource {
       ...(params.references !== undefined ? { references: params.references } : {}),
       ...(params.preview !== undefined ? { preview: params.preview } : {}),
       ...(params.previewStart !== undefined ? { previewStart: params.previewStart } : {}),
+      ...(params.portionStart !== undefined ? { portionStart: params.portionStart } : {}),
+      ...(params.portionSec !== undefined ? { portionSec: params.portionSec } : {}),
       ...(params.clipKind !== undefined ? { clipKind: params.clipKind } : {}),
       ...(params.previz !== undefined ? { previz: params.previz } : {}),
     }
