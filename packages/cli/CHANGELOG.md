@@ -1,5 +1,23 @@
 # @nodaro/cli
 
+## 1.55.1
+
+### Patch Changes
+
+- e55b92f: `nodaro nodes run video-to-video --param provider=nodaro-prism|nodaro-pulse`: the Video Remake quote names the size the run is delivered at (`--param resolution=720p|1080p|4k`, 4K included) where the platform answers it.
+- Updated dependencies [19de7be]
+- Updated dependencies [82b764f]
+- Updated dependencies [0590952]
+- Updated dependencies [0590952]
+- Updated dependencies [8e5b6c5]
+- Updated dependencies [93255f0]
+- Updated dependencies [e55b92f]
+- Updated dependencies [453f97d]
+- Updated dependencies [03126fc]
+  - @nodaro/prompts@1.62.0
+  - @nodaro/shared@3.75.0
+  - @nodaro/sdk@2.81.0
+
 ## 1.55.0
 
 ### Minor Changes
