@@ -11,7 +11,7 @@ import { coveredMarkOf } from "../lib/covered-step.js"
 import { cleanAssetName } from "../lib/asset-names.js"
 import { getAppSettings } from "../lib/app-settings.js"
 import type { ProviderResult } from "../providers/provider.interface.js"
-import { uploadToR2, uploadFileToR2, uploadBufferToR2, uploadFileWithKeyToR2, getR2ObjectSize } from "../lib/storage.js"
+import { uploadToR2, uploadFileToR2, uploadBufferToR2, uploadFileWithKeyToR2, storageChargeOf } from "../lib/storage.js"
 import { uploadJobScratchFile } from "../lib/job-scratch.js"
 import { safeFetch } from "../lib/safe-fetch.js"
 import { isAllowedSocialVideoUrl } from "../lib/url-validator.js"
@@ -1903,7 +1903,9 @@ export async function createAssetFromJob(
       // a recorded reference at insert; a size on it would still read, once a
       // job-history delete NULLed its job, like the worker's own output.
       const ownOutput = isOwnedObjectKey(jobId, r2Key)
-      const sizeBytes = ownOutput ? await getR2ObjectSize(r2Key) : 0
+      // What it was charged, not merely its size: an object stored uncounted
+      // (lib/storage.ts) was never charged, so its row gives nothing back.
+      const sizeBytes = ownOutput ? (await storageChargeOf(r2Key)).bytes : 0
 
       // THE DURABLE RELAY MARKER (`assets.relay_job_id`, migration 384).
       //
@@ -1922,7 +1924,7 @@ export async function createAssetFromJob(
       // needs it. NULL on every non-relayed row, in every edition.
       // The job's own secondary files that go with this row (lib/asset-companions.ts):
       // recorded only beside the job's own output, each sized like the row itself.
-      const companions = ownOutput ? await companionsForRow(jobId, output, type, r2Key, getR2ObjectSize) : []
+      const companions = ownOutput ? await companionsForRow(jobId, output, type, r2Key, storageChargeOf) : []
 
       const relayJobId =
         typeof job.relay_job_id === "string" && job.relay_job_id && !ownOutput
@@ -1966,7 +1968,7 @@ export async function createAssetFromJob(
         r2_url: image.url,
         filename: image.name ? `${libraryFileStem(image.name)}.${ext}` : stored,
         mime_type: LIBRARY_IMAGE_MIME[ext] ?? "image/png",
-        size_bytes: await getR2ObjectSize(r2Key),
+        size_bytes: (await storageChargeOf(r2Key)).bytes,
         upload_source: "generated",
         relay_job_id: null,
         source: job.source ?? null,

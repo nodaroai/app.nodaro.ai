@@ -656,7 +656,7 @@ describe("whole rows", () => {
 
 describe("a webhook body recorded before the setting", () => {
   it("is sent again, and shown in the delivery log, through the funnel", () => {
-    expect(codeOf("lib/webhooks/event.ts")).toMatch(/body: webhookBodyProviderWords\(d\.payload, canRead\), fresh: false/)
-    expect(codeOf("lib/webhooks/endpoints.ts")).toMatch(/requestBody: !hideBody && typeof row\.payload === "string" \? webhookBodyProviderWords\(row\.payload, canRead\) : null/)
+    expect(codeOf("lib/webhooks/event.ts")).toMatch(/body: webhookBodyProviderWords\(redactRecordedJobEvent\(d\.payload\), canRead\), fresh: false/)
+    expect(codeOf("lib/webhooks/endpoints.ts")).toMatch(/requestBody: !hideBody && typeof row\.payload === "string" \? webhookBodyProviderWords\(redactRecordedJobEvent\(row\.payload\), canRead\) : null/)
   })
 })

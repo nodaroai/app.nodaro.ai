@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { neutralBreakdown, privacyCreditsOf, privacyOutcomeOf } from "../nodaro-motion-quote.js"
+import { neutralBreakdown, privacyCreditsOf, privacyOutcomeOf, withStepFolded } from "../nodaro-motion-quote.js"
 
 /**
  * The quote's neutral key names: read the new key first,
@@ -74,5 +74,20 @@ describe("privacyCreditsOf / privacyOutcomeOf", () => {
     expect(privacyOutcomeOf({ faceMasking: { applied: true, reason: "always" } })).toEqual({ applied: true, reason: "always" })
     expect(privacyOutcomeOf({})).toBeUndefined()
     expect(privacyOutcomeOf("x")).toBeUndefined()
+  })
+})
+
+describe("withStepFolded", () => {
+  it("folds the step's line into the 1080p render's, else the video's, else the job's own steps, the total unchanged", () => {
+    expect(withStepFolded({ base: 5, motionHd: 7, upscale: 2 })).toEqual({ base: 5, motionHd: 9 })
+    expect(withStepFolded({ base: 5, motion: 30, references: 3, upscale: 2 })).toEqual({ base: 5, motion: 32, references: 3 })
+    expect(withStepFolded({ base: 5, upscale: 2 })).toEqual({ base: 7 })
+  })
+
+  it("answers a breakdown with no step line as it is (a new object), and one with nothing to fold into too", () => {
+    const plain = { base: 5, motionHd: 7 }
+    expect(withStepFolded(plain)).toEqual(plain)
+    expect(withStepFolded(plain)).not.toBe(plain)
+    expect(withStepFolded({ references: 3, upscale: 2 })).toEqual({ references: 3, upscale: 2 })
   })
 })

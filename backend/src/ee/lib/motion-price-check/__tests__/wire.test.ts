@@ -12,7 +12,7 @@ function runRow(over: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     id: RUN, created_at: "2026-11-02T10:00:00+00:00", user_id: USER, email: "person@example.test", status: "completed",
     full_quality: false, draft_job_id: null, kind: "trend", trend_name: "Dance", engine: "prism", style: "precise",
-    resolution: "720p", draft: false, length_sec: "4", held: "3670", taken: "1063", settled: true,
+    resolution: "720p", delivered_resolution: "1080p", draft: false, length_sec: "4", held: "3670", taken: "1063", settled: true,
     taken_usd: "2.126", recorded_usd: "1.25", kie_usd: null, paid_usd: "1.25", margin_usd: "0.876", margin_pct: "41.2041",
     steps: 5, steps_without_cost: 0, quote: null, quote_total: "1200", reuse: null, extras: null, quote_allowed: "1250",
     flag_paid_above_taken: false, flag_missing_cost: false, flag_above_quote: false, flagged: false,
@@ -25,11 +25,18 @@ describe("runOfRow", () => {
     expect(runOfRow(runRow())).toEqual({
       id: RUN, createdAt: "2026-11-02T10:00:00+00:00", userId: USER, email: "person@example.test", status: "completed",
       fullQuality: false, draftJobId: null, kind: "trend", trendName: "Dance", engine: "prism", style: "precise",
-      resolution: "720p", draft: false, lengthSec: 4, held: 3670, taken: 1063, settled: true,
+      resolution: "720p", deliveredResolution: "1080p", draft: false, lengthSec: 4, held: 3670, taken: 1063, settled: true,
       takenUsd: 2.126, recordedUsd: 1.25, kieUsd: null, paidUsd: 1.25, marginUsd: 0.876, marginPct: 41.2041,
       steps: 5, stepsWithoutCost: 0, quoteTotal: 1200, quoteAllowed: 1250,
       flags: { paidAboveTaken: false, missingCost: false, aboveQuote: false },
     })
+  })
+
+  it("keeps the engine's size and the size delivered apart; either may be none", () => {
+    expect(runOfRow(runRow({ resolution: "1080p", delivered_resolution: "4k" }))).toMatchObject({ resolution: "1080p", deliveredResolution: "4k" })
+    expect(runOfRow(runRow({ resolution: null, delivered_resolution: "4k" }))).toMatchObject({ resolution: null, deliveredResolution: "4k" })
+    expect(runOfRow(runRow({ delivered_resolution: null }))).toMatchObject({ resolution: "720p", deliveredResolution: null })
+    expect(runOfRow(runRow({ delivered_resolution: undefined, resolution: 720 }))).toMatchObject({ resolution: null, deliveredResolution: null })
   })
 
   it("maps quote_allowed to quoteAllowed, and each flag", () => {

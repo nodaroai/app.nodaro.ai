@@ -339,11 +339,11 @@ export async function deleteOwnedObjects(
   }
 }
 
-/** Each key's stored size (0 when storage cannot say), or undefined when sizing fails: then nothing is given back, and the delete still runs. */
+/** Each key's charged size (0 when storage cannot say, and for an uncounted object: `storageChargeOf`), or undefined when sizing fails: then nothing is given back, and the delete still runs. */
 async function ownedObjectSizes(keys: readonly string[]): Promise<Map<string, number> | undefined> {
   try {
-    const { getR2ObjectSize } = await import("./storage.js")
-    return new Map(await Promise.all(keys.map(async (k) => [k, (await getR2ObjectSize(k)) ?? 0] as const)))
+    const { storageChargeOf } = await import("./storage.js")
+    return new Map(await Promise.all(keys.map(async (k) => [k, (await storageChargeOf(k)).bytes] as const)))
   } catch (err) {
     console.warn(`[job-policy] sizing owned objects failed — their storage is not given back: ${(err as Error).message}`)
     return undefined

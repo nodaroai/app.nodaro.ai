@@ -207,7 +207,7 @@ import type { ZodType } from "zod"
 import type { PluginEdlTimelineOptions, PluginEdlTimelineResult } from "./types.js"
 import { PluginHttpError } from "./types.js"
 import type { PluginBillingContext, PluginCapabilities, PluginEntityRead, PluginEntityTable, PluginInternalRequestOptions, PluginJobErrorHint, PluginOwnedJobRow, PluginOwnedRawJob } from "./types.js"
-import type { PluginDownloadFileOptions, PluginFfmpegToolkit, PluginLlmToolkit, PluginMediaToolkit, PluginProvidersToolkit } from "./types.js"
+import type { PluginDownloadFileOptions, PluginUploadFileOptions, PluginFfmpegToolkit, PluginLlmToolkit, PluginMediaToolkit, PluginProvidersToolkit } from "./types.js"
 import type { PluginToolkit, PluginLlmRequest, PluginLlmSpend, PluginLlmSideHoldPayer, PluginLlmSideHoldToolkit, PluginLlmMultimodalRequest, PluginVideoGenOptions, PluginVideoGenResult, PluginImageGenOptions, PluginImageGenResult, PluginMusicGenOptions, PluginMusicGenResult, PipelineSnapshot } from "./types.js"
 import { applyFrameFitAndDelivery } from "../video-frame-dispatch.js"
 
@@ -1841,7 +1841,20 @@ const HOST_CAPABILITIES: PluginCapabilities = Object.freeze({
   llmStructuredImages: true,
   // tk.ffmpeg.downloadFile takes `{ timeoutMs?, signal? }`: a hard total and an abort signal.
   downloadFileBounds: true,
+  // tk.storage.uploadFileToR2 takes `{ uncounted: true }`: never charged to, never given back to, anyone's storage.
+  uncountedUploads: true,
 })
+
+/** `tk.storage.uploadFileToR2`: only the option a plugin may set reaches `uploadFileToR2`. */
+function pluginUploadFileToR2(
+  filePath: string,
+  jobId: string,
+  type?: "image" | "video" | "audio",
+  trackUserId?: string,
+  opts?: PluginUploadFileOptions,
+): Promise<string> {
+  return uploadFileToR2(filePath, jobId, type, trackUserId, opts?.uncounted === true ? { uncounted: true } : {})
+}
 
 /** `tk.ffmpeg.downloadFile`: only the bounds a plugin may set reach `downloadFile`. */
 function pluginDownloadFile(url: string, dest: string, opts?: PluginDownloadFileOptions): Promise<void> {
@@ -2041,7 +2054,7 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
       retainJobVideo, readRetainedJobVideos, readRetainedVideoCopies, recordRetainedVideoCopy,
       recordRetainedImageCopy, readRetainedImageCopies,
       uploadBufferToR2,
-      uploadFileToR2,
+      uploadFileToR2: pluginUploadFileToR2,
       runPostProcessing,
       // Exactly four arguments: the job id is always the running job's
       // (`getJobId()`), never one a plugin names.

@@ -580,6 +580,12 @@ export interface PluginProvidersToolkit {
 // tk.ffmpeg — backend/src/providers/video/ffmpeg-utils.ts
 // ============================================================================
 
+/** `tk.storage.uploadFileToR2`'s options (`PluginCapabilities.uncountedUploads`). */
+export interface PluginUploadFileOptions {
+  /** Never charged to, and never given back to, anyone's storage (lib/storage.ts, UNCOUNTED FILES). */
+  readonly uncounted?: boolean
+}
+
 /** `tk.ffmpeg.downloadFile`'s optional bounds (`PluginCapabilities.downloadFileBounds`). */
 export interface PluginDownloadFileOptions {
   /** A hard total over the response and the body, in ms (capped at 120 s). */
@@ -1435,6 +1441,16 @@ export interface PluginStorageToolkit {
     jobId: string,
     type?: "image" | "video" | "audio",
     trackUserId?: string,
+    /**
+     * `uncounted: true` (additive-optional — `PluginCapabilities.uncountedUploads`;
+     * an older host ignores it and charges `trackUserId` as before, so check
+     * the capability first): a file kept for the platform's use, never charged
+     * to anyone's storage (`trackUserId` is ignored) and marked on the object
+     * so no delete gives it back. A companion of a result (its url in a field
+     * of `COMPANION_OUTPUT_FIELDS`, lib/asset-companions.ts) is still deleted
+     * with the result's Library item.
+     */
+    opts?: PluginUploadFileOptions,
   ): Promise<string>
   /**
    * Mirrors `mediaObjectKey` (`lib/storage.ts`) — THE key builder for produced
@@ -4227,6 +4243,14 @@ export interface PluginCapabilities {
    */
   readonly downloadFileBounds?: boolean
   /**
+   * `tk.storage.uploadFileToR2` takes `{ uncounted: true }`
+   * (`PluginUploadFileOptions`): the file is never charged to the owner's
+   * storage and no delete gives it back. False (or absent): an older host,
+   * which ignores the option and charges the user id it is given, as before —
+   * a plugin then uploads as it always did.
+   */
+  readonly uncountedUploads?: boolean
+  /**
    * The host routes video runs per model and per service from its admin
    * setting (`video_route_policy`), and speaks the second version of
    * `PluginServices.alternateRoutes`: it fills `PluginAlternateRouteRequest`'s
@@ -5574,6 +5598,24 @@ export interface PluginSupports {
      * lib/video-remake-upscale-choice.ts): an unknown engine id, size or target is dropped, never thrown on.
      */
     readonly upscaleNext?: PluginCastSwapUpscaleNext
+    /**
+     * A part of the clip (decided 2026-11-25): a run, its estimate and the plan-roles route take
+     * `portionStart` (seconds, at least 0) and `portionSec` (seconds), an ordinary run of that length
+     * priced by it (not a preview: refused with `preview: true`, `portion_with_preview`; never on a
+     * trend run, `portion_not_for_trends`). With a part the source clip may be longer than 30 s, up to
+     * 10 minutes. The job's input echoes both fields, and the completed output's `durationSec` is the
+     * part's length. Declared only while the deployment's engine switch is on (read at load); where it
+     * is off the engine refuses the fields, 400 `portion_unavailable`. Absent: none of this
+     * (lib/video-remake-portion.ts).
+     */
+    readonly portion?: boolean
+    /**
+     * Short clips (decided 2026-11-25): the accepted clip length is 2–30 s instead of 4–30 s (a clip
+     * under the engine's shortest output is padded in time, run and cut back, priced at the padded
+     * length). Declared only while the deployment's engine switch is on. Absent: 4–30 s
+     * (lib/video-remake-portion.ts).
+     */
+    readonly shortClips?: boolean
     /**
      * Video Remake's delivered resolution (2026-11-26): a run and its estimate that carry no `upscale`
      * key read `resolution` as the size DELIVERED (`"480p" | "720p" | "1080p" | "4k"`), however the engine

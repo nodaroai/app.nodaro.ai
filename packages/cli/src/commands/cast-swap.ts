@@ -1,7 +1,7 @@
 import { Command } from "commander"
 import { buildClient, handleError } from "../client.js"
 import { dim, emit, info, success, terminalSafe, type OutputOpts } from "../output.js"
-import { neutralQuote, quotePartLabel } from "../quote-parts.js"
+import { neutralQuote, quotePartLabel, renderReused } from "../quote-parts.js"
 
 interface GlobalOpts extends OutputOpts {
   profile?: string
@@ -23,7 +23,10 @@ function fullQualityCommand(): Command {
     .option("--json")
     .action(async (jobId: string, opts: GlobalOpts) => {
       try {
-        const quote = neutralQuote(await buildClient(opts.profile).videoRemake.fullQualityEstimate(jobId))
+        const answered = await buildClient(opts.profile).videoRemake.fullQualityEstimate(jobId)
+        // Read before the parts are folded: a server's step line goes into the render's.
+        const reused = renderReused(answered)
+        const quote = neutralQuote(answered)
         if (opts.json) {
           emit(quote, opts)
           return
@@ -36,7 +39,7 @@ function fullQualityCommand(): Command {
         for (const [part, credits] of Object.entries(quote.breakdown)) {
           if (typeof credits === "number") dim(`  ${terminalSafe(quotePartLabel(part))}: ${credits}`)
         }
-        if (quote.kind !== "new-take" && quote.breakdown.motionHd === 0) dim("  an earlier try's 1080p render is reused")
+        if (quote.kind !== "new-take" && reused) dim("  an earlier try's 1080p render is reused")
         dim(`available until ${terminalSafe(quote.availableUntil)}`)
       } catch (err) {
         handleError(err)

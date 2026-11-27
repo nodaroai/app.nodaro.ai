@@ -1,3 +1,4 @@
+import type { VideoRemakeSizesHere } from "../video-remake-sizes.js"
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { mcpImageResolutionSent } from "./_image-resolution-sent.js"
 import { z } from "zod"
@@ -77,6 +78,8 @@ export interface RegisterOpts {
   server: McpServer
   session: McpSession
   fastify: FastifyInstance
+  /** The sizes Video Remake's engines offer here (`resolveMcpSession`), which `modify_video` names; absent: none is named. */
+  videoRemakeSizes?: VideoRemakeSizesHere
 }
 
 export function registerImageVerbs({ server, session, fastify }: RegisterOpts): void {

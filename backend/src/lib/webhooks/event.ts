@@ -27,7 +27,7 @@ import { PUBLIC_JOB_KEYS, sanitizeJobForPublic, type JobRecord } from "../../rou
 import { fillJobRenderQuality } from "../render-label-fill.js"
 import { titleColumnPresent } from "../jobs-title-column.js"
 import { coverColumnPresent } from "../jobs-cover-column.js"
-import { CHILD_JOB_COLUMN } from "../public-job-data.js"
+import { CHILD_JOB_COLUMN, redactRecordedJobEvent } from "../public-job-data.js"
 import { publicCreditFieldsOf, runCreditsFor } from "../job-credit-status.js"
 import { runIdOf, webhookBodyProviderWords } from "../provider-words.js"
 import { runJobsProviderWords, webhookBodyCanRead } from "../provider-words-readers.js"
@@ -185,9 +185,10 @@ export async function eventBodyFor(d: ClaimedDelivery): Promise<BuiltEvent> {
     // The same text, unless it carries provider words its owner may not read
     // (lib/provider-words.ts): a body recorded before the deployment kept them
     // for its admins, or for a run's job whose workflow its owner cannot open
-    // (looked up only when the body carries words), would otherwise send them again.
+    // (looked up only when the body carries words), would otherwise send them again;
+    // and less a server-only job key a body recorded before it joined the rule carries.
     const canRead = await webhookBodyCanRead(d.userId, d.payload, kept.runId)
-    return { kind: "body", body: webhookBodyProviderWords(d.payload, canRead), fresh: false }
+    return { kind: "body", body: webhookBodyProviderWords(redactRecordedJobEvent(d.payload), canRead), fresh: false }
   }
   if (d.event === "ping") {
     return { kind: "body", body: envelope(d, { webhookId: d.webhookId }), fresh: true }

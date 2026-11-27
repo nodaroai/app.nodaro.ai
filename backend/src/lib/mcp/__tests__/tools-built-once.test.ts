@@ -330,6 +330,20 @@ describe("every input that changes a build makes a new one", () => {
     expect(shapeWith(null)).toBe(shapeWith(null))
   })
 
+  it("the sizes video_remake names, which follow the admin's settings while the process runs", async () => {
+    const { buildShapeOf } = await import("../tools-built-once.js")
+    const { newSession } = await import("../session.js")
+    type Sizes = import("../video-remake-sizes.js").VideoRemakeSizesHere
+    type Size = import("../../video-remake-delivered-resolution.js").VideoRemakeDeliveredSize
+    const shapeWith = (videoRemakeSizes: Sizes | undefined) =>
+      buildShapeOf(newSession({ userId: USER, scopes: [...ALL_SCOPES], clientName: "Claude" }), { fastify: app, conversation: true, offer: undefined, videoRemakeSizes })
+    const prism = (sizes: Size[]): Sizes => ({ kind: "delivered", resolutions: { "nodaro-prism": sizes } })
+    expect(shapeWith(prism(["720p", "1080p", "4k"]))).not.toBe(shapeWith(prism(["720p", "1080p"])))
+    expect(shapeWith(prism(["720p", "1080p", "4k"]))).not.toBe(shapeWith({ kind: "unread" }))
+    expect(shapeWith({ kind: "engine" })).not.toBe(shapeWith(undefined))
+    expect(shapeWith(prism(["720p", "1080p", "4k"]))).toBe(shapeWith(prism(["720p", "1080p", "4k"])))
+  })
+
   it("the addresses the request came in on", async () => {
     const base = await bothLists(opts())
     const addresses = { ...(await import("../../mcp-lane-addresses.js")).mcpLaneAddresses(), pagesBase: "https://pages.other.example" }

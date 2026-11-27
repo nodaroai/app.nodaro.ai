@@ -103,6 +103,38 @@ describe("video-remake full-quality", () => {
     expect(out).not.toMatch(/seedance|Motion (Pro|Lite)\b/i)
   })
 
+  it("estimate never names the step that makes the render larger: an older server's line is folded into the render's", async () => {
+    mocks.fullQualityEstimate.mockResolvedValueOnce({ ...QUOTE, totalCredits: 14, breakdown: { base: 5, motionHd: 7, upscale: 2 } })
+    await runCmd("video-remake", "full-quality", "estimate", "draft-1")
+    const out = [...vi.mocked(info).mock.calls, ...vi.mocked(dim).mock.calls].flat().join("\n")
+    expect(out).toContain("about 14 credits")
+    expect(out).toContain("1080p render: 9")
+    expect(out).not.toMatch(/upscal|topaz/i)
+    mocks.fullQualityEstimate.mockResolvedValueOnce({ ...QUOTE, totalCredits: 14, breakdown: { base: 5, motionHd: 7, upscale: 2 } })
+    await runCmd("video-remake", "full-quality", "estimate", "draft-1", "--json")
+    expect(emit).toHaveBeenLastCalledWith({ ...QUOTE, totalCredits: 14, breakdown: { base: 5, motionHd: 9 } }, expect.objectContaining({ json: true }))
+  })
+
+  it("estimate still says a reused render is reused when an older server answers a step line beside it", async () => {
+    mocks.fullQualityEstimate.mockResolvedValueOnce({ ...QUOTE, totalCredits: 7, breakdown: { base: 5, motionHd: 0, upscale: 2 } })
+    await runCmd("video-remake", "full-quality", "estimate", "draft-1")
+    const out = vi.mocked(dim).mock.calls.flat().join("\n")
+    expect(out).toMatch(/reuse/i)
+    expect(out).not.toMatch(/upscal|topaz/i)
+  })
+
+  it("estimate reads the server's renderReused where it answers one, else a render line of 0", async () => {
+    // A newer server: the step folded into motionHd, the render reused all the same.
+    mocks.fullQualityEstimate.mockResolvedValueOnce({ ...QUOTE, totalCredits: 7, breakdown: { base: 5, motionHd: 2 }, renderReused: true })
+    await runCmd("video-remake", "full-quality", "estimate", "draft-1")
+    expect(vi.mocked(dim).mock.calls.flat().join("\n")).toMatch(/reuse/i)
+    vi.mocked(dim).mockReset()
+    // A newer server that says it is not reused is believed over a 0 line.
+    mocks.fullQualityEstimate.mockResolvedValueOnce({ ...QUOTE, totalCredits: 5, breakdown: { base: 5, motionHd: 0 }, renderReused: false })
+    await runCmd("video-remake", "full-quality", "estimate", "draft-1")
+    expect(vi.mocked(dim).mock.calls.flat().join("\n")).not.toMatch(/reuse/i)
+  })
+
   it("estimate takes no --session: refused before anything is sent", async () => {
     await expect(runCmd("video-remake", "full-quality", "estimate", "draft-1", "--session", "s-1")).rejects.toThrow(/--session/)
     expect(mocks.fullQualityEstimate).not.toHaveBeenCalled()

@@ -967,6 +967,35 @@ describe("permanentlyDeleteAsset — the row's companions", () => {
     expect(vi.mocked(updateStorageUsage)).toHaveBeenCalledWith(USER, -5096)
   })
 
+  // An uncounted companion (lib/storage.ts, UNCOUNTED FILES) was never charged:
+  // it goes with the row and gives nothing back; one recorded without the mark
+  // (every row from before it) keeps its refund.
+  it("deletes an uncounted companion with the row's object and gives back only the row's bytes", async () => {
+    useScenario(companionScenario({ companions: [{ key: ENGINE_KEY, sizeBytes: 0, uncounted: true }] }))
+    const result = await run()
+    expect(result).toEqual({ ok: true, r2Deleted: true })
+    expect(vi.mocked(deleteFromR2)).toHaveBeenCalledWith(ENGINE_KEY)
+    expect(vi.mocked(updateStorageUsage)).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(updateStorageUsage)).toHaveBeenCalledWith(USER, -4096)
+  })
+
+  it("an uncounted companion gives nothing back even if its entry names a size", async () => {
+    useScenario(companionScenario({ companions: [{ key: ENGINE_KEY, sizeBytes: 1000, uncounted: true }] }))
+    await run()
+    expect(vi.mocked(deleteFromR2)).toHaveBeenCalledWith(ENGINE_KEY)
+    expect(vi.mocked(updateStorageUsage)).toHaveBeenCalledWith(USER, -4096)
+  })
+
+  it.each([
+    ["another Library row", { companionAssetRefs: 1 }],
+    ["one of the user's job outputs", { companionJobRefs: 1 }],
+  ])("keeps an uncounted companion %s still names, and gives nothing back for it", async (_name, refs) => {
+    useScenario(companionScenario({ companions: [{ key: ENGINE_KEY, sizeBytes: 0, uncounted: true }], ...refs }))
+    await run()
+    expect(vi.mocked(deleteFromR2)).not.toHaveBeenCalledWith(ENGINE_KEY)
+    expect(vi.mocked(updateStorageUsage)).toHaveBeenCalledWith(USER, -4096)
+  })
+
   it("a kept original beside the preview and a companion: the original's claim is given back on its own, the row and its companion together", async () => {
     const ORIGINAL = `videos/${NEAR_JOB}-master.mov`
     originals.present.set(ORIGINAL, 8800)

@@ -11,6 +11,15 @@ describe("isServerOnlyOutputKey", () => {
     expect(isServerOnlyOutputKey("videoUrl")).toBe(false)
     expect(isServerOnlyOutputKey("a__b")).toBe(false)
   })
+
+  it("is true for Video Remake's reference audio keys, whatever follows the family's name", () => {
+    for (const key of ["prismReferenceAudio", "prismReferenceAudioSemitones", "prismReferenceAudioFallbackReason", "pulseReferenceAudio", "pulseReferenceAudioResolution"]) {
+      expect(isServerOnlyOutputKey(key)).toBe(true)
+    }
+    expect(isServerOnlyOutputKey("pulseAudio")).toBe(false)
+    expect(isServerOnlyOutputKey("referenceAudio")).toBe(false)
+    expect(isServerOnlyOutputKey("myPrismReferenceAudio")).toBe(false)
+  })
 })
 
 describe("withoutServerOnlyKeys", () => {

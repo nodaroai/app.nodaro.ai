@@ -32,6 +32,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("../storage.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../storage.js")>()),
   getR2ObjectSize: async (key: string) => mocks.objects.get(key) ?? 0,
+  storageChargeOf: async (key: string) => ({ bytes: mocks.objects.get(key) ?? 0, uncounted: false }),
   headR2Object: async (key: string) => {
     await Promise.resolve()
     const size = mocks.objects.get(key)

@@ -167,13 +167,42 @@ describe("estimate_full_quality", () => {
     expect(res.content[0]!.text).toMatch(/reuse/i)
   })
 
-  it("says when the quote includes a Topaz upscale, and not otherwise", async () => {
-    const upscaled = { ...QUOTE, breakdown: { ...QUOTE.breakdown, upscale: 220 } }
-    const { fastify } = stubFastify({ [EST_URL]: { statusCode: 200, body: upscaled } })
+  it("never names the step that makes the render larger: an engine that still answers its line has it folded into the render's", async () => {
+    const stepped = { ...QUOTE, totalCredits: 14, breakdown: { ...QUOTE.breakdown, upscale: 2 } }
+    const { fastify } = stubFastify({ [EST_URL]: { statusCode: 200, body: stepped } })
     const res = await callTool(serverWith(fastify), "estimate_full_quality", { job_id: "draft-1" })
-    expect(res.content[0]!.text).toMatch(/Topaz upscale/)
-    const plain = stubFastify({ [EST_URL]: { statusCode: 200, body: QUOTE } })
-    expect((await callTool(serverWith(plain.fastify), "estimate_full_quality", { job_id: "draft-1" })).content[0]!.text).not.toMatch(/Topaz/)
+    const text = res.content[0]!.text
+    expect(text).not.toMatch(/upscal/i)
+    expect(JSON.stringify(res.structuredContent)).not.toMatch(/upscal/i)
+    // The total as quoted; the step's credits in the 1080p render's line.
+    expect(res.structuredContent).toMatchObject({ totalCredits: 14, breakdown: { base: 5, motionHd: 9 } })
+    // A reused render is still said as reused (read before the fold).
+    const reused = stubFastify({ [EST_URL]: { statusCode: 200, body: { ...QUOTE, totalCredits: 7, breakdown: { base: 5, motionHd: 0, upscale: 2 } } } })
+    const again = await callTool(serverWith(reused.fastify), "estimate_full_quality", { job_id: "draft-1" })
+    expect(again.content[0]!.text).toMatch(/reuse/i)
+    expect(again.structuredContent).toMatchObject({ breakdown: { base: 5, motionHd: 2 } })
+  })
+
+  it("reads the engine's renderReused where it answers one (its render line then carries the folded step), else a render line of 0", async () => {
+    const ask = async (body: unknown) => {
+      const { fastify } = stubFastify({ [EST_URL]: { statusCode: 200, body } })
+      return callTool(serverWith(fastify), "estimate_full_quality", { job_id: "draft-1" })
+    }
+    // A newer engine: the step folded into motionHd, so motionHd is not 0, yet the render is reused.
+    const reused = await ask({ ...QUOTE, totalCredits: 7, breakdown: { base: 5, motionHd: 2 }, renderReused: true })
+    expect(reused.content[0]!.text).toMatch(/reuse/i)
+    expect(reused.structuredContent).toMatchObject({ renderReused: true })
+    // A newer engine that says it is not reused is believed over a 0 line.
+    const notReused = await ask({ ...QUOTE, totalCredits: 5, breakdown: { base: 5, motionHd: 0 }, renderReused: false })
+    expect(notReused.content[0]!.text).not.toMatch(/reuse/i)
+    expect(notReused.structuredContent).toMatchObject({ renderReused: false })
+    // An older engine: no renderReused, a render line of 0 says it; nothing is invented in the answer.
+    const older = await ask({ ...QUOTE, totalCredits: 5, breakdown: { base: 5, motionHd: 0 } })
+    expect(older.content[0]!.text).toMatch(/reuse/i)
+    expect(older.structuredContent).not.toHaveProperty("renderReused")
+    // A value that is not a boolean is not read.
+    const odd = await ask({ ...QUOTE, renderReused: "yes" })
+    expect(odd.content[0]!.text).not.toMatch(/reuse/i)
   })
 
   it("refuses a job id that is not an id, sending nothing", async () => {

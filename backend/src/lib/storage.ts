@@ -379,7 +379,7 @@ export async function copyRecastObject(
  * are about to land there, and a caller that measures them (an image upload)
  * notes them again once they have.
  */
-async function streamToR2(key: string, body: Readable | Buffer, contentType: string): Promise<void> {
+async function streamToR2(key: string, body: Readable | Buffer, contentType: string, metadata?: Record<string, string>): Promise<void> {
   refuseEvidenceKey(key)
   forgetStoredImage(r2Url(key))
   const upload = new Upload({
@@ -390,6 +390,7 @@ async function streamToR2(key: string, body: Readable | Buffer, contentType: str
       Body: body,
       ContentType: contentType,
       CacheControl: R2_CACHE_CONTROL,
+      ...(metadata ? { Metadata: metadata } : {}),
     }),
     partSize: 5 * 1024 * 1024,
     queueSize: 4,
@@ -644,17 +645,74 @@ export async function uploadBufferToR2(
 }
 
 /**
+ * UNCOUNTED FILES: a job's own file kept for the platform's use (a debugging
+ * copy beside a result) that is never charged to, and so never given back to,
+ * its owner's storage (decided 2026-11-27).
+ *
+ * The mark lives on the object itself, written with its bytes by the upload
+ * that skips the charge (`uploadFileToR2`'s `uncounted`): user metadata
+ * `nodaro-uncounted: <the object's own key>`. Every path that gives a job's
+ * bytes back sizes them through `storageChargeOf`, which answers 0 for a
+ * marked object, so the record and the bytes cannot disagree in any order of
+ * events: a later charged upload to the same key replaces the metadata (and is
+ * counted again), a failed upload leaves no object, and an object stored
+ * before the mark existed carries none (charged, as it always was). The value
+ * is the object's key so a copy under another key (`CopyObject` keeps the
+ * metadata), which its copier charges, still reads as charged.
+ */
+const UNCOUNTED_METADATA_KEY = "nodaro-uncounted"
+
+/** The metadata an uncounted upload of `key` writes. */
+export function uncountedObjectMetadata(key: string): Record<string, string> {
+  return { [UNCOUNTED_METADATA_KEY]: key }
+}
+
+/** Whether an object's metadata marks it uncounted: the mark names this very key. */
+export function isUncountedObject(key: string, metadata: Record<string, string> | undefined): boolean {
+  return metadata?.[UNCOUNTED_METADATA_KEY] === key
+}
+
+/** What an object's bytes cost its owner's storage (`storageChargeOf`). */
+export interface StorageCharge {
+  /** The bytes charged at upload, the bytes a delete gives back: 0 for an uncounted object, and when storage cannot say. */
+  readonly bytes: number
+  /** The object carries the uncounted mark (`uncountedObjectMetadata`). */
+  readonly uncounted: boolean
+}
+
+/**
+ * The bytes `key` was charged to its owner's storage at upload: its stored
+ * size, or 0 when it is marked uncounted (see UNCOUNTED FILES above) or storage
+ * cannot answer (as `getR2ObjectSize`). What every path that gives a job's own
+ * objects back to their owner's storage sizes them by.
+ */
+export async function storageChargeOf(key: string): Promise<StorageCharge> {
+  try {
+    const head = await s3.send(new HeadObjectCommand({ Bucket: config.R2_BUCKET_NAME, Key: key }))
+    if (isUncountedObject(key, head.Metadata)) return { bytes: 0, uncounted: true }
+    return { bytes: Number(head.ContentLength ?? 0), uncounted: false }
+  } catch {
+    return { bytes: 0, uncounted: false }
+  }
+}
+
+/**
  * Stream a local file directly to R2 without buffering the entire file in memory.
+ *
+ * `opts.uncounted`: the file is kept for the platform's use and is never
+ * charged to anyone's storage (`trackUserId` is ignored), and the object is
+ * marked so (see UNCOUNTED FILES above), so no delete ever gives it back.
  */
 export async function uploadFileToR2(
   filePath: string,
   jobId: string,
   type: MediaType = "video",
   trackUserId?: string,
-  opts: { ext?: VideoContainerExt; signal?: AbortSignal } = {},
+  opts: { ext?: VideoContainerExt; signal?: AbortSignal; uncounted?: boolean } = {},
 ): Promise<string> {
   const fileStat = await stat(filePath)
   const { key, contentType } = mediaTarget(jobId, type, opts.ext ?? (type === "audio" ? audioExtOf(filePath) : undefined))
+  const metadata = opts.uncounted === true ? uncountedObjectMetadata(key) : undefined
 
   if (opts.signal) {
     opts.signal.throwIfAborted()
@@ -665,12 +723,13 @@ export async function uploadFileToR2(
       // bounded PUT carries the signal to the HTTP request and closes the input stream.
       await s3.send(new PutObjectCommand(withObjectAcl({ Bucket: config.R2_BUCKET_NAME, Key: key,
         Body: body, ContentLength: fileStat.size, ContentType: contentType, CacheControl: R2_CACHE_CONTROL,
+        ...(metadata ? { Metadata: metadata } : {}),
       })), { abortSignal: opts.signal, ...storageTransferOptions(fileStat.size) })
       opts.signal.throwIfAborted()
     } finally { body.destroy() }
-  } else await streamToR2(key, createReadStream(filePath), contentType)
+  } else await streamToR2(key, createReadStream(filePath), contentType, metadata)
 
-  trackStorage(trackUserId, fileStat.size)
+  if (!metadata) trackStorage(trackUserId, fileStat.size)
 
   const url = r2Url(key)
   if (type === "image") await noteStoredImage(url, filePath)

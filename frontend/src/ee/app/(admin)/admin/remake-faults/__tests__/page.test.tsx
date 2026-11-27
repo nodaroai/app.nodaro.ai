@@ -3,8 +3,8 @@
  * filtered and paged.
  *
  * - The first request: the last seven local days, no filter, 50 a page.
- * - A row: when, who (address, else the id's start), engine, resolution,
- *   status, the faults as chips worst first (an override's intent code
+ * - A row: when, who (address, else the id's start), engine, the engine's
+ *   size and the size delivered (each its own column), status, the faults as chips worst first (an override's intent code
  *   beside its kind), and a link to the job's page.
  * - Severity, kind (from the range's kinds) and engine ask again from the
  *   first page; Next asks for the next one.
@@ -59,6 +59,7 @@ function run(over: Partial<RemakeFaultRun> = {}): RemakeFaultRun {
     fullQuality: false,
     engine: "prism",
     resolution: "720p",
+    deliveredResolution: null,
     draft: false,
     worst: "blocked",
     faults: [
@@ -73,7 +74,7 @@ function run(over: Partial<RemakeFaultRun> = {}): RemakeFaultRun {
 const LIST: RemakeFaultList = {
   total: 120,
   kinds: ["face_check_unsure", "intent_override", "unblurred_refused"],
-  runs: [run(), run({ id: idOf(2), email: null, engine: "pulse", fullQuality: true, status: "completed", worst: "warning", faults: [{ kind: "blur_left", severity: "warning" }] })],
+  runs: [run(), run({ id: idOf(2), email: null, engine: "pulse", fullQuality: true, status: "completed", resolution: "1080p", deliveredResolution: "4k", worst: "warning", faults: [{ kind: "blur_left", severity: "warning" }] })],
 }
 
 function renderPage(client = new QueryClient({ defaultOptions: { queries: { retry: false } } })) {
@@ -103,14 +104,19 @@ describe("Admin → Remake faults", () => {
     expect(calls()[0]).toEqual({ ...rangeToIso(fromDay, toDay), offset: 0, limit: 50 })
   })
 
-  it("shows each run's who, engine, status, faults worst first and a link to its job page", async () => {
+  it("shows each run's who, engine, sizes, status, faults worst first and a link to its job page", async () => {
     renderPage()
-    const rows = within(await table()).getAllByRole("row").slice(1)
+    const grid = await table()
+    expect(within(grid).getAllByRole("columnheader").map((c) => c.textContent)).toEqual(
+      ["When", "Who", "Engine", "Engine size", "Delivered", "Status", "Faults", "Job"])
+    const rows = within(grid).getAllByRole("row").slice(1)
     expect(rows).toHaveLength(2)
     const first = within(rows[0]!)
     first.getByText("ops@nodaro.example")
     first.getByText("Prism")
     first.getByText("failed")
+    // A failed run: its engine's size, nothing delivered.
+    expect(within(rows[0]!).getAllByRole("cell").slice(3, 5).map((c) => c.textContent)).toEqual(["720p", "—"])
     const chips = within(first.getByRole("list", { name: "Faults" })).getAllByRole("listitem")
     expect(chips.map((c) => c.getAttribute("data-fault-severity"))).toEqual(["blocked", "recovered", "warning"])
     expect(chips.map((c) => c.textContent)).toEqual(["Blockedunblurred_refused", "Recoveredintent_override: no_person", "Warningface_check_unsure"])
@@ -119,6 +125,8 @@ describe("Admin → Remake faults", () => {
     second.getByText("00000000…")
     second.getByText("Pulse")
     second.getByText("Full Quality")
+    // Made at 1080p, delivered at 4K.
+    expect(within(rows[1]!).getAllByRole("cell").slice(3, 5).map((c) => c.textContent)).toEqual(["1080p", "4K"])
     expect(screen.getByText("1–50 of 120")).toBeTruthy()
   })
 

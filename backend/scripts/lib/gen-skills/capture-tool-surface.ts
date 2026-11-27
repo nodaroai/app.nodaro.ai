@@ -12,6 +12,7 @@ import { z } from "zod"
 import { ALL_SCOPES } from "../../../src/lib/scopes.js"
 import { publishStandInPluginServices } from "../../../src/lib/private-plugins/load.js"
 import { setPluginEngines } from "../../../src/lib/private-plugins/engine-registry.js"
+import { setPluginSupports } from "../../../src/lib/private-plugins/supports-registry.js"
 import { captureMcpToolSchemas } from "./capture-mcp-schemas.js"
 import { assumeLlmMeteredSchemaReadyForDocs } from "../../../src/lib/llm-metered-schema-gate.js"
 import type { PluginEngines, PluginServices } from "../../../src/lib/private-plugins/types.js"
@@ -55,6 +56,22 @@ if (edition === "cloud") {
   const engines: Required<{ [K in keyof PluginEngines]: never }> = { scene3d: engine, surround: engine, smartCut: engine }
   publishStandInPluginServices(services)
   setPluginEngines(engines)
+  // Video Remake's engine on Nodaro Cloud delivers its sizes (`castSwap.deliveredResolution`), so the
+  // public pages name what production serves: Nodaro Prism and Nodaro Pulse 720p / 1080p / 4K, their Flash
+  // choices 720p / 1080p (lib/mcp/video-remake-sizes.ts). Declared as sizes the engine makes, so the
+  // capture reads no admin setting (it has no database); the engine's other declarations stay absent.
+  const remakeSizes = (sizes: readonly string[]) => sizes.map((size) => ({ size }))
+  setPluginSupports({
+    castSwap: {
+      deliveredResolution: true,
+      deliveredResolutions: {
+        "nodaro-prism": remakeSizes(["720p", "1080p", "4k"]),
+        "nodaro-pulse": remakeSizes(["720p", "1080p", "4k"]),
+        "nodaro-prism-flash": remakeSizes(["720p", "1080p"]),
+        "nodaro-pulse-flash": remakeSizes(["720p", "1080p"]),
+      },
+    },
+  } as never)
   // Nodaro Cloud runs with the metered LLM schema (551 + 552 + 554) applied; this
   // process has no database to ask (R33 gate — see the helper).
   assumeLlmMeteredSchemaReadyForDocs()

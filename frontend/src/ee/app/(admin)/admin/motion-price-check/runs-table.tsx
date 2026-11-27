@@ -29,6 +29,7 @@ import {
   formatSeconds,
   formatUsd,
   formatWhen,
+  deliveredLabel,
   resolutionLabel,
   runName,
 } from "./format"
@@ -62,7 +63,8 @@ const COLUMNS: readonly { label: string; figure: boolean }[] = [
   { label: "Who", figure: false },
   { label: "Run", figure: false },
   { label: "Engine", figure: false },
-  { label: "Resolution", figure: false },
+  { label: "Engine size", figure: false },
+  { label: "Delivered", figure: false },
   { label: "Clip (s)", figure: true },
   { label: "Held", figure: true },
   { label: "Taken", figure: true },
@@ -155,6 +157,7 @@ function RunRow({ run, open, onOpen }: { run: MotionPriceRun; open: boolean; onO
       </td>
       <td className={CELL}>{engineLabel(run.engine)}</td>
       <td className={CELL}>{resolutionLabel(run.resolution, run.draft)}</td>
+      <td className={CELL}>{deliveredLabel(run.deliveredResolution)}</td>
       <td className={FIGURE}>{formatSeconds(run.lengthSec)}</td>
       <td className={FIGURE}>{formatCredits(run.held)}</td>
       <td className={FIGURE}>{run.settled ? formatCredits(run.taken) : <InProgress>{formatCredits(run.taken)}</InProgress>}</td>

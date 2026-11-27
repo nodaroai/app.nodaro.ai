@@ -33,7 +33,10 @@ export interface MotionPriceRun {
   trendName: string | null
   engine: MotionEngine
   style: MotionStyle
+  /** The size the engine made the run at (480p, 720p, 1080p); null where none is recorded. Totals and the filter go by it. */
   resolution: string | null
+  /** The size delivered ("4k" for 4K); for a run that has not completed, the size asked where it is known, else null. */
+  deliveredResolution: string | null
   draft: boolean
   lengthSec: number | null
   held: number | null

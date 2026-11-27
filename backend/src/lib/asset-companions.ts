@@ -31,6 +31,13 @@ import { isCanonicalObjectKey } from "./key-ownership.js"
  * went, and its recorded bytes are refunded in the same decrement as the
  * row's.
  *
+ * An UNCOUNTED companion (a file kept for the platform's use, stored with
+ * `uploadFileToR2`'s `uncounted`, lib/storage.ts) was never charged: it is
+ * recorded `{ key, sizeBytes: 0, uncounted: true }`, read from the object's own
+ * mark when the row is made, so its delete still removes it and gives nothing
+ * back. A recorded companion with no `uncounted` was charged, as every one
+ * recorded before the mark existed.
+ *
  * A new kind of companion joins by adding its output field below; nothing else
  * names one.
  */
@@ -47,7 +54,16 @@ export const COMPANION_OUTPUT_FIELDS: ReadonlyArray<{
 
 export interface AssetCompanion {
   readonly key: string
+  /** The bytes charged for it at upload, given back when it is deleted (0 for an uncounted one). */
   readonly sizeBytes: number
+  /** Stored uncounted: never charged, never given back. Absent: charged. */
+  readonly uncounted?: true
+}
+
+/** What a companion's object cost its owner's storage (`storageChargeOf`, lib/storage.ts). */
+export interface CompanionCharge {
+  readonly bytes: number
+  readonly uncounted: boolean
 }
 
 /** The storage key a stored url names (the inverse of the public url). */
@@ -58,14 +74,15 @@ function keyOfUrl(url: string): string {
 /**
  * The companions to record on a job's `type` row whose object is `primaryKey`:
  * each declared field's url, kept only when its key is canonical and in the
- * job's own key family and is not the row's own object, sized by `sizeOf` (0 when unknown).
+ * job's own key family and is not the row's own object, each with what it was
+ * charged (`chargeOf`: 0 when unknown, and for an uncounted one, then marked so).
  */
 export async function companionsForRow(
   jobId: string,
   output: Record<string, unknown>,
   type: "image" | "video" | "audio",
   primaryKey: string,
-  sizeOf: (key: string) => Promise<number>,
+  chargeOf: (key: string) => Promise<CompanionCharge>,
 ): Promise<AssetCompanion[]> {
   const companions: AssetCompanion[] = []
   for (const { field, of } of COMPANION_OUTPUT_FIELDS) {
@@ -75,7 +92,8 @@ export async function companionsForRow(
     const key = keyOfUrl(url)
     if (key === primaryKey || !isCanonicalObjectKey(key) || !isOwnedObjectKey(jobId, key)) continue
     if (companions.some((c) => c.key === key)) continue
-    companions.push({ key, sizeBytes: await sizeOf(key) })
+    const charge = await chargeOf(key)
+    companions.push(charge.uncounted ? { key, sizeBytes: 0, uncounted: true } : { key, sizeBytes: charge.bytes })
   }
   return companions
 }
@@ -84,7 +102,7 @@ export async function companionsForRow(
  * The companions a row's `metadata` records, read defensively: only entries
  * whose key is in the SAME key family as the row's own object (so a row cannot
  * name another job's file as its companion), each size a non-negative integer
- * (anything else counts 0).
+ * (anything else counts 0), and an uncounted one's always 0.
  */
 export function companionsOf(metadata: unknown, primaryKey: string | null): AssetCompanion[] {
   if (!primaryKey || typeof metadata !== "object" || metadata === null) return []
@@ -94,10 +112,14 @@ export function companionsOf(metadata: unknown, primaryKey: string | null): Asse
   const out: AssetCompanion[] = []
   for (const entry of raw) {
     if (typeof entry !== "object" || entry === null) continue
-    const { key, sizeBytes } = entry as { key?: unknown; sizeBytes?: unknown }
+    const { key, sizeBytes, uncounted } = entry as { key?: unknown; sizeBytes?: unknown; uncounted?: unknown }
     if (typeof key !== "string" || !key || key === primaryKey) continue
     if (!families.some((jobId) => isOwnedObjectKey(jobId, key))) continue
     if (out.some((c) => c.key === key)) continue
+    if (uncounted === true) {
+      out.push({ key, sizeBytes: 0, uncounted: true })
+      continue
+    }
     const size = typeof sizeBytes === "number" && Number.isInteger(sizeBytes) && sizeBytes > 0 ? sizeBytes : 0
     out.push({ key, sizeBytes: size })
   }

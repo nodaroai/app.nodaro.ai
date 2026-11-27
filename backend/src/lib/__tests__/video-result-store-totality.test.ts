@@ -70,6 +70,7 @@ const OUTSIDE_THE_FUNNEL: Readonly<Record<string, string>> = {
   "lib/private-plugins/toolkit.ts :: extractTailToUrl": PLUGIN_HELPER,
   "lib/private-plugins/toolkit.ts :: trimVideoToUrl": PLUGIN_HELPER,
   "lib/private-plugins/toolkit.ts :: renderEdlTimelineToUrl": PLUGIN_HELPER,
+  "lib/private-plugins/toolkit.ts :: pluginUploadFileToR2": "tk.storage.uploadFileToR2 itself, the raw upload plugins always had: it only narrows the options a plugin may pass (`uncounted`)",
   "ee/lib/video-remake-side-by-side-job.ts :: renderSideBySide": `${OUR_RENDER} (Video Remake's side by side, rendered from the run's own files)`,
   "workers/handlers/relay-render-home.ts :: bringRenderHome": "a render the relay target already finished (its own funnel made it browser-safe), copied home as it is",
   // ── uploads, imports, provider inputs and catalog media ──

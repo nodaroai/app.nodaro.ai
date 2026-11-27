@@ -90,7 +90,7 @@ import { pickText } from "../lib/trends/localize.js"
 import { emptyFillLookOf, emptyFillOf, type TrendEmptyFill } from "../lib/trends/empty-fill.js"
 import { PUBLIC_READ_LIMIT, guestKeep, guestLocale, keptHit, sendPublicRead } from "../lib/trends/public-read.js"
 import { watchTrendCatalogForEdge } from "../lib/trends/catalog-stamp.js"
-import { neutralBreakdown, privacyCreditsOf } from "../../lib/nodaro-motion-quote.js"
+import { neutralBreakdown, privacyCreditsOf, withStepFolded } from "../../lib/nodaro-motion-quote.js"
 import { publishedTagUsage, readTagLabels, tagLabel, type TagLabels } from "../lib/trends/tags.js"
 import { TrendRunError, composeTrendRun, type ComposedTrendRun } from "../lib/trends/compose.js"
 import { listedExamples, shownOriginal, storedExampleRequest } from "../lib/trends/public-examples.js"
@@ -760,7 +760,7 @@ export async function trendRoutes(app: FastifyInstance) {
             holdCredits: quote.totalCredits,
             engine: flash ?? nodaroMotionEngineOf(priced),
             engineName: flash ? VIDEO_REMAKE_FLASH_ENGINE_NAMES[flash] : nodaroMotionEngineName(priced),
-            breakdown: neutralBreakdown(quote.breakdown),
+            breakdown: withStepFolded(neutralBreakdown(quote.breakdown)),
             // A retry of a refused clip: charged only if it runs (not in the hold).
             ...(privacyCredits !== undefined ? { privacyCredits } : {}),
             // "First Remake on us": what the offer would cover, as the Video Remake quote says (ee/lib/first-remake-offer.ts).

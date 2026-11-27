@@ -74,6 +74,7 @@ function run(over: Partial<MotionPriceRun> = {}): MotionPriceRun {
     engine: "prism",
     style: "precise",
     resolution: "720p",
+    deliveredResolution: "720p",
     draft: false,
     lengthSec: 12.4,
     held: 1200,
@@ -121,7 +122,9 @@ const ABOVE_QUOTE = run({
   trendName: "Rooftop",
   fullQuality: true,
   draftJobId: idOf(9),
+  // Made at 1080p, delivered at 4K.
   resolution: "1080p",
+  deliveredResolution: "4k",
   taken: 1300,
   // An extra ran: the allowance is above the hold, and the badge names the allowance.
   quoteTotal: 1100,
@@ -240,7 +243,7 @@ describe("Admin → Motion price check", () => {
     ).toBeInTheDocument()
   })
 
-  it("reads the filters From, To, Engine, Style, Kind, Resolution, Flagged only, Sort, then the direction", async () => {
+  it("reads the filters From, To, Engine, Style, Kind, Engine size, Flagged only, Sort, then the direction", async () => {
     renderPage()
     await runsTable()
     const controls = [
@@ -249,7 +252,7 @@ describe("Admin → Motion price check", () => {
       screen.getByLabelText("Engine"),
       screen.getByLabelText("Style"),
       screen.getByLabelText("Kind"),
-      screen.getByLabelText("Resolution"),
+      screen.getByLabelText("Engine size"),
       screen.getByLabelText("Flagged only"),
       screen.getByLabelText("Sort"),
       screen.getByRole("button", { name: "Ascending" }),
@@ -261,7 +264,7 @@ describe("Admin → Motion price check", () => {
     expect(screen.getByLabelText("To")).toHaveValue("2026-11-03")
   })
 
-  it("shows the totals: All, then each engine, resolution (by number) and style", async () => {
+  it("shows the totals: All, then each engine, engine size (by number) and style", async () => {
     renderPage()
     const table = within(await totalsRegion()).getByRole("table")
     expect(within(table).getAllByRole("columnheader").map((c) => c.textContent)).toEqual([
@@ -278,9 +281,9 @@ describe("Admin → Motion price check", () => {
       "All",
       "Engine Prism",
       "Engine Pulse",
-      "Resolution 480p",
-      "Resolution 720p",
-      "Resolution 1080p",
+      "Engine size 480p",
+      "Engine size 720p",
+      "Engine size 1080p",
       "Style Flex",
       "Style Precise",
     ])
@@ -307,7 +310,8 @@ describe("Admin → Motion price check", () => {
       "Who",
       "Run",
       "Engine",
-      "Resolution",
+      "Engine size",
+      "Delivered",
       "Clip (s)",
       "Held",
       "Taken",
@@ -330,6 +334,7 @@ describe("Admin → Motion price check", () => {
       "ops@nodaro.example",
       "Office dance",
       "Prism",
+      "720p",
       "720p",
       "12.4",
       "1,200",
@@ -355,6 +360,8 @@ describe("Admin → Motion price check", () => {
 
     const aboveQuote = rowOfRun("Rooftop Full Quality")
     expect(within(aboveQuote).getByText("Full Quality")).toBeInTheDocument()
+    // The engine's size and the size delivered, each in its own column.
+    expect(cellsOf(aboveQuote).slice(4, 6)).toEqual(["1080p", "4K"])
     // Its reason is on screen, so a tap reads it as a hover does.
     expect(within(aboveQuote).getByText("Above quote")).not.toHaveAttribute("title")
     expect(within(aboveQuote).getByText("taken 1,300 > allowed 1,200")).toBeVisible()
@@ -368,13 +375,13 @@ describe("Admin → Motion price check", () => {
     const row = rowOfRun("Night drive")
     const cells = within(row).getAllByRole("cell")
     // Taken is the running total so far; the margin is not known yet.
-    expect(within(cells[7]!).getByText("240")).toBeInTheDocument()
-    expect(within(cells[7]!).getByText("In progress")).toBeInTheDocument()
-    expect(within(cells[10]!).getByText("—")).toBeInTheDocument()
-    expect(within(cells[10]!).getByText("In progress")).toBeInTheDocument()
-    expect(cells[11]).toHaveTextContent(/^—$/)
+    expect(within(cells[8]!).getByText("240")).toBeInTheDocument()
+    expect(within(cells[8]!).getByText("In progress")).toBeInTheDocument()
+    expect(within(cells[11]!).getByText("—")).toBeInTheDocument()
+    expect(within(cells[11]!).getByText("In progress")).toBeInTheDocument()
+    expect(cells[12]).toHaveTextContent(/^—$/)
     // Never a flag while in flight.
-    expect(cells[12]).toHaveTextContent(/^$/)
+    expect(cells[13]).toHaveTextContent(/^$/)
   })
 
   it("a filter asks again from the first page; Next and Prev page through", async () => {
@@ -397,7 +404,7 @@ describe("Admin → Motion price check", () => {
 
     await user.selectOptions(screen.getByLabelText("Style"), "flex")
     await user.selectOptions(screen.getByLabelText("Kind"), "hand")
-    await user.selectOptions(screen.getByLabelText("Resolution"), "480p")
+    await user.selectOptions(screen.getByLabelText("Engine size"), "480p")
     await waitFor(() =>
       expect(lastParams()).toMatchObject({ engine: "pulse", style: "flex", kind: "hand", resolution: "480p", offset: 0 }),
     )

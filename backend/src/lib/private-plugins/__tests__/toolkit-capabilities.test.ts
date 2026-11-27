@@ -117,6 +117,11 @@ describe("tk.capabilities", () => {
     expect(buildToolkit().capabilities?.downloadFileBounds).toBe(true)
   })
 
+  it("advertises tk.storage.uploadFileToR2's { uncounted: true }", () => {
+    // toolkit-upload-uncounted.test.ts proves the option reaches the upload.
+    expect(buildToolkit().capabilities?.uncountedUploads).toBe(true)
+  })
+
   it("is a stable, frozen snapshot, not a per-call mutable object", () => {
     const caps = buildToolkit().capabilities
     expect(caps).toBeDefined()

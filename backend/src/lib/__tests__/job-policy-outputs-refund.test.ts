@@ -16,7 +16,7 @@ const m = vi.hoisted(() => ({
 }))
 
 vi.mock("@/lib/storage-delete.js", () => ({ deleteKeysRecordingFailures: m.deleteKeys }))
-vi.mock("@/lib/storage.js", () => ({ getR2ObjectSize: m.size, r2KeyFromOurUrl: (u: string) => u.replace("https://r2.example/", "") }))
+vi.mock("@/lib/storage.js", () => ({ storageChargeOf: m.size, r2KeyFromOurUrl: (u: string) => u.replace("https://r2.example/", "") }))
 vi.mock("@/lib/storage-deletes-setting.js", () => ({ storageDeletesSkipped: m.skipped }))
 const reap = vi.hoisted(() => ({ reapRecordedObjects: vi.fn(async () => ({ deleted: 1, failedJobIds: new Set(), keptKeys: new Set(), deletedKeys: new Set(), errors: 0, refunded: 0 })) }))
 vi.mock("@/lib/job-server-output.js", () => reap)
@@ -36,7 +36,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   m.owner = { user_id: "u1" }
   m.skipped.mockReturnValue(false)
-  m.size.mockImplementation(async (key: string) => SIZES[key] ?? 0)
+  m.size.mockImplementation(async (key: string) => ({ bytes: SIZES[key] ?? 0, uncounted: false }))
   m.deleteKeys.mockImplementation(async (keys: string[]) => ({ deleted: keys.length, errors: 0, notDeleted: [], kept: [], failed: [] }))
 })
 
@@ -45,6 +45,13 @@ describe("deleteOwnedObjects — giving the owner's storage back", () => {
     await expect(deleteOwnedObjects("j1", objects, { refundOwner: true })).resolves.toBe(3)
     expect(m.updateStorageUsage).toHaveBeenCalledTimes(1)
     expect(m.updateStorageUsage).toHaveBeenCalledWith("u1", -1200)
+  })
+
+  it("an object stored uncounted is deleted and gives nothing back: it was never charged", async () => {
+    m.size.mockImplementation(async (key: string) => (key === "images/j1-layers-2.png" ? { bytes: 0, uncounted: true } : { bytes: SIZES[key] ?? 0, uncounted: false }))
+    await expect(deleteOwnedObjects("j1", objects, { refundOwner: true })).resolves.toBe(3)
+    expect(m.deleteKeys).toHaveBeenCalledWith(Object.keys(SIZES), "job-policy", expect.anything())
+    expect(m.updateStorageUsage).toHaveBeenCalledWith("u1", -1100)
   })
 
   it("a key storage did not delete gives nothing back (it is recorded for the retry pass)", async () => {

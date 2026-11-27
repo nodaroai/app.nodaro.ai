@@ -16,7 +16,9 @@
  *                                      flash: { "nodaro-prism": boolean, "nodaro-pulse": boolean },
  *                                      resolutions: { [engineChoice]?: size[] },
  *                                      upscaleChoice: boolean,
- *                                      upscaleTo: { [engine]?: { [size]?: nextSize } } }
+ *                                      upscaleTo: { [engine]?: { [size]?: nextSize } },
+ *                                      portion: boolean,
+ *                                      shortClips: boolean }
  *
  * TRANSITION SHIM (the 2026-11-17 engine ids): each map also answers every
  * engine under its previous id (`"motion-prism"`, `"motion-pulse"`), the same
@@ -175,6 +177,17 @@
  * and Prism Flash answer the sizes their engines make). Keyed by its own ids
  * only. A client reading a server from before it finds none and treats it as
  * `{}`.
+ *
+ * `portion` says whether a run, its estimate and the plan-roles route take a
+ * part of the clip (`portionStart` and `portionSec`, in seconds: an ordinary
+ * run of that length, priced by it, decided 2026-11-25): one boolean for the
+ * deployment, true only while this environment's engine declares
+ * `castSwap.portion` (which it does only while the deployment's engine switch
+ * is on; lib/video-remake-portion.ts). `shortClips` says whether a clip of
+ * 2 s or more is accepted (else 4 s or more): true only while the engine
+ * declares `castSwap.shortClips`. Like `roleFace` both follow the engine alone
+ * and are in every answer, the failed-read one included. A client reading a
+ * server from before them finds none and treats each as false.
  */
 import type { FastifyInstance, RouteHandlerMethod } from "fastify"
 import { NODARO_MOTION_ENGINES, NODARO_MOTION_LEGACY_ENGINE_OF, type NodaroMotionEngine } from "@nodaro/shared/models"
@@ -199,6 +212,7 @@ import {
   upscaleToReadsSettings,
   type VideoRemakeUpscaleTo,
 } from "../../lib/video-remake-upscale-choice.js"
+import { engineTakesPortion, engineTakesShortClips } from "../../lib/video-remake-portion.js"
 import {
   deliveredResolutionsOffered,
   deliveredResolutionsReadSettings,
@@ -254,6 +268,8 @@ function answer(
   upscaleTo: VideoRemakeUpscaleTo,
   /** Per engine choice, the sizes delivered here (`deliveredResolutionsOffered`); keyed by its own ids. */
   resolutions: VideoRemakeResolutions,
+  /** The engine's part-of-the-clip and short-clip capabilities (`castSwap.portion`, `castSwap.shortClips`); the engine alone. */
+  clipLength: { portion: boolean; shortClips: boolean },
 ) {
   return {
     engines: withPreviousEngineIds(engines),
@@ -269,6 +285,8 @@ function answer(
     upscaleChoice,
     upscaleTo,
     resolutions,
+    portion: clipLength.portion,
+    shortClips: clipLength.shortClips,
   }
 }
 
@@ -291,9 +309,10 @@ const styleChoiceHandler: RouteHandlerMethod = async (req, reply) => {
   const upscaleChoice = engineTakesUpscaleChoice(castSwap)
   const takesUpscaleTo = upscaleToReadsSettings(castSwap)
   const takesResolutions = deliveredResolutionsReadSettings(castSwap)
+  const clipLength = { portion: engineTakesPortion(castSwap), shortClips: engineTakesShortClips(castSwap) }
   // What the answer says without the settings: people choose the style, no custom style, no roles planned from the prompt, no 3D previz clip.
   const withoutSettings = () =>
-    answer(styleChoices(null), { styleOnly, preciseArtStyle, preciseArtStyleAlone, customStyle: customStyleEngines(false) }, false, false, roleFace, false, flashOfferedEngines(null, castSwap), upscaleChoice, upscaleToOffered(castSwap, null), deliveredResolutionsOffered(castSwap, null))
+    answer(styleChoices(null), { styleOnly, preciseArtStyle, preciseArtStyleAlone, customStyle: customStyleEngines(false) }, false, false, roleFace, false, flashOfferedEngines(null, castSwap), upscaleChoice, upscaleToOffered(castSwap, null), deliveredResolutionsOffered(castSwap, null), clipLength)
   // Nothing of the answer reads the settings for this engine: it enforces no Style choice, takes no custom style, plans no roles, takes no 3D previz clip,
   // no Flash choice, and offers no upscale choice and no delivered size stepped up on a Prism-family engine (Pulse's needs no row).
   if (!takesStyleChoice && !takesCustomStyle && !takesPlanRoles && !takesPreviz && !engineTakesFlashChoices(castSwap) && !takesUpscaleTo && !takesResolutions) {
@@ -326,6 +345,7 @@ const styleChoiceHandler: RouteHandlerMethod = async (req, reply) => {
       upscaleChoice,
       upscaleToOffered(castSwap, precise),
       deliveredResolutionsOffered(castSwap, precise),
+      clipLength,
     ),
   )
 }

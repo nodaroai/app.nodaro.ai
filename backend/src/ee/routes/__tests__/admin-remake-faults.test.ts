@@ -34,7 +34,8 @@ import { adminRemakeFaultsRoutes } from "../admin-remake-faults.js"
 function row(over: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     id: RUN, created_at: "2026-11-02T10:00:00+00:00", user_id: USER_UUID, email: "person@example.test",
-    job_type: "cast-swap", status: "failed", full_quality: false, engine: "prism", resolution: "720p", draft: true,
+    job_type: "cast-swap", status: "failed", full_quality: false, engine: "prism", resolution: "720p",
+    delivered_resolution: null, draft: true,
     worst: "blocked",
     faults: [
       { kind: "unblurred_refused", severity: "blocked", at: "2026-11-02T10:00:03Z" },
@@ -97,7 +98,8 @@ describe("GET /v1/admin/remake-faults", () => {
         kinds: ["intent_override", "unblurred_refused"],
         runs: [{
           id: RUN, createdAt: "2026-11-02T10:00:00+00:00", userId: USER_UUID, email: "person@example.test",
-          jobType: "cast-swap", status: "failed", fullQuality: false, engine: "prism", resolution: "720p", draft: true,
+          jobType: "cast-swap", status: "failed", fullQuality: false, engine: "prism", resolution: "720p",
+          deliveredResolution: null, draft: true,
           worst: "blocked",
           faults: [
             { kind: "unblurred_refused", severity: "blocked", at: "2026-11-02T10:00:03Z" },
@@ -155,6 +157,12 @@ describe("GET /v1/admin/remake-faults", () => {
     expect(data.kinds).toEqual(["x", "y"])
     expect(data.runs[0].faults).toEqual([{ kind: "y", severity: "blocked" }, { kind: "x", severity: "warning" }])
     expect(data.runs[0].worst).toBe("blocked")
+  })
+
+  it("answers the engine's size and the size delivered apart (a 4K delivery made at 1080p)", async () => {
+    state.rpc.mockResolvedValue({ data: { total: 1, rows: [row({ resolution: "1080p", delivered_resolution: "4k" })], kinds: [] }, error: null })
+    const run = (await get({ from: FROM, to: TO })).json().data.runs[0]
+    expect(run).toMatchObject({ resolution: "1080p", deliveredResolution: "4k" })
   })
 
   it("an answer of no shape is an empty list", async () => {
