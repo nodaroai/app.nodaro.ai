@@ -2,8 +2,9 @@
  * A photo over a network's byte limit is re-encoded as a JPEG that fits before
  * it is posted (Facebook refused a 2K GPT Image 2 PNG: "Photos should be less
  * than 10 MB"). Pinned here: what is sent as it is (without a copy), what is
- * re-encoded at its own size, what is scaled down, what fails open, and what a
- * failure to store the copy means for the post.
+ * re-encoded at its own size, what is scaled down, what is never read, what
+ * fails open, and what a failure to store the copy, or no time left, means for
+ * the post.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import sharp from "sharp"
@@ -14,16 +15,13 @@ const OUTSIDE_URL = "https://example.com/a.png"
 const COPY_URL = `${OWN_HOST}tmp/provider-input/job/social-photo-1.jpg`
 const JOB = "11111111-2222-4333-8444-555555555555"
 
-const storage = vi.hoisted(() => ({ headR2Object: vi.fn(), readR2Object: vi.fn() }))
-vi.mock("../../../lib/storage.js", () => ({
-  r2KeyFromOurUrl: (url: string) => (url.startsWith("https://cdn.test/") ? url.slice("https://cdn.test/".length) : null),
-  headR2Object: storage.headR2Object,
-  readR2Object: storage.readR2Object,
+vi.mock("../../../lib/fetch-own-media.js", () => ({
+  isOwnMediaUrl: (url: string) => url.startsWith("https://cdn.test/"),
 }))
 
-const outside = vi.hoisted(() => ({ safeFetch: vi.fn(), chunks: vi.fn() }))
-vi.mock("../../../lib/safe-fetch.js", () => ({ safeFetch: outside.safeFetch }))
-vi.mock("../../../lib/safe-fetch-bytes.js", () => ({ boundedPublicChunks: outside.chunks }))
+const net = vi.hoisted(() => ({ head: vi.fn(), chunks: vi.fn() }))
+vi.mock("../../../lib/safe-fetch.js", () => ({ safeFetch: net.head }))
+vi.mock("../../../lib/safe-fetch-bytes.js", () => ({ boundedPublicChunks: net.chunks }))
 
 const scratch = vi.hoisted(() => ({ upload: vi.fn(), discard: vi.fn() }))
 vi.mock("../../../lib/job-scratch.js", () => ({
@@ -31,7 +29,7 @@ vi.mock("../../../lib/job-scratch.js", () => ({
   discardJobScratchFile: scratch.discard,
 }))
 
-import { discardPhotoCopies, fitPhotoUnderBytes, fitRequestPhotos } from "../photo-fit.js"
+import { discardPhotoCopies, fitPhotoUnderBytes, fitRequestPhotos, PUBLISH_CALL_RESERVE_MS } from "../photo-fit.js"
 import { META_PHOTO_MAX_BYTES } from "../photo-limits.js"
 import { NotPublishedError } from "../providers/types.js"
 
@@ -47,10 +45,11 @@ async function jpegAtFullSize(png: Buffer): Promise<Buffer> {
   return sharp(png).rotate().flatten({ background: "#ffffff" }).jpeg({ quality: 90 }).toBuffer()
 }
 
-/** Our own photo, `bytes` long, as storage reports it. */
-function ownPhoto(bytes: Buffer): void {
-  storage.headR2Object.mockResolvedValue({ exists: true, sizeBytes: bytes.length })
-  storage.readR2Object.mockResolvedValue({ body: bytes, contentType: "image/png", size: bytes.length })
+/** A limit the photo's PNG is over and its JPEG at full size is within. */
+async function limitBetween(png: Buffer): Promise<number> {
+  const jpeg = await jpegAtFullSize(png)
+  expect(png.length).toBeGreaterThan(jpeg.length)
+  return Math.floor((png.length + jpeg.length) / 2)
 }
 
 function headAnswer(headers: Record<string, string>, status = 200) {
@@ -63,17 +62,25 @@ function streamOf(...pieces: Buffer[]) {
   }
 }
 
+/** Our own photo: its HEAD answer states its size, its download yields its bytes. */
+function ownPhoto(bytes: Buffer): void {
+  net.head.mockResolvedValue(headAnswer({ "content-length": String(bytes.length) }))
+  net.chunks.mockImplementation(streamOf(bytes))
+}
+
 /** The JPEG that was stored, and what it was stored as. */
 function storedCopy(): { bytes: Buffer; name: unknown; ext: unknown; type: unknown; jobId: unknown } {
   const [bytes, name, ext, type, jobId] = scratch.upload.mock.calls[0] as [Buffer, unknown, unknown, unknown, unknown]
   return { bytes, name, ext, type, jobId }
 }
 
+function failureOf(promise: Promise<unknown>): Promise<unknown> {
+  return promise.then(() => null).catch((e: unknown) => e)
+}
+
 beforeEach(() => {
-  storage.headR2Object.mockReset()
-  storage.readR2Object.mockReset()
-  outside.safeFetch.mockReset()
-  outside.chunks.mockReset()
+  net.head.mockReset()
+  net.chunks.mockReset()
   scratch.upload.mockReset().mockResolvedValue(COPY_URL)
   scratch.discard.mockReset().mockResolvedValue(undefined)
 })
@@ -86,22 +93,20 @@ describe("Meta's photo limit", () => {
 })
 
 describe("fitPhotoUnderBytes", () => {
-  it("sends a photo within the limit as it is, without reading it", async () => {
-    storage.headR2Object.mockResolvedValue({ exists: true, sizeBytes: 1_000 })
+  it("sends a photo within the limit as it is, without downloading it", async () => {
+    net.head.mockResolvedValue(headAnswer({ "content-length": "1000" }))
 
     const fitted = await fitPhotoUnderBytes(OWN_URL, 5_000, JOB)
 
     expect(fitted).toEqual({ url: OWN_URL, copied: false })
-    expect(storage.headR2Object).toHaveBeenCalledWith("images/a.png")
-    expect(storage.readR2Object).not.toHaveBeenCalled()
+    expect(net.head).toHaveBeenCalledWith(OWN_URL, expect.objectContaining({ method: "HEAD" }))
+    expect(net.chunks).not.toHaveBeenCalled()
     expect(scratch.upload).not.toHaveBeenCalled()
   })
 
   it("re-encodes an oversized photo as a JPEG at its own size when that fits", async () => {
     const png = await noisePng(320, 240)
-    const jpeg = await jpegAtFullSize(png)
-    expect(png.length).toBeGreaterThan(jpeg.length)
-    const limit = Math.floor((png.length + jpeg.length) / 2)
+    const limit = await limitBetween(png)
     ownPhoto(png)
 
     const fitted = await fitPhotoUnderBytes(OWN_URL, limit, JOB)
@@ -113,12 +118,13 @@ describe("fitPhotoUnderBytes", () => {
     expect(meta.format).toBe("jpeg")
     expect([meta.width, meta.height]).toEqual([320, 240])
     expect(copy.bytes.length).toBeLessThanOrEqual(limit)
+    // Read through its public address, the one the network fetches.
+    expect(net.chunks).toHaveBeenCalledWith(OWN_URL, expect.objectContaining({ label: "Image" }))
   })
 
   it("scales a photo down only when its JPEG at full size is still too large, keeping its shape", async () => {
     const png = await noisePng(400, 300)
-    const jpeg = await jpegAtFullSize(png)
-    const limit = Math.floor(jpeg.length / 3)
+    const limit = Math.floor((await jpegAtFullSize(png)).length / 3)
     ownPhoto(png)
 
     const fitted = await fitPhotoUnderBytes(OWN_URL, limit, JOB)
@@ -133,67 +139,57 @@ describe("fitPhotoUnderBytes", () => {
 
   it("lays a transparent photo on white (a JPEG has no transparency)", async () => {
     const png = await noisePng(200, 200, 4)
-    const jpeg = await jpegAtFullSize(png)
     ownPhoto(png)
 
-    await fitPhotoUnderBytes(OWN_URL, Math.floor((png.length + jpeg.length) / 2), JOB)
+    await fitPhotoUnderBytes(OWN_URL, await limitBetween(png), JOB)
 
     const meta = await sharp(storedCopy().bytes).metadata()
     expect(meta.channels).toBe(3)
     expect(meta.hasAlpha).toBe(false)
   })
 
-  it("does not download an outside photo whose server states a size within the limit", async () => {
-    outside.safeFetch.mockResolvedValue(headAnswer({ "content-length": "1000" }))
-
-    const fitted = await fitPhotoUnderBytes(OUTSIDE_URL, 5_000, JOB)
+  it("sends an outside link as it is, without reading anything", async () => {
+    const fitted = await fitPhotoUnderBytes(OUTSIDE_URL, 100, JOB)
 
     expect(fitted).toEqual({ url: OUTSIDE_URL, copied: false })
-    expect(outside.safeFetch).toHaveBeenCalledWith(OUTSIDE_URL, expect.objectContaining({ method: "HEAD" }))
-    expect(outside.chunks).not.toHaveBeenCalled()
-    expect(storage.headR2Object).not.toHaveBeenCalled()
+    expect(net.head).not.toHaveBeenCalled()
+    expect(net.chunks).not.toHaveBeenCalled()
   })
 
-  it("downloads an outside photo of unstated size and sends it as it is when it fits", async () => {
-    outside.safeFetch.mockResolvedValue(headAnswer({}))
-    outside.chunks.mockImplementation(streamOf(Buffer.alloc(3_000)))
+  it.each([403, 404])("never downloads a photo whose public address answers %s: the network meets the same answer", async (status) => {
+    net.head.mockResolvedValue(headAnswer({}, status))
 
-    const fitted = await fitPhotoUnderBytes(OUTSIDE_URL, 5_000, JOB)
+    const fitted = await fitPhotoUnderBytes(OWN_URL, 100, JOB)
 
-    expect(fitted).toEqual({ url: OUTSIDE_URL, copied: false })
-    expect(outside.chunks).toHaveBeenCalledWith(OUTSIDE_URL, expect.objectContaining({ label: "Image" }))
+    expect(fitted).toEqual({ url: OWN_URL, copied: false })
+    expect(net.chunks).not.toHaveBeenCalled()
+  })
+
+  it("downloads a photo of unstated size and sends it as it is when it fits", async () => {
+    net.head.mockResolvedValue(headAnswer({}))
+    net.chunks.mockImplementation(streamOf(Buffer.alloc(3_000)))
+
+    const fitted = await fitPhotoUnderBytes(OWN_URL, 5_000, JOB)
+
+    expect(fitted).toEqual({ url: OWN_URL, copied: false })
     expect(scratch.upload).not.toHaveBeenCalled()
   })
 
-  it("re-encodes an oversized outside photo through the SSRF-safe download", async () => {
+  it("downloads the photo when its size cannot be asked, and re-encodes it when over", async () => {
     const png = await noisePng(320, 240)
-    const jpeg = await jpegAtFullSize(png)
-    outside.safeFetch.mockResolvedValue(headAnswer({ "content-length": String(png.length) }))
+    const limit = await limitBetween(png)
+    net.head.mockRejectedValue(new TypeError("fetch failed"))
     const half = Math.floor(png.length / 2)
-    outside.chunks.mockImplementation(streamOf(png.subarray(0, half), png.subarray(half)))
+    net.chunks.mockImplementation(streamOf(png.subarray(0, half), png.subarray(half)))
 
-    const fitted = await fitPhotoUnderBytes(OUTSIDE_URL, Math.floor((png.length + jpeg.length) / 2), JOB)
+    const fitted = await fitPhotoUnderBytes(OWN_URL, limit, JOB)
 
     expect(fitted).toEqual({ url: COPY_URL, copied: true })
   })
 
-  it("reads our own photo from the public address when storage cannot serve it", async () => {
-    const png = await noisePng(320, 240)
-    const jpeg = await jpegAtFullSize(png)
-    storage.headR2Object.mockResolvedValue({ exists: true, sizeBytes: png.length })
-    storage.readR2Object.mockResolvedValue(null)
-    outside.chunks.mockImplementation(streamOf(png))
-
-    const fitted = await fitPhotoUnderBytes(OWN_URL, Math.floor((png.length + jpeg.length) / 2), JOB)
-
-    expect(fitted.copied).toBe(true)
-    expect(outside.chunks).toHaveBeenCalledWith(OWN_URL, expect.anything())
-  })
-
-  it("sends a photo it cannot read as it is: the network then answers for it", async () => {
-    storage.headR2Object.mockResolvedValue({ exists: true, sizeBytes: 50_000_000 })
-    storage.readR2Object.mockResolvedValue(null)
-    outside.chunks.mockImplementation(async function* () {
+  it("sends a photo it cannot download as it is", async () => {
+    net.head.mockResolvedValue(headAnswer({ "content-length": "50000000" }))
+    net.chunks.mockImplementation(async function* () {
       yield Buffer.alloc(0)
       throw new Error("socket hang up")
     })
@@ -213,19 +209,84 @@ describe("fitPhotoUnderBytes", () => {
     expect(scratch.upload).not.toHaveBeenCalled()
   })
 
+  it("sends an animated picture as it is: a JPEG would keep one frame", async () => {
+    const frame = (r: number) => sharp({ create: { width: 64, height: 64, channels: 3, background: { r, g: 0, b: 0 } } }).png().toBuffer()
+    const gif = await sharp([await frame(255), await frame(0)], { join: { animated: true } }).gif().toBuffer()
+    expect((await sharp(gif).metadata()).pages).toBe(2)
+    ownPhoto(gif)
+
+    const fitted = await fitPhotoUnderBytes(OWN_URL, 10, JOB)
+
+    expect(fitted).toEqual({ url: OWN_URL, copied: false })
+    expect(scratch.upload).not.toHaveBeenCalled()
+  })
+
+  it("sends an SVG as it is: it is never drawn", async () => {
+    const svg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><!--${"x".repeat(2_000)}--><rect width="10" height="10"/></svg>`)
+    ownPhoto(svg)
+
+    const fitted = await fitPhotoUnderBytes(OWN_URL, 100, JOB)
+
+    expect(fitted).toEqual({ url: OWN_URL, copied: false })
+    expect(scratch.upload).not.toHaveBeenCalled()
+  })
+
   it("reports a copy it could not store as NOT published, safe to retry", async () => {
     const png = await noisePng(320, 240)
-    const jpeg = await jpegAtFullSize(png)
+    const limit = await limitBetween(png)
     ownPhoto(png)
     scratch.upload.mockRejectedValue(new Error("storage unavailable"))
 
-    const err = await fitPhotoUnderBytes(OWN_URL, Math.floor((png.length + jpeg.length) / 2), JOB)
-      .then(() => null)
-      .catch((e: unknown) => e)
+    const err = await failureOf(fitPhotoUnderBytes(OWN_URL, limit, JOB))
 
     expect(err).toBeInstanceOf(NotPublishedError)
     expect((err as Error).message).toMatch(/NOT published/)
-    expect((err as Error).message).not.toMatch(/MAY have been published/i)
+    expect((err as Error).message).not.toMatch(/MAY have been published|storage unavailable/i)
+  })
+
+  it("sends the photo as it is when the deadline leaves no time to ask its size", async () => {
+    const fitted = await fitPhotoUnderBytes(OWN_URL, 100, JOB, { deadlineMs: Date.now() + PUBLISH_CALL_RESERVE_MS - 1_000 })
+
+    expect(fitted).toEqual({ url: OWN_URL, copied: false })
+    expect(net.head).not.toHaveBeenCalled()
+  })
+
+  it("reports a photo it has no time left to re-encode as NOT published, safe to retry", async () => {
+    net.head.mockImplementation(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 120))
+      return headAnswer({ "content-length": "50000000" })
+    })
+
+    const err = await failureOf(fitPhotoUnderBytes(OWN_URL, 5_000, JOB, { deadlineMs: Date.now() + PUBLISH_CALL_RESERVE_MS + 60 }))
+
+    expect(err).toBeInstanceOf(NotPublishedError)
+    expect(net.chunks).not.toHaveBeenCalled()
+  })
+
+  it("re-encodes one photo at a time", async () => {
+    const png = await noisePng(320, 240)
+    const limit = await limitBetween(png)
+    net.head.mockResolvedValue(headAnswer({ "content-length": String(png.length) }))
+    let releaseFirst: () => void = () => {}
+    const firstHeld = new Promise<void>((resolve) => {
+      releaseFirst = resolve
+    })
+    net.chunks
+      .mockImplementationOnce(async function* () {
+        await firstHeld
+        yield png
+      })
+      .mockImplementation(streamOf(png))
+
+    const first = fitPhotoUnderBytes(`${OWN_HOST}images/1.png`, limit, JOB)
+    const second = fitPhotoUnderBytes(`${OWN_HOST}images/2.png`, limit, JOB)
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(net.chunks).toHaveBeenCalledTimes(1)
+
+    releaseFirst()
+    await Promise.all([first, second])
+    expect(net.chunks).toHaveBeenCalledTimes(2)
+    expect(scratch.upload).toHaveBeenCalledTimes(2)
   })
 })
 
@@ -237,16 +298,16 @@ describe("fitRequestPhotos", () => {
 
     expect(fitted.request).toBe(request)
     expect(fitted.copies).toEqual([])
-    expect(storage.headR2Object).not.toHaveBeenCalled()
+    expect(net.head).not.toHaveBeenCalled()
   })
 
   it("puts the fitted photo in a new request and leaves the given one untouched", async () => {
     const png = await noisePng(320, 240)
-    const jpeg = await jpegAtFullSize(png)
+    const limit = await limitBetween(png)
     ownPhoto(png)
     const request = { action: "post-image", caption: "hi", mediaUrl: OWN_URL }
 
-    const fitted = await fitRequestPhotos(request, Math.floor((png.length + jpeg.length) / 2), JOB)
+    const fitted = await fitRequestPhotos(request, limit, JOB)
 
     expect(fitted.request).toEqual({ action: "post-image", caption: "hi", mediaUrl: COPY_URL })
     expect(fitted.copies).toEqual([COPY_URL])
@@ -260,25 +321,25 @@ describe("fitRequestPhotos", () => {
 
     expect(fitted.request).toEqual(request)
     expect(fitted.copies).toEqual([])
-    expect(storage.headR2Object).not.toHaveBeenCalled()
+    expect(net.head).not.toHaveBeenCalled()
   })
 
-  it("fits a photo named twice (a scheduled post's mediaUrl and its one item) once", async () => {
+  it("fits only what the action posts: a scheduled photo post's mediaUrl, not its item list", async () => {
     const png = await noisePng(320, 240)
-    const jpeg = await jpegAtFullSize(png)
+    const limit = await limitBetween(png)
     ownPhoto(png)
     const request = { action: "post-image", mediaUrl: OWN_URL, mediaItems: [{ type: "photo" as const, url: OWN_URL }] }
 
-    const fitted = await fitRequestPhotos(request, Math.floor((png.length + jpeg.length) / 2), JOB)
+    const fitted = await fitRequestPhotos(request, limit, JOB)
 
     expect(scratch.upload).toHaveBeenCalledTimes(1)
-    expect(fitted.request).toEqual({ action: "post-image", mediaUrl: COPY_URL, mediaItems: [{ type: "photo", url: COPY_URL }] })
+    expect(fitted.request).toEqual({ action: "post-image", mediaUrl: COPY_URL, mediaItems: [{ type: "photo", url: OWN_URL }] })
     expect(fitted.copies).toEqual([COPY_URL])
   })
 
   it("fits every photo of a carousel", async () => {
     const png = await noisePng(320, 240)
-    const jpeg = await jpegAtFullSize(png)
+    const limit = await limitBetween(png)
     ownPhoto(png)
     scratch.upload.mockResolvedValueOnce(`${COPY_URL}?1`).mockResolvedValueOnce(`${COPY_URL}?2`)
     const request = {
@@ -289,7 +350,7 @@ describe("fitRequestPhotos", () => {
       ],
     }
 
-    const fitted = await fitRequestPhotos(request, Math.floor((png.length + jpeg.length) / 2), JOB)
+    const fitted = await fitRequestPhotos(request, limit, JOB)
 
     expect(fitted.request.mediaItems).toEqual([
       { type: "photo", url: `${COPY_URL}?1` },
@@ -300,7 +361,7 @@ describe("fitRequestPhotos", () => {
 
   it("discards the copies already made when a later photo fails, and rethrows", async () => {
     const png = await noisePng(320, 240)
-    const jpeg = await jpegAtFullSize(png)
+    const limit = await limitBetween(png)
     ownPhoto(png)
     scratch.upload.mockResolvedValueOnce(COPY_URL).mockRejectedValueOnce(new Error("storage unavailable"))
     const request = {
@@ -311,9 +372,7 @@ describe("fitRequestPhotos", () => {
       ],
     }
 
-    await expect(fitRequestPhotos(request, Math.floor((png.length + jpeg.length) / 2), JOB)).rejects.toBeInstanceOf(
-      NotPublishedError,
-    )
+    await expect(fitRequestPhotos(request, limit, JOB)).rejects.toBeInstanceOf(NotPublishedError)
     expect(scratch.discard).toHaveBeenCalledWith(COPY_URL, JOB)
   })
 })
@@ -326,9 +385,8 @@ describe("discardPhotoCopies", () => {
     expect(scratch.discard).toHaveBeenCalledWith(`${COPY_URL}?2`, JOB)
   })
 
-  it("does nothing when no copy was made or no job names the folder", async () => {
+  it("does nothing when no copy was made", async () => {
     await discardPhotoCopies([], JOB)
-    await discardPhotoCopies([COPY_URL], undefined)
 
     expect(scratch.discard).not.toHaveBeenCalled()
   })

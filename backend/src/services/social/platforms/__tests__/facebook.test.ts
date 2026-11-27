@@ -7,7 +7,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest"
 import { facebookPublisher } from "../facebook.js"
 import { GraphRefusedError } from "../graph-error.js"
-import { BadBodyError } from "../../providers/types.js"
+import { BadBodyError, NotPublishedError } from "../../providers/types.js"
 
 /** Facebook's answer to a 2K GPT Image 2 PNG (the photo over its 10 MB limit). */
 const PHOTO_TOO_LARGE = {
@@ -99,6 +99,21 @@ describe("facebookPublisher", () => {
 
     expect(err).toBeInstanceOf(BadBodyError)
     expect((err as Error).message).toBe("Facebook photo post failed: Bad Request")
+  })
+
+  it.each([
+    ["a rate limit (code 4)", 400, { error: { message: "(#4) Application request limit reached", type: "OAuthException", code: 4 } }],
+    ["a Page rate limit (code 32)", 400, { error: { message: "(#32) Page request limit reached", type: "OAuthException", code: 32 } }],
+    ["an error Meta marks transient", 400, { error: { message: "Please retry", type: "OAuthException", code: 2, is_transient: true } }],
+    ["HTTP 429", 429, { error: { message: "Too many requests" } }],
+  ])("reports %s as NOT published, to be retried later", async (_name, status, body) => {
+    mockFetch.mockResolvedValueOnce(answer(status, body))
+
+    const err = await failureOf(post("post-image"))
+
+    expect(err).toBeInstanceOf(NotPublishedError)
+    expect(err).not.toBeInstanceOf(BadBodyError)
+    expect((err as Error).message).toMatch(/NOT published — retrying later is safe/)
   })
 
   it("leaves a server error (5xx) undecided: Facebook may have posted before it failed", async () => {

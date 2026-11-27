@@ -8,7 +8,7 @@ const GRAPH = "https://graph.facebook.com/v25.0"
  *  - HTTP 4xx: Facebook refused the request (code 100 "Invalid parameter" for
  *    a photo over its 10 MB limit, a missing permission, a URL it could not
  *    read). Nothing was posted, so it is a definite failure in Facebook's own
- *    words (`graphRefusal`).
+ *    words (`graphRefusal`); one refused for its rate is retried later.
  *  - HTTP 5xx, or no answer at all (a lost connection, a timeout): the request
  *    reached Facebook and may have been acted on, so it stays a plain Error,
  *    which execute-publish reports as an unknown outcome and never retries

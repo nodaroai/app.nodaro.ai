@@ -64,7 +64,13 @@ export interface ExecutePublishInput {
    * The job this publish runs under: a photo re-encoded to fit the network's
    * byte limit is stored in its scratch folder (`photo-fit.ts`).
    */
-  jobId?: string
+  jobId: string
+}
+
+/** The deadline a caller that must answer an open request set (`publishDeadlineMs`), if any. */
+function publishDeadlineOf(metadata: Record<string, unknown>): number | undefined {
+  const v = metadata.publishDeadlineMs
+  return typeof v === "number" && Number.isFinite(v) && v > 0 ? v : undefined
 }
 
 export interface ExecutePublishSuccess {
@@ -183,7 +189,9 @@ export async function executePublish(input: ExecutePublishInput): Promise<Execut
 
   // Photos over the network's byte limit are re-encoded to fit, BEFORE the
   // provider call: a failure here sent nothing, so it is never "unknown".
-  const fitted = await fitRequestPhotos(input.request, provider.photoMaxBytes, input.jobId)
+  const fitted = await fitRequestPhotos(input.request, provider.photoMaxBytes, input.jobId, {
+    deadlineMs: publishDeadlineOf(metadata),
+  })
 
   // The provider call. From here on a failure is an UNKNOWN outcome — the
   // platform may have accepted the post before the error surfaced.
@@ -200,7 +208,9 @@ export async function executePublish(input: ExecutePublishInput): Promise<Execut
     throw new UnknownOutcomeError(`Publish outcome unknown — the post MAY have been published: ${msg}`, err)
   } finally {
     // The network fetched the copy during the call; nothing reads it after.
-    await discardPhotoCopies(fitted.copies, input.jobId)
+    // Not awaited: the answer for a post that went out never waits on storage
+    // (it never throws, and the daily age sweep backs it up).
+    void discardPhotoCopies(fitted.copies, input.jobId)
   }
 
   if (!result.success) {

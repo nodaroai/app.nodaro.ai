@@ -96,6 +96,7 @@ describe("executePublish", () => {
     const res = await executePublish({
       userId: "u1",
       platform: "prov",
+      jobId: "job-1",
       request: { action: "post-image" },
     })
     expect(res).toEqual({ connectionId: "c1", platformPostId: "p1", platformPostUrl: "https://x/p1" })
@@ -105,7 +106,7 @@ describe("executePublish", () => {
   it("throws NotConnectedError when no row matches", async () => {
     connectionRows = []
     await expect(
-      executePublish({ userId: "u1", platform: "prov", request: { action: "post-image" } }),
+      executePublish({ userId: "u1", platform: "prov", jobId: "job-1", request: { action: "post-image" } }),
     ).rejects.toBeInstanceOf(NotConnectedError)
   })
 
@@ -113,7 +114,7 @@ describe("executePublish", () => {
     connectionRows = [conn()]
     publishMock.mockRejectedValue(new Error("socket hang up"))
     await expect(
-      executePublish({ userId: "u1", platform: "prov", request: { action: "post-image" } }),
+      executePublish({ userId: "u1", platform: "prov", jobId: "job-1", request: { action: "post-image" } }),
     ).rejects.toBeInstanceOf(UnknownOutcomeError)
   })
 
@@ -123,7 +124,7 @@ describe("executePublish", () => {
       new NotPublishedError("Instagram publish failed: media still not ready (code 9007)"),
     )
 
-    const err = await executePublish({ userId: "u1", platform: "prov", request: { action: "post-image" } })
+    const err = await executePublish({ userId: "u1", platform: "prov", jobId: "job-1", request: { action: "post-image" } })
       .then(() => null)
       .catch((e) => e)
 
@@ -137,7 +138,7 @@ describe("executePublish", () => {
     connectionRows = [conn()]
     publishMock.mockRejectedValue(new BadBodyError("Instagram media processing failed (status_code=ERROR)"))
     await expect(
-      executePublish({ userId: "u1", platform: "prov", request: { action: "post-image" } }),
+      executePublish({ userId: "u1", platform: "prov", jobId: "job-1", request: { action: "post-image" } }),
     ).rejects.toBeInstanceOf(BadBodyError)
   })
 
@@ -145,7 +146,7 @@ describe("executePublish", () => {
     connectionRows = [conn()]
     publishMock.mockResolvedValue({ success: false, error: "Caption too long" })
     await expect(
-      executePublish({ userId: "u1", platform: "prov", request: { action: "post-image" } }),
+      executePublish({ userId: "u1", platform: "prov", jobId: "job-1", request: { action: "post-image" } }),
     ).rejects.toBeInstanceOf(BadBodyError)
   })
 
@@ -153,7 +154,7 @@ describe("executePublish", () => {
     testProvider.capabilities.refresh = "reconnect"
     connectionRows = [conn({ token_expires_at: past })]
 
-    const err = await executePublish({ userId: "u1", platform: "prov", request: { action: "post-image" } })
+    const err = await executePublish({ userId: "u1", platform: "prov", jobId: "job-1", request: { action: "post-image" } })
       .then(() => null)
       .catch((e) => e)
     expect(err).toBeInstanceOf(RefreshTokenError)
@@ -167,7 +168,7 @@ describe("executePublish", () => {
     refreshMock.mockResolvedValue({ accessToken: "tok-new", refreshToken: "refresh-2", expiresIn: 3600 })
     publishMock.mockResolvedValue({ success: true })
 
-    await executePublish({ userId: "u1", platform: "prov", request: { action: "post-image" } })
+    await executePublish({ userId: "u1", platform: "prov", jobId: "job-1", request: { action: "post-image" } })
 
     expect(refreshMock).toHaveBeenCalledWith(testProvider, "refresh-1")
     expect(publishMock).toHaveBeenCalledWith("tok-new", expect.any(Object), expect.any(Object))
@@ -181,7 +182,7 @@ describe("executePublish", () => {
     connectionRows = [conn({ token_expires_at: past, refresh_token_encrypted: "enc:refresh-1" })]
     refreshMock.mockRejectedValue(new Error("invalid_grant"))
 
-    const err = await executePublish({ userId: "u1", platform: "prov", request: { action: "post-image" } })
+    const err = await executePublish({ userId: "u1", platform: "prov", jobId: "job-1", request: { action: "post-image" } })
       .then(() => null)
       .catch((e) => e)
     expect(err).toBeInstanceOf(RefreshTokenError)
@@ -196,6 +197,7 @@ describe("executePublish", () => {
     await executePublish({
       userId: "u1",
       platform: "prov",
+      jobId: "job-1",
       request: { action: "post-image" },
       extraMetadata: { chatId: "42" },
     })
@@ -219,7 +221,7 @@ describe("executePublish: photos over the network's byte limit", () => {
 
     await executePublish({ userId: "u1", platform: "prov", jobId: "job-9", request: BIG })
 
-    expect(fitRequestPhotosMock).toHaveBeenCalledWith(BIG, 8_000_000, "job-9")
+    expect(fitRequestPhotosMock).toHaveBeenCalledWith(BIG, 8_000_000, "job-9", { deadlineMs: undefined })
     expect(publishMock).toHaveBeenCalledWith("tok-live", fitted, expect.any(Object))
     expect(discardPhotoCopiesMock).toHaveBeenCalledWith([COPY], "job-9")
     // The copy goes only once the network has answered: it fetches the photo during the call.
@@ -230,10 +232,27 @@ describe("executePublish: photos over the network's byte limit", () => {
     connectionRows = [conn()]
     publishMock.mockResolvedValue({ success: true })
 
-    await executePublish({ userId: "u1", platform: "prov", request: BIG })
+    await executePublish({ userId: "u1", platform: "prov", jobId: "job-9", request: BIG })
 
-    expect(fitRequestPhotosMock).toHaveBeenCalledWith(BIG, undefined, undefined)
+    expect(fitRequestPhotosMock).toHaveBeenCalledWith(BIG, undefined, "job-9", { deadlineMs: undefined })
     expect(publishMock).toHaveBeenCalledWith("tok-live", BIG, expect.any(Object))
+  })
+
+  it("holds the fitting to the deadline a caller that must answer has set", async () => {
+    connectionRows = [conn()]
+    testProvider.photoMaxBytes = 8_000_000
+    publishMock.mockResolvedValue({ success: true })
+    const deadline = Date.now() + 250_000
+
+    await executePublish({
+      userId: "u1",
+      platform: "prov",
+      jobId: "job-9",
+      request: BIG,
+      extraMetadata: { publishDeadlineMs: deadline },
+    })
+
+    expect(fitRequestPhotosMock).toHaveBeenCalledWith(BIG, 8_000_000, "job-9", { deadlineMs: deadline })
   })
 
   it("discards the copies when the call fails too", async () => {
