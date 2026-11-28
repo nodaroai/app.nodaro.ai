@@ -2,6 +2,9 @@ import { config, hasAdmin, hasCredits, isMultiUser } from "./lib/config.js"
 import { buildApp } from "./app.js"
 import { startCommunityReaperCron } from "./ee/services/community/reaper.js"
 import { startCleanupCron } from "./ee/billing/cleanup-cron.js"
+import { releaseVideoRouteLeases } from "./ee/billing/video-route-watch.js"
+// Registers the routed-node estimators the price table prices a routed node with (every process that estimates).
+import "./ee/billing/video-route-admission.js"
 import { startReconcileCron } from "./lib/reconcile/start.js"
 import { startAppReportSweepCron } from "./lib/app-report-sweep.js"
 import { startScene3DArtifactCleanup } from "./lib/scene3d-artifact-cleanup.js"
@@ -33,6 +36,7 @@ import {
 import { createOrchestratorWorker } from "./workers/orchestrator-worker.js"
 import { createVideoDirectorWorker } from "./workers/video-director-worker.js"
 import { logFfmpegVersion } from "./providers/video/ffmpeg-utils.js"
+import { startProcessShortageWatch } from "./lib/process-shortage.js"
 import { assertClientAddressConfig, describeClientAddressConfig } from "./lib/client-address.js"
 import { watchProviderCredentials } from "./providers/index.js"
 import { warmHeygenCatalog } from "./providers/heygen/catalog.js"
@@ -112,6 +116,10 @@ async function main() {
   // version-dependent (see the Dockerfile FFMPEG_VERSION pin), and "which
   // ffmpeg?" is the first question when production output changes.
   logFfmpegVersion("server")
+  // And the process limit this container really has, then one line whenever the kernel refuses it a
+  // process or a thread: this program starts others too (probes, downloads), and a launch that fails
+  // is judged by how recently one was refused (providers/video/box-shortage.ts). Stopped on shutdown.
+  const stopShortageWatch = startProcessShortageWatch("server")
   // And which client address — the line to compare across environments after
   // NETWORK_HASH_SECRET changes (staging and production share one database).
   console.info(describeClientAddressConfig())
@@ -354,6 +362,7 @@ async function main() {
     // First: no platform claim from a process on its way out (a beat already in flight may still land; that claim
     // then lapses within its TTL). The engine record is never the heartbeat's.
     stopPlatformClaimHeartbeat?.()
+    stopShortageWatch()
     const hardExit = setTimeout(() => {
       console.error("[server] Shutdown timed out, forcing exit")
       process.exit(1)
@@ -374,6 +383,8 @@ async function main() {
       stopTrendRadarCron()
       stopWorkflowExecutionsReconcileCron()
       stopPipelinesReconcileCron()
+      // The routed-video sweeps' "running" leases, so the next process's pass is not held off for their TTL.
+      await releaseVideoRouteLeases()
       await orchestratorWorker.close()
       if (videoDirectorWorker) await videoDirectorWorker.close()
       if (pipelineWorker) await pipelineWorker.close()

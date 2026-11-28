@@ -273,6 +273,7 @@ function ReferenceBoardNodeComponent({ id, data, selected }: NodeProps) {
                     onClick={(e) => {
                       e.stopPropagation()
                       const a = document.createElement('a')
+                      // download-site: an image result
                       a.href = `/v1/image-proxy?url=${encodeURIComponent(activeUrl)}&download=1`
                       a.download = `${nodeData.label || 'reference-board'}.png`
                       a.click()

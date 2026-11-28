@@ -1,7 +1,19 @@
 import { describe, expect, it, vi } from "vitest"
 import { ALTERNATE_ROUTE_JOB_TYPES } from "../alternate-route-request.js"
 import type { PluginAlternateRouteRequest, PluginAlternateRoutesService } from "../private-plugins/types.js"
-import { decideVideoRoute, routeViewOf, videoRouteRequestKey, videoRouteServiceOf, videoRouteStamp, videoRouteStampOf, type RouteView } from "../video-route-decision.js"
+import {
+  bindRowlessRouteToken,
+  decideVideoRoute,
+  foreignRowlessRouteToken,
+  routeViewOf,
+  rowlessRouteToken,
+  rowlessRouteTokenOf,
+  videoRouteRequestKey,
+  videoRouteServiceOf,
+  videoRouteStamp,
+  videoRouteStampOf,
+  type RouteView,
+} from "../video-route-decision.js"
 import {
   ROUTABLE_VIDEO_MODELS,
   defaultVideoRoutePolicy,
@@ -9,6 +21,7 @@ import {
   priceFactorKey,
   raisedPriceFactor,
   revertedVideoRoutePolicy,
+  routingWidens,
   videoRouteChoiceFor,
   PRICE_FACTOR_MAX_AUTO_STEP,
   type VideoRoutePolicy,
@@ -79,14 +92,14 @@ describe("decideVideoRoute — totality", () => {
     expect(decideVideoRoute(policy, yesView(), { model: "seedance-2-fast", service: "cast-swap", request: request() }).route).toBe("default")
   })
 
-  it("stays on the default route where this process's route cannot take it", () => {
+  it("refuses a selected route that cannot take the request", () => {
     const policy = routed({ "seedance-2-5": { route: "alternate" } })
     const ask = { model: "seedance-2-5", service: "image-to-video", request: request() }
-    expect(decideVideoRoute(policy, null, ask)).toEqual({ route: "default", why: "no-route" })
-    expect(decideVideoRoute(policy, yesView({ v2: false }), ask)).toEqual({ route: "default", why: "route-v1" })
-    expect(decideVideoRoute(policy, yesView({ capable: () => false }), ask)).toEqual({ route: "default", why: "not-capable" })
-    expect(decideVideoRoute(policy, yesView({ accepts: () => null }), ask)).toEqual({ route: "default", why: "not-accepted" })
-    expect(decideVideoRoute(policy, yesView({ accepts: () => ({ routeId: "" }) }), ask)).toEqual({ route: "default", why: "not-accepted" })
+    expect(decideVideoRoute(policy, null, ask)).toEqual({ route: "refused", why: "no-route" })
+    expect(decideVideoRoute(policy, yesView({ v2: false }), ask)).toEqual({ route: "refused", why: "route-v1" })
+    expect(decideVideoRoute(policy, yesView({ capable: () => false }), ask)).toEqual({ route: "refused", why: "not-capable" })
+    expect(decideVideoRoute(policy, yesView({ accepts: () => null }), ask)).toEqual({ route: "refused", why: "not-accepted" })
+    expect(decideVideoRoute(policy, yesView({ accepts: () => ({ routeId: "" }) }), ask)).toEqual({ route: "refused", why: "not-accepted" })
   })
 
   it("asks accepts with the service and kind set (the admin-routed consult)", () => {
@@ -151,6 +164,32 @@ describe("the policy", () => {
     expect(raisedPriceFactor(2, 5)).toBe(2)
   })
 
+  it("a change widens routing only when some model, for some service, newly takes the alternate route", () => {
+    const one = routed({ "seedance-2": { route: "alternate" } })
+    // A route added: from nothing saved, from an empty policy, or beside one already there.
+    expect(routingWidens(null, one)).toBe(true)
+    expect(routingWidens(routed({}), one)).toBe(true)
+    expect(routingWidens(one, routed({ "seedance-2": { route: "alternate" }, "seedance-2-5": { route: "alternate" } }))).toBe(true)
+    // A service override added under a model on the default route.
+    expect(routingWidens(routed({ "seedance-2": { route: "default" } }), routed({ "seedance-2": { route: "default", services: { "lip-sync": "alternate" } } }))).toBe(true)
+    // A "default" override removed under a model routed as a whole: that service now takes the route.
+    expect(routingWidens(routed({ "seedance-2": { route: "alternate", services: { "lip-sync": "default" } } }), one)).toBe(true)
+    // A model routed as a whole where only one of its services was: every other service now takes it.
+    expect(routingWidens(routed({ "seedance-2": { route: "default", services: { "lip-sync": "alternate" } } }), one)).toBe(true)
+  })
+
+  it("removing a route, narrowing one, or changing only a threshold never widens", () => {
+    const two = routed({ "seedance-2": { route: "alternate" }, "seedance-2-5": { route: "alternate" } })
+    expect(routingWidens(two, routed({ "seedance-2": { route: "alternate" } }))).toBe(false)
+    expect(routingWidens(two, routed({}))).toBe(false)
+    expect(routingWidens(two, null)).toBe(false)
+    expect(routingWidens(routed({ "seedance-2": { route: "default", services: { "lip-sync": "alternate" } } }), routed({ "seedance-2": { route: "default" } }))).toBe(false)
+    expect(routingWidens(routed({ "seedance-2": { route: "alternate" } }), routed({ "seedance-2": { route: "alternate", services: { "lip-sync": "default" } } }))).toBe(false)
+    expect(routingWidens(two, { ...two, routeBalanceAlertUsd: 10, spendDriftAlertPercent: 9, billAnomalyMultiple: 7 })).toBe(false)
+    expect(routingWidens(two, two)).toBe(false)
+    expect(routingWidens(null, routed({ "seedance-2": { route: "default", services: { "lip-sync": "default" } } }))).toBe(false)
+  })
+
   it("keys a factor by model, resolution, reference video and kind", () => {
     expect(priceFactorKey({ model: "seedance-2-5", resolution: "720p", hasRefVideo: true, kind: "generate" })).toBe("seedance-2-5:720p:ref:generate")
   })
@@ -188,5 +227,46 @@ describe("the service and the stamp", () => {
     expect(videoRouteRequestKey(input)).toBe(videoRouteRequestKey({ ...input, prompt: "other words" }))
     expect(videoRouteRequestKey(input)).not.toBe(videoRouteRequestKey({ ...input, duration: 12 }))
     expect(videoRouteRequestKey(input)).not.toBe(videoRouteRequestKey({ ...input, refVideoDurationsSec: [9] }))
+  })
+})
+
+describe("a run token from another environment (staging and production share one database)", () => {
+  const inEnv = <T>(env: string, fn: () => T): T => {
+    const before = process.env.RUNTIME_ENV
+    process.env.RUNTIME_ENV = env
+    try {
+      return fn()
+    } finally {
+      if (before === undefined) delete process.env.RUNTIME_ENV
+      else process.env.RUNTIME_ENV = before
+    }
+  }
+  const body = { routeId: "r1", model: "seedance-2-5", service: "generate-video-pro", decidedAt: "2026-11-27T10:00:00.000Z", stage: "run" }
+  /** A token as another environment would write it, with a signature this one cannot verify. */
+  const claim = (fields: unknown, sig = "signed-with-another-secret") => `${Buffer.from(JSON.stringify(fields)).toString("base64url")}.${sig}`
+
+  it("is foreign when it names another environment, whether or not its signature verifies here", () => {
+    const signedThere = inEnv("staging", () => bindRowlessRouteToken(rowlessRouteToken({ routeId: "r1", model: "seedance-2-5", service: "generate-video-pro", feeChargedCredits: 10, feeId: "gvp-fee" }), { parentJobId: "j", userId: "u" })!)
+    inEnv("production", () => {
+      expect(foreignRowlessRouteToken(signedThere)).toBe(true)
+      // An environment signing with a different secret: its token cannot verify here, and is refused as its, never read as merely invalid.
+      expect(foreignRowlessRouteToken(claim({ ...body, env: "staging" }))).toBe(true)
+      expect(foreignRowlessRouteToken(claim({ ...body, env: "staging" }, ""))).toBe(true)
+      expect(rowlessRouteTokenOf(claim({ ...body, env: "staging" }))).toBeUndefined()
+    })
+  })
+
+  it("is not foreign when it names this environment or none, or cannot be read (such a token is refused as invalid where it is read)", () => {
+    inEnv("production", () => {
+      const signedHere = rowlessRouteToken({ routeId: "r1", model: "seedance-2-5", service: "generate-video-pro" })
+      expect(foreignRowlessRouteToken(signedHere)).toBe(false)
+      expect(rowlessRouteTokenOf(signedHere)).toMatchObject({ env: "production" })
+      // A bad signature that claims this environment: not foreign, and not a decision either.
+      expect(foreignRowlessRouteToken(claim({ ...body, env: "production" }))).toBe(false)
+      expect(rowlessRouteTokenOf(claim({ ...body, env: "production" }))).toBeUndefined()
+      for (const unreadable of [claim(body), claim({ ...body, env: 5 }), claim(null), claim("staging"), "not-json.sig", "", undefined, 42, null]) {
+        expect(foreignRowlessRouteToken(unreadable)).toBe(false)
+      }
+    })
   })
 })

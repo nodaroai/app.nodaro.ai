@@ -221,6 +221,14 @@ describe("parseRuntimeConfig — typed, lenient, never throws", () => {
     }
   })
 
+  it("keeps storageOrigins' https origins only, and no key when none is one", () => {
+    expect(parseRuntimeConfig({ storageOrigins: ["https://cdn.example.com", "https://pub-1.r2.dev"] })).toEqual({ storageOrigins: ["https://cdn.example.com", "https://pub-1.r2.dev"] })
+    expect(parseRuntimeConfig({ storageOrigins: ["https://cdn.example.com", "http://cdn.example.com", "https://cdn.example.com/path", 7] })).toEqual({ storageOrigins: ["https://cdn.example.com"] })
+    for (const malformed of [[], ["http://cdn.example.com"], "https://cdn.example.com", null]) {
+      expect("storageOrigins" in parseRuntimeConfig({ storageOrigins: malformed })).toBe(false)
+    }
+  })
+
   it("no mediaOrigin key ⇒ no mediaOrigin (a deployment that is not white-label)", () => {
     expect("mediaOrigin" in parseRuntimeConfig({ apiUrl: "/" })).toBe(false)
     expect("mediaOrigin" in parseRuntimeConfig({})).toBe(false)

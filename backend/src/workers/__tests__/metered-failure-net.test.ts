@@ -46,7 +46,7 @@ vi.mock("../../lib/llm-billing.js", async (importOriginal) => ({
   settleLlmUsageLog: h.settle,
 }))
 vi.mock("../../ee/services/credits.js", () => ({
-  CreditsService: { refundCredits: h.refundCredits, commitCredits: h.commitCredits, trySettleManagedCredits: h.trySettleManagedCredits },
+  CreditsService: { refundCredits: h.refundCredits, commitCredits: h.commitCredits, trySettleManagedCredits: h.trySettleManagedCredits, trySettleManagedCreditsOrReadLog: async () => ((await h.trySettleManagedCredits()) ? { managed: true } : { managed: false, log: null }) },
 }))
 vi.mock("../../lib/app-reports.js", () => ({ insertAppReport: h.report }))
 

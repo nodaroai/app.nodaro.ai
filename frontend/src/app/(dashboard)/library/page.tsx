@@ -1,3 +1,4 @@
+import { useOwnedClipDelivery } from "@/hooks/use-repaired-video"
 import { CoverButton } from "@/components/ui/cover-button"
 import { useCallback, useEffect, useMemo, useState, memo } from "react"
 import { hasCredits } from "@/lib/edition"
@@ -236,6 +237,8 @@ export default function LibraryPage() {
   )
   const totalCount = data?.pages[0]?.totalCount ?? assets.length
   const previewAsset = previewIndex !== null ? assets[previewIndex] ?? null : null
+  const videoJobId = previewAsset?.type === "video" && previewAsset.metadata?.separateClipCount ? previewAsset.jobId : undefined
+  const videoOutput = useOwnedClipDelivery(videoJobId ?? undefined)
 
   // Auto-fetch next page when previewing near the end of loaded items
   useEffect(() => {
@@ -575,7 +578,8 @@ export default function LibraryPage() {
         isOpen={previewAsset !== null}
         onClose={closePreview}
         type={previewAsset?.type ?? "image"}
-        url={previewAsset?.url ?? ""}
+        url={videoOutput?.videoUrl ?? previewAsset?.url ?? ""}
+        clips={videoOutput?.unassembledClips}
         quality={qualityOf(previewAsset?.metadata)}
         currentIndex={previewIndex ?? 0}
         totalCount={totalCount}

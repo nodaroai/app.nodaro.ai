@@ -1,7 +1,7 @@
 /**
  * Video Remake's delivered resolution (decided 2026-11-26): a caller picks only the size it RECEIVES.
  *
- *   request (run and estimate, no `upscale` key)  resolution?: "480p" | "720p" | "1080p" | "4k", the size delivered
+ *   request (run and estimate)                    resolution?: "480p" | "720p" | "1080p" | "4k", the size delivered
  *   estimate answer and completed job output      resolution: the size delivered
  *   GET /v1/video-remake/style-choice             resolutions: { [engineChoice]: sizes, smallest (the default) first }
  *
@@ -11,7 +11,13 @@
  * (`castSwap.deliveredResolution`, read at load) and, for `style-choice`, which sizes it can deliver per engine
  * choice (`castSwap.deliveredResolutions`), less the steps this deployment's admin switched off.
  *
- * A request that still carries `upscale` is read by the engine as before (lib/video-remake-upscale-choice.ts).
+ * The request read the earlier way (its `upscale` key) is removed (stage 5): no answer of the platform names how a
+ * size is made, whichever engine answered it (ee/lib/video-remake-estimate-answer.ts drops an older engine's fields
+ * from a quote on its way out, `deliveredSizeOfQuote` reads the size delivered from them).
+ *
+ * A trend run is read that way only by an engine that also declares `castSwap.trendDeliveredResolution`, and only
+ * when its body says so (`trendRun.delivered: true`, which the platform adds for such an engine alone:
+ * ee/lib/trends/sizes.ts); every other trend run is read as before.
  */
 import {
   CAST_SWAP_ENGINE_OF_NODARO_MOTION,
@@ -66,6 +72,21 @@ export function engineDeliversResolution(cs: PluginSupports["castSwap"] | undefi
 /** Whether this process's Cast Swap engine reads `resolution` as the size delivered. */
 export function loadedEngineDeliversResolution(): boolean {
   return engineDeliversResolution(getPluginSupports().castSwap)
+}
+
+/**
+ * Whether an engine's supports read a TREND run's `resolution` as the size delivered too: both
+ * `castSwap.deliveredResolution` and `castSwap.trendDeliveredResolution`. Only then does a trend page list
+ * the sizes delivered and a trend run body carry `trendRun.delivered: true` (ee/lib/trends/sizes.ts); an
+ * engine with either alone reads every trend run as before.
+ */
+export function engineDeliversTrendResolution(cs: PluginSupports["castSwap"] | undefined): boolean {
+  return engineDeliversResolution(cs) && cs?.trendDeliveredResolution === true
+}
+
+/** Whether this process's Cast Swap engine reads a trend run's `resolution` as the size delivered. */
+export function loadedEngineDeliversTrendResolution(): boolean {
+  return engineDeliversTrendResolution(getPluginSupports().castSwap)
 }
 
 /**
@@ -166,9 +187,8 @@ export function deliveredSizeLabel(size: VideoRemakeDeliveredSize): string {
 
 /**
  * The size an estimate's answer says the run delivers: its `resolution` from an engine that delivers
- * resolutions; from one that answers the earlier fields (a request read the earlier way), its
- * `outputResolution` where it answers one. Undefined from an engine that answers neither, or a value
- * outside the contract.
+ * resolutions; from an engine before stage 5 that still answers the earlier fields, its `outputResolution`
+ * where it answers one. Undefined from an engine that answers neither, or a value outside the contract.
  */
 export function deliveredSizeOfQuote(quote: unknown): VideoRemakeDeliveredSize | undefined {
   if (!isPlainObject(quote)) return undefined

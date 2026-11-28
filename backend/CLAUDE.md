@@ -629,7 +629,7 @@ Generates multiple image prompts from a single concept via Claude Sonnet (3 cred
 ### Public Gallery
 - `GET /v1/gallery` -- public, no auth. Params: `cursor`, `limit` (default 20, max 50), `type` (image/video/audio)
 - Returns `{ data, nextCursor }` -- cursor-based pagination
-- Download proxy: `GET /v1/download?url=...` streams R2 files with `Content-Disposition: attachment` (domain-locked to R2 bucket)
+- Download proxy: `GET /v1/download?url=...` streams R2 files with `Content-Disposition: attachment` (domain-locked to R2 bucket). `original=1` (the app's video Download, decided 2026-11-22) serves the kept original a completed, untrashed job names beside that preview (`lib/video-download-original.ts`), `open=1` redirects to the file itself when there is none; the frontend's every video Download goes through `frontend/src/lib/video-result-download.ts`, held by `video-download-sites.test.ts`
 
 ### Private Mode
 - `GET /v1/user/settings?userId=` / `PATCH /v1/user/settings` -- tier + publicOutputs

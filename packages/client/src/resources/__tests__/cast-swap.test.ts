@@ -19,6 +19,8 @@ import {
   type VideoRemakeFullQualityEstimate,
   type VideoRemakeFullQualityKind,
   type VideoRemakeFullQualityRefusalCode,
+  type VideoRemakeLongClips,
+  type VideoRemakePartial,
   type VideoRemakeFullQualityResult,
   type VideoRemakeFaceMasking,
   type VideoRemakeIntentCheck,
@@ -1121,6 +1123,41 @@ describe("the intent check: whether the typed words ask for something Video Rema
   })
 })
 
+describe("quality: how the size delivered is made", () => {
+  it("sends quality as given on the estimate and the run, and none when it is left out", async () => {
+    for (const quality of ["economy", "full"] as const) {
+      const quote: VideoRemakeEstimate = {
+        totalCredits: 20,
+        breakdown: { base: 5, references: 0, motion: 15 },
+        settlesLower: true,
+        resolution: "720p",
+        quality,
+        qualityOffered: true,
+        ...(quality === "economy" ? { engineResolution: "480p" as const } : {}),
+      }
+      const fetchMock = vi.fn().mockReturnValueOnce(mockOk(quote)).mockReturnValueOnce(mockOk({ jobId: "j-q" }, 202))
+      const client = make(fetchMock)
+      expect(await client.videoRemake.estimate({ ...params, resolution: "720p", quality })).toEqual(quote)
+      await client.videoRemake.run({ ...params, resolution: "720p", quality })
+      for (const [, init] of fetchMock.mock.calls as [string, RequestInit][]) expect(JSON.parse(init.body as string).quality).toBe(quality)
+    }
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ totalCredits: 1, breakdown: { references: 0 }, settlesLower: false }))
+    const { quality: _named, ...unnamed } = params
+    await make(fetchMock).videoRemake.estimate(unnamed)
+    expect("quality" in JSON.parse((fetchMock.mock.calls[0] as [string, RequestInit])[1].body as string)).toBe(false)
+  })
+
+  it("types the completed job's quality and the video before the upscale, and style-choice's sizes", () => {
+    const output: VideoRemakeJobOutput = { videoUrl: "v", resolution: "720p", quality: "economy", engineVideoUrl: "e", engineWidth: 854, engineHeight: 480, engineResolution: "480p" }
+    expect(output.quality).toBe("economy")
+    const choice: Pick<VideoRemakeStyleChoice, "quality"> = { quality: { "nodaro-prism": ["720p", "1080p"], "nodaro-pulse": ["1080p"] } }
+    expect(choice.quality?.["nodaro-prism"]).toEqual(["720p", "1080p"])
+    // The older value still type-checks on the request.
+    const older: VideoRemakeParams["quality"] = "draft"
+    expect(older).toBe("draft")
+  })
+})
+
 describe("resolution: the size delivered", () => {
   it("sends resolution as given, 4K included, and the estimate answers the size the run delivers", async () => {
     for (const resolution of ["720p", "1080p", "4k"] satisfies VideoRemakeResolution[]) {
@@ -1220,5 +1257,29 @@ describe("a part of the clip and short clips", () => {
     expect(codes).toHaveLength(6)
     const output: VideoRemakeJobOutput = { videoUrl: "https://cdn.example.com/out.mp4", durationSec: 12 }
     expect(output.durationSec).toBe(12)
+  })
+})
+
+describe("long clips and a clip delivered in part", () => {
+  it("styleChoice passes longClips through, typed; an older server's answer has none", async () => {
+    const answer: VideoRemakeStyleChoice = { engines: { "nodaro-prism": "user", "nodaro-pulse": "user" }, longClips: { maxSourceSec: 120 } }
+    const got = await make(vi.fn().mockReturnValueOnce(mockOk(answer))).videoRemake.styleChoice()
+    const longClips: VideoRemakeLongClips | null | undefined = got.longClips
+    expect(longClips).toEqual({ maxSourceSec: 120 })
+    const off = await make(vi.fn().mockReturnValueOnce(mockOk({ ...answer, longClips: null }))).videoRemake.styleChoice()
+    expect(off.longClips).toBeNull()
+    const older = await make(vi.fn().mockReturnValueOnce(mockOk({ engines: answer.engines }))).videoRemake.styleChoice()
+    expect(older.longClips ?? null).toBeNull()
+  })
+
+  it("types the refusals of a long clip and a completed output delivered in part", () => {
+    const plan: VideoRemakePlanRolesRefusalCode = "long_clip_too_long"
+    const fullQuality: VideoRemakeFullQualityRefusalCode = "long_clip_no_full_quality"
+    expect([plan, fullQuality]).toEqual(["long_clip_too_long", "long_clip_no_full_quality"])
+    const partial: VideoRemakePartial = { deliveredSec: 48.5, sourceSec: 120, parts: { delivered: 2, planned: 5 }, reason: "part_failed", message: "We remade the first 0:48 of 2:00." }
+    const output: VideoRemakeJobOutput = { videoUrl: "https://cdn.example.com/out.mp4", durationSec: 48.5, partial }
+    expect(output.partial?.deliveredSec).toBe(output.durationSec)
+    const whole: VideoRemakeJobOutput = { videoUrl: "https://cdn.example.com/out.mp4", durationSec: 120 }
+    expect(whole.partial).toBeUndefined()
   })
 })

@@ -1,5 +1,23 @@
 # @nodaro/cli
 
+## 1.56.0
+
+### Minor Changes
+
+- 7be220e: `nodaro trends estimate` and `nodaro trends run` take `--resolution 4k`, for a trend whose page (`nodaro trends get`) says `deliveredResolution`: its resolutions are then the sizes a run is delivered at. `--draft` makes the 480p draft whatever sizes the trend lists.
+
+### Patch Changes
+
+- 158bc24: `nodaro video-remake full-quality estimate --json` and `nodaro trends estimate --json` name nothing of how a size is made: a server that still answers `outputResolution`, `upscale` or `upscaleOffered` has its delivered size printed as `resolution` and the other two left out.
+- Updated dependencies [3761931]
+- Updated dependencies [7509e8e]
+- Updated dependencies [6f20a46]
+- Updated dependencies [7be220e]
+- Updated dependencies [fb504f3]
+- Updated dependencies [649debe]
+  - @nodaro/shared@3.78.0
+  - @nodaro/sdk@2.83.0
+
 ## 1.55.2
 
 ### Patch Changes

@@ -158,7 +158,7 @@
               },
               "field": {
                 "type": "string",
-                "description": "The node-data field a wired value lands in. Never on a use-case node (its inputs land in useCaseMedia / useCaseMusic / useCaseIntroCard), never with many, and never on a JSON input (accepts look: it lands in unitInputs)."
+                "description": "The node-data field a wired value lands in. Never on a use-case node (its inputs land in useCaseMedia / useCaseMusic / useCaseIntroCard), never with many, and never on a JSON input (accepts look: it lands in unitInputs). An image input without one is the image lane: its picture's URL lands in unitInputs under the input's id, so it accepts only image."
               },
               "many": {
                 "const": true,

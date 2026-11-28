@@ -24,6 +24,8 @@ export interface RouteView {
   capable(model: string): boolean
   /** The plugin's `accepts`, made safe: a throw reads as "not mine". */
   accepts(req: PluginAlternateRouteRequest): { routeId: string } | null
+  /** The plugin's reason code for a refusal (`explain`), made safe: null when it has none. */
+  explain?(req: PluginAlternateRouteRequest): string | null
 }
 
 export type VideoRouteDefaultReason =
@@ -31,6 +33,8 @@ export type VideoRouteDefaultReason =
   | "setting"
   /** Not a model a route can be chosen for. */
   | "not-routable"
+
+export type VideoRouteRefusalReason =
   /** This process has no route service. */
   | "no-route"
   /** The route service predates per-model routing. */
@@ -41,7 +45,16 @@ export type VideoRouteDefaultReason =
   | "not-accepted"
 
 export type VideoRouteDecision =
-  | { readonly route: "default"; readonly why: VideoRouteDefaultReason }
+  | {
+      readonly route: "default"
+      readonly why: VideoRouteDefaultReason
+    }
+  | {
+      readonly route: "refused"
+      readonly why: VideoRouteRefusalReason
+      /** For "not-accepted": the reason code (the route's `explain`, or the host's own), when known. */
+      readonly detail?: string
+    }
   | { readonly route: "alternate"; readonly routeId: string; readonly service: string }
 
 export interface VideoRouteAsk {
@@ -63,12 +76,16 @@ export function decideVideoRoute(
 ): VideoRouteDecision {
   if (!isRoutableVideoModel(ask.model)) return { route: "default", why: "not-routable" }
   if (videoRouteChoiceFor(policy, ask.model, ask.service) !== "alternate") return { route: "default", why: "setting" }
-  if (!view) return { route: "default", why: "no-route" }
-  if (!view.v2) return { route: "default", why: "route-v1" }
-  if (!view.capable(ask.model)) return { route: "default", why: "not-capable" }
-  const accepted = view.accepts({ ...ask.request, service: ask.service, kind: ask.request.kind ?? "generate" })
+  if (!view) return { route: "refused", why: "no-route" }
+  if (!view.v2) return { route: "refused", why: "route-v1" }
+  if (!view.capable(ask.model)) return { route: "refused", why: "not-capable" }
+  const asked = { ...ask.request, service: ask.service, kind: ask.request.kind ?? "generate" }
+  const accepted = view.accepts(asked)
   const routeId = accepted?.routeId
-  if (typeof routeId !== "string" || routeId.length === 0) return { route: "default", why: "not-accepted" }
+  if (typeof routeId !== "string" || routeId.length === 0) {
+    const detail = view.explain?.(asked) ?? null
+    return detail ? { route: "refused", why: "not-accepted", detail } : { route: "refused", why: "not-accepted" }
+  }
   return { route: "alternate", routeId, service: ask.service }
 }
 
@@ -104,7 +121,16 @@ export function routeViewOf(
       try {
         return service.accepts(req) ?? null
       } catch (err) {
-        console.warn(`[video-route] accepts threw; the request stays on the default route: ${err instanceof Error ? err.message : String(err)}`)
+        console.warn(`[video-route] accepts threw; the selected route is unavailable: ${err instanceof Error ? err.message : String(err)}`)
+        return null
+      }
+    },
+    explain: (req) => {
+      try {
+        const code = typeof service.explain === "function" ? service.explain(req) : null
+        // A stable kebab-case code only: anything else is not recorded.
+        return typeof code === "string" && /^[a-z0-9]+(-[a-z0-9]+)*$/.test(code) && code.length <= 60 ? code : null
+      } catch {
         return null
       }
     },
@@ -246,6 +272,11 @@ const finiteNonNeg = (v: unknown): v is number => typeof v === "number" && Numbe
  * written by the admission for it). Undefined = the job runs as the platform
  * always ran it.
  */
+export function foreignVideoRouteStamp(inputData: unknown): boolean {
+  const stamp = (inputData as Record<string, unknown> | null)?.[VIDEO_ROUTE_STAMP_KEY] as Record<string, unknown> | undefined
+  return typeof stamp?.env === "string" && stamp.env !== getRuntimeEnv()
+}
+
 export function videoRouteStampOf(inputData: unknown, jobId: string): VideoRouteStamp | undefined {
   const raw = (inputData as Record<string, unknown> | null | undefined)?.[VIDEO_ROUTE_STAMP_KEY]
   if (typeof raw !== "object" || raw === null) return undefined
@@ -276,4 +307,141 @@ export function videoRouteStampOf(inputData: unknown, jobId: string): VideoRoute
     return undefined
   }
   return stamp
+}
+
+// ── A rowless run's decision (a plugin's segments, sent inside their parent) ──
+
+/**
+ * What a routed rowless run carries, signed. Two stages:
+ *   - "quote" (a run's pricing, before it has a job): its route, model,
+ *     service and the charged credits it was priced at — what
+ *     `reserveRoutedRun` holds; it can send nothing;
+ *   - "run" (bound by `reserveRoutedRun` to the parent job that holds it, its
+ *     user and an expiry): the only token a segment is sent with.
+ */
+export interface RowlessRouteToken {
+  readonly routeId: string
+  readonly model: string
+  readonly service: string
+  readonly env: string
+  readonly decidedAt: string
+  readonly stage?: "quote" | "run"
+  /** Charged credits: the run's fee, and fee + every segment (what it holds). */
+  readonly feeChargedCredits?: number
+  readonly reserveChargedCredits?: number
+  /** The price id the run is held under (its fee's). */
+  readonly feeId?: string
+  /** Keyframes: one anchor image's base credits, and the most anchors the hold covers. */
+  readonly anchorUnitBase?: number
+  readonly anchorsMax?: number
+  /** Maximum non-video add-ons reserved by a planned run. */
+  readonly nonVideoChargedCreditsMax?: number
+  /** "run" only: the parent job holding the run, its user, and when the token stops sending. */
+  readonly parentJobId?: string
+  readonly userId?: string
+  readonly expiresAt?: string
+}
+
+/** How long a bound run token sends segments: a long multi-segment run, with margin. */
+export const ROWLESS_RUN_TOKEN_TTL_MS = 48 * 3_600_000
+
+function signRowless(body: RowlessRouteToken): string {
+  const json = Buffer.from(JSON.stringify(body)).toString("base64url")
+  const sig = createHmac("sha256", stampKey()).update(`rowless:${json}`).digest("base64url")
+  return `${json}.${sig}`
+}
+
+/**
+ * Binds a run's "quote" token to the parent job that now holds it (its user,
+ * and an expiry): the token its segments are sent with. Undefined when the
+ * quote does not verify.
+ */
+export function bindRowlessRouteToken(quote: unknown, bind: { parentJobId: string; userId: string; now?: Date }): string | undefined {
+  const t = rowlessRouteTokenOf(quote)
+  if (!t || (t.stage ?? "quote") !== "quote") return undefined
+  const now = bind.now ?? new Date()
+  return signRowless({ ...t, stage: "run", parentJobId: bind.parentJobId, userId: bind.userId, expiresAt: new Date(now.getTime() + ROWLESS_RUN_TOKEN_TTL_MS).toISOString() })
+}
+
+/** A bound run token's decision when it may send a segment of `parentJobId` now; undefined otherwise. */
+export function rowlessRunTokenFor(token: unknown, parentJobId: string | undefined, now = Date.now()): RowlessRouteToken | undefined {
+  const t = rowlessRouteTokenOf(token)
+  if (!t || t.stage !== "run" || !parentJobId || t.parentJobId !== parentJobId) return undefined
+  const expires = Date.parse(t.expiresAt ?? "")
+  return Number.isFinite(expires) && expires > now ? t : undefined
+}
+
+/** The signed token for a rowless routed run (`PluginRoutedRunPricing.token`). */
+export function rowlessRouteToken(t: Pick<RowlessRouteToken, "routeId" | "model" | "service" | "feeChargedCredits" | "reserveChargedCredits" | "feeId" | "anchorUnitBase" | "anchorsMax" | "nonVideoChargedCreditsMax"> & { now?: Date }): string {
+  return signRowless({
+    routeId: t.routeId,
+    model: t.model,
+    service: t.service,
+    env: getRuntimeEnv(),
+    decidedAt: (t.now ?? new Date()).toISOString(),
+    stage: "quote",
+    ...(t.feeChargedCredits !== undefined ? { feeChargedCredits: t.feeChargedCredits } : {}),
+    ...(t.reserveChargedCredits !== undefined ? { reserveChargedCredits: t.reserveChargedCredits } : {}),
+    ...(t.nonVideoChargedCreditsMax !== undefined ? { nonVideoChargedCreditsMax: t.nonVideoChargedCreditsMax } : {}),
+    ...(t.feeId !== undefined ? { feeId: t.feeId } : {}),
+    ...(t.anchorUnitBase !== undefined && t.anchorsMax !== undefined ? { anchorUnitBase: t.anchorUnitBase, anchorsMax: t.anchorsMax } : {}),
+  })
+}
+
+/**
+ * Whether a run token CLAIMS another environment (staging and production share
+ * one database): it names an environment other than this one, whatever its
+ * signature. The signature is not checked here on purpose: an environment
+ * signing with a different secret cannot verify the other's tokens, and would
+ * otherwise read one as merely invalid and go on to release or record its
+ * reservation. Every caller refuses on true, so a forged claim only refuses.
+ * A token that names this environment (or none) and does not verify is not
+ * foreign: it is invalid, and refused where it is read.
+ */
+export function foreignRowlessRouteToken(token: unknown): boolean {
+  if (typeof token !== "string") return false
+  const [json] = token.split(".")
+  if (!json) return false
+  try {
+    const env = (JSON.parse(Buffer.from(json, "base64url").toString("utf8")) as { env?: unknown } | null)?.env
+    return typeof env === "string" && env !== getRuntimeEnv()
+  } catch {
+    return false
+  }
+}
+
+/** A token's decision when the server signed it in this environment; undefined otherwise. */
+export function rowlessRouteTokenOf(token: unknown): RowlessRouteToken | undefined {
+  if (typeof token !== "string") return undefined
+  const [json, sig] = token.split(".")
+  if (!json || !sig) return undefined
+  const want = createHmac("sha256", stampKey()).update(`rowless:${json}`).digest("base64url")
+  if (!constantTimeEqualStr(sig, want)) return undefined
+  try {
+    const t = JSON.parse(Buffer.from(json, "base64url").toString("utf8")) as RowlessRouteToken
+    if (typeof t.routeId !== "string" || typeof t.model !== "string" || typeof t.service !== "string" || t.env !== getRuntimeEnv()) return undefined
+    return t
+  } catch {
+    return undefined
+  }
+}
+
+/** The task id a rowless routed segment is checkpointed under: the route and its task, so a resume can read it. */
+export function rowlessRouteTaskId(routeId: string, taskRef: string, segmentKey?: string): string {
+  const route = Buffer.from(routeId).toString("base64url")
+  // With the segment's key (`alt:r:<route>.<key>:<ref>`), so a resume records its billed cost on the parent under it.
+  return segmentKey ? `alt:r:${route}.${Buffer.from(segmentKey).toString("base64url")}:${taskRef}` : `alt:r:${route}:${taskRef}`
+}
+
+/** The route and task of a rowless routed segment's checkpointed id, or undefined. */
+export function rowlessRouteTaskOf(taskId: unknown): { routeId: string; taskRef: string; segmentKey?: string } | undefined {
+  if (typeof taskId !== "string" || !taskId.startsWith("alt:r:")) return undefined
+  const rest = taskId.slice("alt:r:".length)
+  const i = rest.indexOf(":")
+  if (i <= 0) return undefined
+  const [routePart, keyPart] = rest.slice(0, i).split(".")
+  const routeId = Buffer.from(routePart ?? "", "base64url").toString("utf8")
+  const segmentKey = keyPart ? Buffer.from(keyPart, "base64url").toString("utf8") : undefined
+  const taskRef = rest.slice(i + 1)
+  return routeId && taskRef ? { routeId, taskRef, ...(segmentKey ? { segmentKey } : {}) } : undefined
 }

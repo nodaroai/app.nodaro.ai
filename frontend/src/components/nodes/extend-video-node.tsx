@@ -1,3 +1,4 @@
+import { useNodeVideoPrice } from "@/hooks/use-seedance-ref-price"
 "use client"
 
 import { useT } from "@/lib/i18n"
@@ -71,11 +72,14 @@ function ExtendVideoNodeComponent({ id, data, selected }: NodeProps) {
   const priced = { id, type: "extend-video", position: { x: 0, y: 0 }, data: nodeData } as unknown as WorkflowNode
   const units = useWorkflowStore((s) => extendVideoPricingUnits(priced, s.nodes, s.edges))
   const modelId = useWorkflowStore((s) => getModelIdentifier(priced, s.edges, s.nodes))
-  const credits = useUnitQuoteCredits(
+  const unitCredits = useUnitQuoteCredits(
     modelId,
     units,
     extendProvider === "runway-extend" ? 32 : 40,
   )
+
+  const price = useNodeVideoPrice(id, unitCredits ?? 0)
+  const credits = price.quoted ? price.credits : unitCredits
 
   // Result aspect drives node sizing — 16:9 until a result lands, then snaps to
   // the real video aspect (raw dims fed in via the overlay's onRawDimensions).

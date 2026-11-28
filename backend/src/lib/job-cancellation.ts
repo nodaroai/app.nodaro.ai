@@ -33,6 +33,7 @@ interface JobCancelStore {
   /** Sticky once a graceful stop was observed (`stop_requested_at` stamped). */
   stopRequested?: boolean
   /** Whether this is the job's last worker attempt (no BullMQ retry follows a failure), asked only when needed. */
+  readonly assemblyAttemptId?: string
   readonly finalAttempt?: () => boolean
 }
 
@@ -76,9 +77,15 @@ export function runWithJobCancellation<T>(
   userId: string | undefined,
   fn: () => Promise<T>,
   /** `finalAttempt`: whether no BullMQ retry follows a failure of this attempt (`isFinalJobAttempt`), asked only when needed. */
-  opts: { finalAttempt?: () => boolean } = {},
+  opts: { finalAttempt?: () => boolean; assemblyAttemptId?: string } = {},
 ): Promise<T> {
-  return storage.run({ jobId, userId, lastCheckMs: 0, cancelled: false, ...(opts.finalAttempt !== undefined ? { finalAttempt: opts.finalAttempt } : {}) }, fn)
+  return storage.run({ jobId, userId, lastCheckMs: 0, cancelled: false, ...opts }, fn)
+}
+
+/** A single, known intermediate key makes an interrupted assembly cleanable. */
+export function assemblyIntermediateId(): string | undefined {
+  const store = storage.getStore()
+  return store?.assemblyAttemptId ? `${store.jobId}-assembly-${store.assemblyAttemptId}-combine` : undefined
 }
 
 /** Whether the running job's attempt is its last, or undefined outside a context that knows (a reconcile or webhook lane). */
@@ -105,11 +112,11 @@ export function getJobId(): string | undefined {
  * called outside a `runWithJobCancellation` context. Throttled so a tight poll
  * loop doesn't hammer the DB.
  */
-export async function throwIfJobCancelled(): Promise<void> {
+export async function throwIfJobCancelled(options?: { finishStartedVideo?: boolean }): Promise<void> {
   const store = storage.getStore()
   if (!store) return
   if (store.cancelled) throw new JobCancelledError(store.jobId)
-  if (store.stopRequested) throw new JobStopRequestedError(store.jobId)
+  if (store.stopRequested && !options?.finishStartedVideo) throw new JobStopRequestedError(store.jobId)
 
   const now = Date.now()
   if (now - store.lastCheckMs < CANCEL_CHECK_THROTTLE_MS) return
@@ -130,8 +137,8 @@ export async function throwIfJobCancelled(): Promise<void> {
   }
   // Graceful stop (same throttled read — zero extra queries): only ever
   // stamped by job types whose routes expose a stop endpoint (gvp).
-  if ((data as { stop_requested_at?: string | null } | null)?.stop_requested_at) {
+  if (!(store.assemblyAttemptId && data?.status === "completed") && (data as { stop_requested_at?: string | null } | null)?.stop_requested_at) {
     store.stopRequested = true
-    throw new JobStopRequestedError(store.jobId)
+    if (!options?.finishStartedVideo) throw new JobStopRequestedError(store.jobId)
   }
 }

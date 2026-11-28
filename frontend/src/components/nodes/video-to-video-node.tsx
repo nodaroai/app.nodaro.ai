@@ -32,6 +32,7 @@ import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-di
 import { EditableNodeLabel } from "./editable-node-label"
 import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import type { VideoToVideoData } from "@/types/nodes"
+import { downloadVideoFile } from "@/lib/video-result-download"
 
 const isPickerType = (s: string) => VISUAL_PARAMETER_PICKER_NODE_TYPES.has(s)
 const ACCEPTS_VIDEO          = (t: string) => isValidVideoToVideoConnection("video",          t, isPickerType)
@@ -253,7 +254,7 @@ function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
               loop={shouldPlay}
               playsInline
             />
-            {unplayableVideo.unplayable && activeUrl && <VideoUnplayableNotice url={activeUrl} label={(nodeData.label as string | undefined) ?? ""} />}
+            {unplayableVideo.unplayable && activeUrl && <VideoUnplayableNotice url={activeUrl} />}
             {/* Only a draft-capable model's result can be a draft — no job
                 lookup per result for a Wan / Runway / Aleph run. */}
             <SeedanceDraftResultBadge result={activeResult} lookup={isSeedanceDraftCapable(v2vProvider)} />
@@ -326,7 +327,7 @@ function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
               type="button"
               className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
               aria-label={t("common.download")}
-              onClick={(e) => { e.stopPropagation(); const a = document.createElement('a'); a.href = `/v1/image-proxy?url=${encodeURIComponent(activeUrl!)}&download=1`; a.download = `${nodeData.label || 'video'}.mp4`; a.click() }}
+              onClick={(e) => { e.stopPropagation(); downloadVideoFile(activeUrl!) }}
             >
               <Download className="w-3.5 h-3.5" />
             </button>

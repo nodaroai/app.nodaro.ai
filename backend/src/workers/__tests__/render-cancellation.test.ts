@@ -66,6 +66,38 @@ describe("render cancellation owns underlying work", () => {
     expect(await observed).toBeInstanceOf(DrainAbortError)
   })
 
+  it("stops work that reports itself stuck, with the reason it gave, and waits for the renderer to exit", async () => {
+    vi.useFakeTimers()
+    let stuck: Error | undefined
+    const render = deferred<string>()
+    const cancel = vi.fn(() => render.reject(new Error("renderer cancelled")))
+    const result = withRenderCancellation({ jobId: "job", timeoutMs: 60_000, pollMs: 10,
+      isCancelled: async () => false, isDraining: () => false, stuck: () => stuck, cancel }, () => render.promise)
+    const observed = result.catch((error) => error)
+    // Asked on every poll, and nothing happens while it has no reason.
+    await vi.advanceTimersByTimeAsync(35)
+    expect(cancel).not.toHaveBeenCalled()
+    stuck = new Error("no progress after the container refused a thread")
+    await vi.advanceTimersByTimeAsync(10)
+    expect(cancel).toHaveBeenCalledOnce()
+    expect(await observed).toBe(stuck)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it("a drain or a user's cancel wins over a stuck render", async () => {
+    vi.useFakeTimers()
+    let draining = false
+    const render = deferred<string>()
+    const result = withRenderCancellation({ jobId: "job", timeoutMs: 60_000, pollMs: 10,
+      isCancelled: async () => false, isDraining: () => draining, stuck: () => new Error("stuck"),
+      cancel: () => render.reject(new Error("browser closed")) }, () => render.promise)
+    const observed = result.catch((error) => error)
+    draining = true
+    await vi.advanceTimersByTimeAsync(10)
+    // The deployment's interruption keeps its identity: the job goes back to the queue at no cost.
+    expect(await observed).toBeInstanceOf(DrainAbortError)
+  })
+
   it("cleans up cancellation timers after a successful render", async () => {
     vi.useFakeTimers()
     const cancel = vi.fn()

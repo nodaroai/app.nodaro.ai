@@ -6,7 +6,8 @@ import {
   seedanceDraftFinalizeCreditId,
 } from "@nodaro/shared/model-catalog"
 import { supabase } from "./supabase.js"
-import { ALTERNATE_ROUTE_DRAFT_MESSAGE, ALTERNATE_ROUTE_PROVIDER_KIND, ALTERNATE_ROUTE_REF_PREFIX } from "./alternate-route-request.js"
+import { ALTERNATE_ROUTE_DRAFT_MESSAGE, ALTERNATE_ROUTE_PROVIDER_KIND, ALTERNATE_ROUTE_REF_PREFIX, alternateRouteTaskRefOf } from "./alternate-route-request.js"
+import { getPluginServices, pluginServicesLoaded } from "./private-plugins/services-registry.js"
 import { hasCredits } from "./config.js"
 import { probeRefVideoDurations } from "./ref-video-probe.js"
 import { draftAudioMuxForSource, type DraftAudioMux } from "./seedance-draft-audio.js"
@@ -158,9 +159,13 @@ export async function resolveSeedanceDraftFinalize(args: {
       "This draft was rendered through a connected nodaro.ai account, so it can't be finalized on this install.",
     )
   }
-  // A draft the alternate route made holds the route's own reference, not a
-  // task the default upstream can finalize.
-  if (completed.provider_kind === ALTERNATE_ROUTE_PROVIDER_KIND || completed.provider_task_id?.startsWith(ALTERNATE_ROUTE_REF_PREFIX)) {
+  // A draft the alternate route made holds the route's own reference, never a
+  // task the default upstream can finalize: it is finalized on the route that
+  // made it (`kind: "draft-finalize"`, ee/billing/video-route-admission.ts),
+  // and refused where this process's route cannot (an older plugin, none).
+  // The standalone orchestrator loads no plugin: its admission asks the API.
+  const routeDraft = completed.provider_kind === ALTERNATE_ROUTE_PROVIDER_KIND || completed.provider_task_id?.startsWith(ALTERNATE_ROUTE_REF_PREFIX)
+  if (routeDraft && (!alternateRouteTaskRefOf(completed.provider_task_id) || (pluginServicesLoaded() && typeof getPluginServices().alternateRoutes?.prices !== "function"))) {
     return refuse(409, "draft_not_finalizable", ALTERNATE_ROUTE_DRAFT_MESSAGE)
   }
   if (!completed.provider_task_id) {

@@ -26,6 +26,7 @@ import { aiAvatarQuoteCreditId } from "@nodaro/render-rules"
 import { useAiAvatarQuotedAudioSec } from "@/hooks/use-ai-avatar-quote"
 import { AiAvatarSetupBody } from "./ai-avatar/ai-avatar-setup-body"
 import { AiAvatarNewRunToggle } from "./ai-avatar/new-run-toggle"
+import { downloadVideoFile } from "@/lib/video-result-download"
 
 const ACCEPTS_SCRIPT = (t: string) => isValidAiAvatarConnection("script", t, isVisualPickerType)
 const ACCEPTS_AUDIO  = (t: string) => isValidAiAvatarConnection("audio",  t, isVisualPickerType)
@@ -205,7 +206,7 @@ function AiAvatarNodeComponent({ id, data, selected }: NodeProps) {
               loop={shouldPlay}
               playsInline
             />
-            {unplayableVideo.unplayable && activeUrl && <VideoUnplayableNotice url={activeUrl} label={(nodeData.label as string | undefined) ?? ""} />}
+            {unplayableVideo.unplayable && activeUrl && <VideoUnplayableNotice url={activeUrl} />}
 
             {/* A LATER run failed while an earlier version is on show: say so
                 over the video (the toast alone was easy to miss). The retry is
@@ -263,7 +264,7 @@ function AiAvatarNodeComponent({ id, data, selected }: NodeProps) {
               </button>
               <button type="button" aria-label={t("common.download")}
                 className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-                onClick={(e) => { e.stopPropagation(); const a = document.createElement("a"); a.href = `/v1/image-proxy?url=${encodeURIComponent(activeUrl!)}&download=1`; a.download = `${nodeData.label || "avatar"}.mp4`; a.click() }}
+                onClick={(e) => { e.stopPropagation(); downloadVideoFile(activeUrl!) }}
                 title={t("common.download")}>
                 <Download className="w-3.5 h-3.5" />
               </button>

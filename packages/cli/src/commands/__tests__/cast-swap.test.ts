@@ -63,6 +63,14 @@ describe("video-remake full-quality", () => {
     expect(emit).toHaveBeenLastCalledWith({ ...QUOTE, breakdown: { base: 5, motionHd: 7 } }, expect.objectContaining({ json: true }))
   })
 
+  it("estimate --json names nothing of how a size is made: an older server's earlier fields dropped, its size delivered kept", async () => {
+    mocks.fullQualityEstimate.mockResolvedValueOnce({ ...QUOTE, resolution: "1080p", outputResolution: "4k", upscale: "next", upscaleOffered: true })
+    await runCmd("video-remake", "full-quality", "estimate", "draft-1", "--json")
+    const emitted = vi.mocked(emit).mock.calls.at(-1)![0] as Record<string, unknown>
+    expect(emitted).toEqual({ ...QUOTE, breakdown: { base: 5, motionHd: 7 }, resolution: "4k" })
+    expect(JSON.stringify(emitted).toLowerCase()).not.toContain("upscale")
+  })
+
   it("reads the base fee from base, else castSwap (0.396.0 sends both, 0.397.0 base only), and never prints castSwap", async () => {
     for (const breakdown of [{ castSwap: 5, motionHd: 7 }, { base: 5, motionHd: 7 }, { base: 5, castSwap: 99, motionHd: 7 }]) {
       mocks.fullQualityEstimate.mockResolvedValueOnce({ ...QUOTE, breakdown })

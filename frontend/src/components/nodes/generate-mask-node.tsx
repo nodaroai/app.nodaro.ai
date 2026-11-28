@@ -255,6 +255,7 @@ function GenerateMaskNodeComponent({ id, data, selected }: NodeProps) {
                       e.stopPropagation()
                       if (!activeMaskUrl) return
                       const a = document.createElement("a")
+                      // download-site: a mask image
                       a.href = `/v1/image-proxy?url=${encodeURIComponent(activeMaskUrl)}&download=1`
                       a.download = `${nodeData.label || "mask"}.png`
                       a.click()

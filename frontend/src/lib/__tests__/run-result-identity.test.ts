@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest"
-import { recordedVideoLengthField, runResultIdentity, runResultRowIdentity } from "../run-result-identity"
+import { runMediaRows, recordedVideoLengthField, runResultIdentity, runResultRowIdentity } from "../run-result-identity"
 
 describe("runResultIdentity — what a landed take carries (A1b)", () => {
   it("a Grok Imagine video take (its job recorded its resolution beside its task) carries both on its row, exactly as stored", () => {
@@ -95,12 +95,21 @@ describe("runResultRowIdentity — a server fan-out row's own job", () => {
   }
 
   it("pairs by row, never by position among the URLs", () => {
-    expect(runResultRowIdentity("apply-edl", output, "c.mp4")).toEqual({ jobId: "job-c", quality: "proxy", clipKey: "4-5", planBasis: "00000000000000cc" })
-    expect(runResultRowIdentity("apply-edl", output, "a.mp4")).toEqual({ jobId: "job-a", thumbnailUrl: "a.jpg", quality: "proxy", clipKey: "0-1" })
+    expect(runResultRowIdentity("apply-edl", output, 2)).toEqual({ jobId: "job-c", quality: "proxy", clipKey: "4-5", planBasis: "00000000000000cc" })
+    expect(runResultRowIdentity("apply-edl", output, 0)).toEqual({ jobId: "job-a", thumbnailUrl: "a.jpg", quality: "proxy", clipKey: "0-1" })
   })
 
   it("a run that published no stamps (or an unknown URL) gives nothing", () => {
-    expect(runResultRowIdentity("apply-edl", { listResults: ["a.mp4"] }, "a.mp4")).toEqual({})
-    expect(runResultRowIdentity("apply-edl", output, "zzz")).toEqual({})
+    expect(runResultRowIdentity("apply-edl", { listResults: ["a.mp4"] }, 0)).toEqual({})
+    expect(runResultRowIdentity("apply-edl", output, 3)).toEqual({})
   })
+})
+
+it("pairs Pro fan-out rows by job through blank rows and identical first clips", () => {
+  const url = "https://media/first"
+  const output = { listResults: [url, "", url], listResultStamps: [{ jobId: "a" }, {}, { jobId: "b" }] }
+  expect(runMediaRows("edit-video-pro", output, [{ jobId: "a", url }])).toEqual({
+    multiple: true, newRows: [{ url, i: 2 }],
+  })
+  expect(runResultRowIdentity("edit-video-pro", output, 2).jobId).toBe("b")
 })

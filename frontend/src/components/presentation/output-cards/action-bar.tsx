@@ -2,6 +2,7 @@ import type { ComponentType } from "react"
 import { Share2, Pencil, Download, Link, EyeOff } from "lucide-react"
 import { copyUrl, downloadFile, type MediaType } from "./shared"
 import { CAN_NATIVE_SHARE } from "./share-utils"
+import { openVideoDownload } from "@/lib/video-result-download"
 import { useT } from "@/lib/i18n"
 import { imageDownloadExtension } from "@/lib/image"
 
@@ -55,7 +56,7 @@ export function ActionBar({ mediaType, url, label, onShare, onEdit, onHide }: Ac
       {onShare && <ActionBarButton icon={Share2} label={shareLabel} onClick={onShare} />}
       {canEdit && onEdit && <ActionBarButton icon={Pencil} label={t("common.edit")} onClick={onEdit} />}
       {hasMedia && (
-        <ActionBarButton icon={Download} label={t("common.download")} onClick={() => downloadFile(url!, filename)} />
+        <ActionBarButton icon={Download} label={t("common.download")} onClick={() => mediaType === "video" ? openVideoDownload(url!, () => downloadFile(url!, filename)) : downloadFile(url!, filename)} />
       )}
       {hasMedia && <ActionBarButton icon={Link} label={t("present.copyLink")} onClick={() => copyUrl(url!)} />}
       {onHide && <ActionBarButton icon={EyeOff} label={t("common.hide")} onClick={onHide} />}

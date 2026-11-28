@@ -19,6 +19,12 @@ function proxyOrigin(value) {
   return match ? match[1] : undefined
 }
 
+/** RUNTIME_STORAGE_ORIGINS: the https origins in a comma-separated list, each read whole as `proxyOrigin` reads one; undefined when none. */
+function storageOriginList(value) {
+  const origins = (typeof value === "string" ? value : "").split(",").map((part) => proxyOrigin(part.trim())).filter(Boolean)
+  return origins.length > 0 ? [...new Set(origins)] : undefined
+}
+
 /** LEGACY_UI_HOSTS by the proxy's one rule: ASCII letter case ignored, commas are spaces, runs of spaces separate. */
 function legacyHostList(value) {
   const lower = (typeof value === "string" ? value : "").replace(/[A-Z]/g, (letter) => letter.toLowerCase())
@@ -97,6 +103,11 @@ export function buildRuntimeConfig(env) {
     // --media-origin): the https origin of the deployment's media host on a
     // white-label surface, "" everywhere else, so no other /config.js changes.
     mediaOrigin: pick(env.RUNTIME_MEDIA_ORIGIN),
+    // The backend's answer, carried as it is (print-surface-profile.js
+    // --storage-origins): the https storage origins the deployment publishes,
+    // each one the download routes accept, comma-separated. The video Download sends
+    // only an address on one of them to the server. None → no key.
+    storageOrigins: storageOriginList(env.RUNTIME_STORAGE_ORIGINS),
     // A deployment whose pages have their own host (FLOW_UI_ORIGIN): a page
     // there carries a browser's saved settings over from linkOrigin, PUBLIC_URL.
     // With the move on too (LEGACY_UI_HOSTS), the page's own calls go same-origin

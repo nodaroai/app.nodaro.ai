@@ -21,6 +21,7 @@ import { PLATFORM_SPECS, PLATFORM_LABELS } from "@/lib/social-media-specs"
 import type { SocialMediaFormatData } from "@/types/nodes"
 import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import type { SocialMediaPlatform } from "@/lib/social-media-specs"
+import { downloadVideoFile } from "@/lib/video-result-download"
 
 function SocialMediaFormatNodeComponent({ id, data, selected }: NodeProps) {
   const t = useT()
@@ -118,10 +119,7 @@ function SocialMediaFormatNodeComponent({ id, data, selected }: NodeProps) {
                     className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                     onClick={(e) => {
                       e.stopPropagation()
-                      const a = document.createElement('a')
-                      a.href = '/v1/image-proxy?url=' + encodeURIComponent(activeUrl) + '&download=1'
-                      a.download = (nodeData.label || 'video') + '.mp4'
-                      a.click()
+                      downloadVideoFile(activeUrl)
                     }}
                     title={t("common.download")}
                   >

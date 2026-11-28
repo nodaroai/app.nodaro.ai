@@ -7,11 +7,12 @@ import { supabase } from "../../supabase.js"
 import { isUuid } from "./_id-guard.js"
 import { registerUpdateJob } from "./job-update-tool.js"
 import { failureGuidance } from "./_job-error.js"
+import { withOwnerOnlyRowFields } from "../../job-owner-output.js"
 import { CHILD_JOB_COLUMN, TREND_RUN_MARKER_SELECT, maskTrendRunError, maskTrendRunErrors, redactPrivateJobData, trendRunErrorText, TRASHED_JOB_COLUMN } from "../../public-job-data.js"
 import { jobRowProviderWordsFor } from "../../provider-words.js"
 import { runJobsProviderWords } from "../../provider-words-readers.js"
 import { JOB_STATUSES } from "../../job-status.js"
-import { jobView, JOB_VIEW_SCHEMA, outputSizeOf } from "./_job-view.js"
+import { jobView, JOB_VIEW_SCHEMA, outputSizeOf, partialDeliveryGuidance } from "./_job-view.js"
 import { waitForJob, waitForJobCallSeconds, WAIT_FOR_JOB_CALL_CEILING_S } from "./_wait-for-job.js"
 import { publicCreditFieldsOf, runCreditsFor } from "../../job-credit-status.js"
 import { fillJobRenderQuality, fillJobsRenderQuality } from "../../render-label-fill.js"
@@ -358,9 +359,13 @@ export function registerJobs({ server, session, fastify }: RegisterJobsOpts): vo
       // A trend run's failure text is replaced (maskTrendRunError): an MCP
       // session is never an admin one.
       // A failed row's words are the platform's: in the deployment's own name (deployment-name.ts).
-      rows = maskTrendRunErrors(redactPrivateJobData(fillJobsRenderQuality(rows)), false).map((r) =>
-        statedFields(isPreviewListing(r) ? { ...r, preview: true } : r, ["error_message"]),
-      )
+      // Your own jobs (scope mine) also carry their owner-only output fields (lib/job-owner-output.ts); the public
+      // scope's rows are never yours and carry none (the helper reads each row's own owner, `user_id` or the scope's).
+      const filledRows = fillJobsRenderQuality(rows)
+      rows = maskTrendRunErrors(redactPrivateJobData(filledRows), false).map((r, i) => {
+        const own = scope === "mine" ? withOwnerOnlyRowFields(r, { user_id: session.userId, output_data: (filledRows[i] as { output_data?: unknown } | undefined)?.output_data }, { userId: session.userId }) : r
+        return statedFields(isPreviewListing(own) ? { ...own, preview: true } : own, ["error_message"])
+      })
       // Your own jobs carry what each one was charged once settled
       // (`credits` is the hold) — the sum to read for "what did I spend" —
       // and your favorite / rating of each. Someone else's (public scope)
@@ -477,7 +482,8 @@ export function registerJobs({ server, session, fastify }: RegisterJobsOpts): vo
       // A trend run's failure text is replaced before either envelope is built.
       const [charged] = await withCreditsCharged([maskTrendRunError(data!, false)], session.userId)
       const filled = fillJobRenderQuality(charged!)
-      const publicData = redactPrivateJobData(filled)
+      // The caller reads their own job (the read above): its owner-only output fields too (lib/job-owner-output.ts).
+      const publicData = withOwnerOnlyRowFields(redactPrivateJobData(filled), filled as { user_id?: unknown; output_data?: unknown }, { userId: session.userId })
       const failed = publicData.status === "failed" || publicData.status === "cancelled"
       const payload = failed
         ? {
@@ -514,8 +520,11 @@ export function registerJobs({ server, session, fastify }: RegisterJobsOpts): vo
                 data: { ...publicData, queue },
                 guidance,
               }
-            : { data: publicData }
-      const view = jobView(filled as Parameters<typeof jobView>[0])
+            : publicData.status === "completed" && partialDeliveryGuidance(publicData.output_data as Record<string, unknown> | null)
+              ? // A clip delivered in part: said in words beside the row, so it is never reported as the whole clip.
+                { data: publicData, guidance: partialDeliveryGuidance(publicData.output_data as Record<string, unknown> | null) }
+              : { data: publicData }
+      const view = jobView(filled as Parameters<typeof jobView>[0], { userId: session.userId })
       return {
         content: [{ type: "text", text: JSON.stringify({ ...payload, ...unitFields() }, null, 2) }],
         // The one envelope (audit 2026-09-06 fix #2): the text keeps its
@@ -618,7 +627,7 @@ export function registerJobs({ server, session, fastify }: RegisterJobsOpts): vo
       // carries credits, timestamps and the failure guidance.
       const { data: read } = await supabase
         .from("jobs")
-        .select("id, status, progress, input_data, output_data, error_message, error_detail, error_hint, created_at, started_at, completed_at, job_type, credits, usage_log_id, workflow_execution_id")
+        .select("id, status, progress, input_data, output_data, error_message, error_detail, error_hint, created_at, started_at, completed_at, job_type, credits, user_id, usage_log_id, workflow_execution_id")
         .eq("id", args.job_id)
         .eq("user_id", session.userId)
         .is(CHILD_JOB_COLUMN, null)
@@ -631,11 +640,11 @@ export function registerJobs({ server, session, fastify }: RegisterJobsOpts): vo
       // text, a trend run's replaced as everywhere else.
       const waitedError = trendRunErrorText(waited.error, { trend: (own as { trend_run_marker?: unknown }).trend_run_marker }, false)
       const view = charged
-        ? jobView(fillJobRenderQuality(charged) as Parameters<typeof jobView>[0])
+        ? jobView(fillJobRenderQuality(charged) as Parameters<typeof jobView>[0], { userId: session.userId })
         : { jobId: args.job_id, status: waited.status, outputUrl: waited.outputUrl, ...outputSizeOf(waited.outputData), outputData: waited.outputData, errorMessage: waitedError === null || waitedError === undefined ? waitedError : statedName(waitedError), jobType: waited.jobType }
       const summary =
         view.status === "completed"
-          ? `Job ${args.job_id} completed${view.outputUrl ? `: ${view.outputUrl}` : ""}.`
+          ? `Job ${args.job_id} completed${view.outputUrl ? `: ${view.outputUrl}` : ""}.${view.guidance ? ` ${view.guidance}` : ""}`
           : view.status === "pending_review"
             ? `Job ${args.job_id} is held for review. ${view.guidance ?? ""}`
             : `Job ${args.job_id} ${view.status}${view.errorMessage ? `: ${view.errorMessage}` : ""}. ${view.guidance ?? ""}`

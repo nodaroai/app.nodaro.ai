@@ -1,5 +1,5 @@
 {
-  "$comment": "A node unit's JSON (accepts look) and many-wire inputs, resolved by both engines (decided 2026-10-18). The target is the fixture unit fixture-echo (tools/units/__fixtures__/expected/*/fixture-echo/*.generated.ts): `in` (video, field videoUrl), `sources` (video + audio, many), `plan` (look). The source type fixture-map is the JSON-only worker of tools/units/__fixtures__/unit-json-outputs.json (outputs `json`, `edl`). Each case's edges are in this order in the workflow's edge list; `unitInputs` is what both resolvers must produce (null = absent), `alsoExpect` other ResolvedInputs keys they must agree on. A source with `saved: false` never ran (no output on either engine). The wire order of a many input is the order of the edge list; one row per upstream node, its first wire wins.",
+  "$comment": "A node unit's JSON (accepts look) and many-wire inputs, resolved by both engines (decided 2026-10-18). The target is the fixture unit fixture-echo (tools/units/__fixtures__/expected/*/fixture-echo/*.generated.ts): `in` (video, field videoUrl), `sources` (video + audio, many), `plan` (look). The source type fixture-map is the JSON-only worker of tools/units/__fixtures__/unit-json-outputs.json (outputs `json`, `edl`). Each case's edges are in this order in the workflow's edge list; `unitInputs` is what both resolvers must produce (null = absent), `alsoExpect` other ResolvedInputs keys they must agree on. A source with `saved: false` never ran (no output on either engine). The wire order of a many input is the order of the edge list; one row per upstream node, its first wire wins. The image lane (decided 2026-11-27): the target fixture-slots (`slotUnit`: `front` and `back`, image inputs with no field; `photo`, an image input with field imageUrl) keeps each wired picture's URL under the input's id, as the JSON lane keeps its string.",
   "nodes": [
     { "id": "a", "type": "upload-video", "data": { "label": "Camera A", "url": "https://r2/a.mp4" } },
     { "id": "b", "type": "upload-video", "data": { "label": "Camera B", "url": "https://r2/b.mp4" } },
@@ -10,9 +10,21 @@
     { "id": "mo", "type": "mood", "data": { "label": "Mood", "mood": "melancholic" } },
     { "id": "tp", "type": "text-prompt", "data": { "label": "Prompt", "text": "{\"cut\":1}" } },
     { "id": "map", "type": "fixture-map", "data": { "label": "Map", "generatedJson": { "version": 1, "speakerMap": { "s0": "a" } }, "generatedEdl": "{\"version\":1,\"segments\":[]}" } },
-    { "id": "mapNone", "type": "fixture-map", "data": { "label": "Map (never ran)" }, "saved": false }
+    { "id": "mapNone", "type": "fixture-map", "data": { "label": "Map (never ran)" }, "saved": false },
+    { "id": "p1", "type": "upload-image", "data": { "label": "Photo 1", "url": "https://r2/p1.png" } },
+    { "id": "p2", "type": "upload-image", "data": { "label": "Photo 2", "url": "https://r2/p2.png" } },
+    { "id": "gi", "type": "generate-image", "data": { "label": "Generate (never ran)" }, "saved": false }
   ],
   "target": { "id": "echo", "type": "fixture-echo", "data": { "label": "Echo" } },
+  "slotUnit": {
+    "type": "fixture-slots",
+    "label": "Fixture Slots",
+    "inputs": [
+      { "id": "front", "label": "Front", "accepts": ["image"] },
+      { "id": "back", "label": "Back", "accepts": ["image"] },
+      { "id": "photo", "label": "Photo", "accepts": ["image"], "field": "imageUrl" }
+    ]
+  },
   "cases": [
     {
       "name": "several wires into sources keep the edge-list order, one row per upstream node",
@@ -107,6 +119,43 @@
       "edges": [["a", "video", "media"]],
       "unitInputs": null,
       "alsoExpect": { "useCaseMedia": [{ "nodeId": "a", "url": "https://r2/a.mp4" }] }
+    },
+    {
+      "name": "a picture wired into an image input with no field lands its URL under the input's id",
+      "target": { "id": "slots", "type": "fixture-slots", "data": { "label": "Slots" } },
+      "edges": [["p1", "image", "front"]],
+      "unitInputs": { "front": "https://r2/p1.png" }
+    },
+    {
+      "name": "two image inputs each keep their own picture",
+      "target": { "id": "slots", "type": "fixture-slots", "data": { "label": "Slots" } },
+      "edges": [["p1", "image", "front"], ["p2", "image", "back"]],
+      "unitInputs": { "front": "https://r2/p1.png", "back": "https://r2/p2.png" }
+    },
+    {
+      "name": "of two pictures wired into one image input the last wins",
+      "target": { "id": "slots", "type": "fixture-slots", "data": { "label": "Slots" } },
+      "edges": [["p1", "image", "front"], ["p2", "image", "front"]],
+      "unitInputs": { "front": "https://r2/p2.png" }
+    },
+    {
+      "name": "a wired image input whose upstream made no picture records \"\" (refused, never unwired)",
+      "target": { "id": "slots", "type": "fixture-slots", "data": { "label": "Slots" } },
+      "edges": [["gi", "image", "front"]],
+      "unitInputs": { "front": "" }
+    },
+    {
+      "name": "an image input with a field still routes by source type, never into unitInputs",
+      "target": { "id": "slots", "type": "fixture-slots", "data": { "label": "Slots" } },
+      "edges": [["p1", "image", "photo"]],
+      "unitInputs": null,
+      "alsoExpect": { "imageUrl": "https://r2/p1.png" }
+    },
+    {
+      "name": "a parameter picker wired into an image input lands nothing",
+      "target": { "id": "slots", "type": "fixture-slots", "data": { "label": "Slots" } },
+      "edges": [["mo", "output", "front"]],
+      "unitInputs": null
     }
   ]
 }

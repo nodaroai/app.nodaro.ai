@@ -21,6 +21,7 @@ import { videoCharacterClipsBilledAsReferenceVideo, wiredCharacterSubjectClips }
 import { seedanceFinalizeDraftQuote, type SeedanceFinalizeDraftOptions } from "@nodaro/render-rules"
 import type { ChargedPriceTable, EstimateEdge, EstimateNode } from "./credits.js"
 import { plannedSeedanceDraftFinalizePlan, seedance2RefVideoQuote } from "./seedance2-ref-video-quote.js"
+import { PriceNotConfiguredError } from "./credits.js"
 import { seedanceDraftFinalizeRefBaseCredits } from "./seedance2-ref-video-credits.js"
 import { knownClipUrl } from "./upload-clip-lengths.js"
 
@@ -349,6 +350,12 @@ export function seedanceDraftFinalizeEstimateCredits(
     durationsSec: draft.durationsSec,
     unknownClips: draft.unknownClips,
   })
+  // A routed model's HD row is the route's whole-run price: listed as it is, never the per-second formula.
+  if (prices.routes?.(plan.creditId)) {
+    const base = prices.base(plan.creditId)
+    if (base === undefined) throw new PriceNotConfiguredError(plan.creditId)
+    return prices.charge(plan.creditId, base)
+  }
   return prices.charge(plan.creditId, seedanceDraftFinalizeRefBaseCredits(plan))
 }
 

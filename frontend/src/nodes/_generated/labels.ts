@@ -6,6 +6,7 @@ import { labels as unit_clip_pack } from "../clip-pack/labels.generated" // unit
 import { labels as unit_episode_chapters } from "../episode-chapters/labels.generated" // unit:episode-chapters
 import { labels as unit_episode_trailer } from "../episode-trailer/labels.generated" // unit:episode-trailer
 import { labels as unit_gif_to_video } from "../gif-to-video/labels.generated" // unit:gif-to-video
+import { labels as unit_long_image } from "../long-image/labels.generated" // unit:long-image
 import { labels as unit_remove_audio } from "../remove-audio/labels.generated" // unit:remove-audio
 import { labels as unit_shot_cuts } from "../shot-cuts/labels.generated" // unit:shot-cuts
 import { labels as unit_speaker_layout } from "../speaker-layout/labels.generated" // unit:speaker-layout
@@ -19,6 +20,7 @@ export const UNIT_LABELS: Readonly<Record<string, UnitLabels>> = Object.assign(O
   "episode-chapters": unit_episode_chapters, // unit:episode-chapters
   "episode-trailer": unit_episode_trailer, // unit:episode-trailer
   "gif-to-video": unit_gif_to_video, // unit:gif-to-video
+  "long-image": unit_long_image, // unit:long-image
   "remove-audio": unit_remove_audio, // unit:remove-audio
   "shot-cuts": unit_shot_cuts, // unit:shot-cuts
   "speaker-layout": unit_speaker_layout, // unit:speaker-layout

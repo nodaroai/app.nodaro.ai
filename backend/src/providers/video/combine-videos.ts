@@ -1,6 +1,7 @@
+import { downloadEditingSource } from "./editing-source.js"
 import { promises as fs } from "node:fs"
 import { join } from "node:path"
-import { downloadFile, runFfmpeg, runFfprobe, getVideoFps, getVideoStreamDuration, createWorkDir, cleanupWorkDir, normalizeVideoForCombine, trimEdgeFrames, COMBINE_DELIVERY_CRF } from "./ffmpeg-utils.js"
+import { runFfmpeg, runFfprobe, getVideoFps, getVideoStreamDuration, createWorkDir, cleanupWorkDir, normalizeVideoForCombine, trimEdgeFrames, COMBINE_DELIVERY_CRF } from "./ffmpeg-utils.js"
 import { getSmartCutMatcher, type SmartCutMode } from "./smart-cut.js"
 import { csvFields } from "./ffprobe-csv.js"
 import { resolveXfadeName, resolveAudioCrossfadeCurve } from "@nodaro/shared/edl"
@@ -457,7 +458,7 @@ export async function combineVideos(options: CombineOptions): Promise<CombineVid
     for (let i = 0; i < videoUrls.length; i++) {
       const rawPath = join(workDir, `input_${i}.mp4`)
       console.log(`[combineVideos] Downloading video ${i + 1}/${videoUrls.length}`)
-      await downloadFile(videoUrls[i], rawPath)
+      await downloadEditingSource(videoUrls[i], rawPath)
       rawPaths.push(rawPath)
     }
     await options.chargeCheck?.(rawPaths)

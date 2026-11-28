@@ -29,7 +29,7 @@ export { ROUTE_PRICE_ROUND_TO, modelOfPriceId, routeUsdToBaseCredits, routedList
 import { applyServiceMarkup } from "./service-margin.js"
 
 type MarginSettings = Parameters<typeof applyServiceMarkup>[1]
-import { PriceNotConfiguredError } from "./credits.js"
+import { PriceNotConfiguredError } from "./price-not-configured.js"
 
 
 /** `base` marked up exactly as the platform price `priceId` is. */
@@ -83,35 +83,14 @@ export function routedQuote(args: {
   return { usd, billedSeconds, factor, baseCredits, chargedCredits: routedChargedCredits(baseCredits, priceId, args.settings) }
 }
 
-/** What a finished routed run is charged: the task's billed cost, in base credits, marked up at `priceId`. */
-/**
- * A settled cost above this multiple of the run's quote (times its factor) is
- * charged only up to it: a corrupt or runaway figure must never charge a
- * person many times what they were quoted. The rest is alerted, and the
- * cost-shortfall sweep records it for a person to look at.
- */
-export const ROUTE_SETTLE_MAX_OF_QUOTE = 3
-
-/**
- * What a finished routed run is charged: the task's billed cost, in base
- * credits, marked up at `priceId` — at most {@link ROUTE_SETTLE_MAX_OF_QUOTE}
- * × the quote it was held at (`capped` then says so). Throws on a cost that is
- * not a positive number: a run is never settled as free from a missing figure
- * (the caller commits the hold instead).
- */
+/** Convert the confirmed task cost at the same price id used to quote the run. */
 export function routedSettlementCredits(args: {
   providerCostUsd: number
   priceId: string
   settings: MarginSettings
-  /** The quote the run was held at, in USD, times its factor. */
-  quotedUsd: number
-}): { baseCredits: number; chargedCredits: number; capped: boolean } {
-  const { providerCostUsd: cost } = args
-  if (typeof cost !== "number" || !Number.isFinite(cost) || cost <= 0) throw new Error(`routed settlement: no billed cost (${String(cost)})`)
-  const bound = args.quotedUsd > 0 ? args.quotedUsd * ROUTE_SETTLE_MAX_OF_QUOTE : Number.POSITIVE_INFINITY
-  const capped = cost > bound
-  const baseCredits = routeUsdToBaseCredits(capped ? bound : cost)
-  return { baseCredits, chargedCredits: routedChargedCredits(baseCredits, args.priceId, args.settings), capped }
+}): { baseCredits: number; chargedCredits: number } {
+  const cost = args.providerCostUsd
+  if (!Number.isFinite(cost) || cost < 0) throw new Error(`routed settlement: no billed cost (${String(cost)})`)
+  const baseCredits = routeUsdToBaseCredits(cost)
+  return { baseCredits, chargedCredits: routedChargedCredits(baseCredits, args.priceId, args.settings) }
 }
-
-

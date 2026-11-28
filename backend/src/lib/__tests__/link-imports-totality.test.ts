@@ -336,6 +336,7 @@ const LANES: Readonly<Record<string, Lane>> = {
   "nodes/speaker-map/payload.ts": BODY_OF("a run's Speaker Map node (services/workflow-engine/node-input-links.ts)", "a node's payload, judged with the node's inputs"),
   "nodes/speaker-map/route.ts": PROCESSING_INPUT,
   "nodes/split-into-layers/quote.ts": BODY_OF("POST /v1/split-into-layers (nodes/split-into-layers/route.ts)"),
+  "nodes/long-image/quote.ts": BODY_OF("POST /v1/long-image (nodes/long-image/route.ts)"),
   "nodes/tighten-episode/use-case.ts": BODY_OF("POST /v1/tighten-episode (routes/use-case-run.ts)"),
   "nodes/clip-pack/use-case.ts": BODY_OF("POST /v1/clip-pack (routes/use-case-run.ts)"),
   "nodes/episode-chapters/use-case.ts": BODY_OF("POST /v1/episode-chapters (routes/use-case-run.ts)"),

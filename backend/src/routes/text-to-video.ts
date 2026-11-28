@@ -191,6 +191,10 @@ export const textToVideoPricing: RoutePricing = {
     )
   },
   opts: {
+    routedVideoInput: (body, req) => {
+      const parsed = textToVideoBody.safeParse(body)
+      return parsed.success ? { input: parsed.data, jobType: "text-to-video" } : null
+    },
     runModel: videoRunModel,
     // The HDR add-on (Kling 4.0) is its own line on top of whatever base this
     // prices (`withVideoHdrAddon`).

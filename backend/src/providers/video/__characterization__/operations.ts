@@ -24,7 +24,7 @@ import { applyEdl } from "../apply-edl.js"
 import { stitchExtension } from "../extend-stitch.js"
 import { composeSideBySide } from "../side-by-side.js"
 import { createWorkDir } from "../ffmpeg-utils.js"
-import { encodeBrowserSafePreview } from "../browser-safe-preview.js"
+import { encodeBrowserSafePreview, encodeEditingSource } from "../browser-safe-preview.js"
 import { probeMatched } from "../matched-encode.js"
 import { fixtureUrl, type FixtureSet } from "./fixtures.js"
 import type { CharacterizedOperation, RenderedOutput, OperationResult } from "./operation-types.js"
@@ -400,6 +400,62 @@ const tier1: CharacterizedOperation[] = [
       const out = `${workDir}/preview.mp4`
       await encodeBrowserSafePreview(f.clipSdrHevc10Mp4, out, await probeMatched(f.clipSdrHevc10Mp4))
       return single(out, "video", workDir)
+    },
+  },
+  // An editing step's source made from a kept original (editing-source.ts,
+  // decided 2026-11-22): the preview's own chain at the working copy's
+  // near-lossless quality. The HLG file is tone-mapped exactly as its preview
+  // is, the 10-bit SDR one taken plainly to 8-bit, so the metrics sit on the
+  // preview ops' own above.
+  {
+    name: "editing-source-hlg",
+    tier: 1,
+    run: async (f) => {
+      const workDir = await createWorkDir("characterize-editing-source")
+      const out = `${workDir}/source.mp4`
+      await encodeEditingSource(f.clipHlgHevc10Mp4, out, await probeMatched(f.clipHlgHevc10Mp4), { timeoutMs: 10 * 60 * 1000 })
+      return single(out, "video", workDir)
+    },
+  },
+  {
+    name: "editing-source-10bit-sdr",
+    tier: 1,
+    run: async (f) => {
+      const workDir = await createWorkDir("characterize-editing-source")
+      const out = `${workDir}/source.mp4`
+      await encodeEditingSource(f.clipSdrHevc10Mp4, out, await probeMatched(f.clipSdrHevc10Mp4), { timeoutMs: 10 * 60 * 1000 })
+      return single(out, "video", workDir)
+    },
+  },
+  // A step that finishes a generation keeps its 10-bit picture (decided
+  // 2026-11-22): the merge copies a 10-bit HEVC picture as it is (only the
+  // sound is encoded), and an Extend joins two 10-bit clips in 10-bit HEVC.
+  {
+    name: "merge-video-audio-keeps-10bit",
+    tier: 1,
+    run: async (f) => {
+      const outputPath = await mergeVideoAudio({
+        videoUrl: fixtureUrl(f.clipSdrHevc10Mp4),
+        audioUrl: fixtureUrl(f.toneWav),
+        keepPicture: true,
+      })
+      return single(outputPath, "video")
+    },
+  },
+  {
+    name: "extend-stitch-10bit-hevc",
+    tier: 1,
+    run: async (f) => {
+      const workDir = await createWorkDir("characterize-extend-stitch")
+      const { outputPath } = await stitchExtension({
+        sourcePath: f.clipSdrHevc10Mp4,
+        extensionPath: f.clipSdrHevc10Mp4,
+        workDir,
+        fallbackTrims: { trimEndFrames: 4, trimStartFrames: 3 },
+        audioFadeSec: 0.15,
+        keepTenBit: true,
+      })
+      return single(outputPath, "video", workDir)
     },
   },
   // apply-edl (the EDL renderer behind the podcast/multicam editing nodes).

@@ -48,6 +48,8 @@ const mocks = vi.hoisted(() => {
   }
 })
 
+// The database has the routed-video columns (probed once per process in production: lib/video-route-schema.ts).
+vi.mock("../../../lib/video-route-schema.js", () => ({ videoRouteSchemaReady: async () => true, stopRuleSelect: async (select: string) => select }))
 vi.mock("../../../lib/supabase.js", () => ({ supabase: { from: mocks.from } }))
 vi.mock("../../../lib/job-cost-columns.js", () => ({ jobCostColumns: async (cost: number) => ({ provider_cost: cost }) }))
 
@@ -124,7 +126,7 @@ describe.each(Object.keys(lanes) as Array<keyof typeof lanes>)("%s lane", (lane)
   const run = lanes[lane]
   const optedIn: ReconcileOpts = { ...OPTED_IN, routeJob: { jobId: "j-1", jobType: lane } }
 
-  it("no plugin service: the same request and call options with or without the opt-in, and no database call", async () => {
+  it("no plugin service: the same request and call options with or without the opt-in, and only the planned-segment stop check", async () => {
     await run(new KieVideoProvider(), { onTaskCreated })
     await run(new KieVideoProvider(), optedIn)
     const [without, withOptIn] = sent()
@@ -133,8 +135,8 @@ describe.each(Object.keys(lanes) as Array<keyof typeof lanes>)("%s lane", (lane)
     expect(Object.keys(withOptIn!.opts).sort()).toEqual(Object.keys(without!.opts).sort())
     expect(withOptIn!.opts).not.toHaveProperty("routeJob")
     // The image lane's credit audit writes its own table, with or without the
-    // opt-in; the seam reads and writes `jobs`, and does neither here.
-    expect(mocks.from.mock.calls.filter((c) => c[0] !== "credit_cost_audit")).toEqual([])
+    // opt-in. An opted-in submission now checks the parent job type for Stop.
+    expect(mocks.from.mock.calls.filter((c) => c[0] !== "credit_cost_audit")).toEqual([["jobs"]])
   })
 
   it("taken: the default upstream is not called; the result has the route's figure and no default task id", async () => {

@@ -1,5 +1,6 @@
+import { downloadEditingSource } from "./editing-source.js"
 import { join } from "node:path"
-import { downloadFile, runFfmpeg, createWorkDir, cleanupWorkDir } from "./ffmpeg-utils.js"
+import { runFfmpeg, createWorkDir, cleanupWorkDir } from "./ffmpeg-utils.js"
 import { ASPECT_RATIO_DIMENSIONS } from "@nodaro/shared/models"
 
 interface ResizeVideoOptions {
@@ -18,7 +19,7 @@ export async function resizeVideo(options: ResizeVideoOptions): Promise<string> 
     const outputPath = join(workDir, "output.mp4")
 
     console.log(`[resizeVideo] Downloading video`)
-    await downloadFile(videoUrl, inputPath)
+    await downloadEditingSource(videoUrl, inputPath)
 
     const dim = ASPECT_RATIO_DIMENSIONS[targetAspect] ?? { width: 1920, height: 1080 }
     const color = padColor.replace("#", "0x")

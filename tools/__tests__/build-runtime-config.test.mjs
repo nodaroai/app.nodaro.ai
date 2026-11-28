@@ -381,6 +381,23 @@ test("RUNTIME_MEDIA_ORIGIN lands on mediaOrigin", () => {
   assert.equal(buildRuntimeConfig({ RUNTIME_MEDIA_ORIGIN: "https://media.example.com" }).mediaOrigin, "https://media.example.com")
 })
 
+test("RUNTIME_STORAGE_ORIGINS lands on storageOrigins, https origins only, each once; none leaves no key", () => {
+  assert.deepEqual(buildRuntimeConfig({ RUNTIME_STORAGE_ORIGINS: "https://cdn.example.com,https://pub-1.r2.dev" }).storageOrigins, ["https://cdn.example.com", "https://pub-1.r2.dev"])
+  assert.deepEqual(buildRuntimeConfig({ RUNTIME_STORAGE_ORIGINS: " https://cdn.example.com , http://x.test,https://cdn.example.com,https://a.test/path" }).storageOrigins, ["https://cdn.example.com"])
+  for (const value of [undefined, "", " ", "http://cdn.example.com"]) {
+    assert.ok(!("storageOrigins" in buildRuntimeConfig({ RUNTIME_STORAGE_ORIGINS: value })), String(value))
+  }
+})
+
+test("start.sh hands the writer the backend's own storage origins", () => {
+  const dockerfile = readFileSync(new URL("../../Dockerfile", import.meta.url), "utf8")
+  assert.match(
+    dockerfile,
+    /RUNTIME_STORAGE_ORIGINS_RESOLVED="\$\(node \/app\/backend\/dist\/lib\/print-surface-profile\.js --storage-origins\)" \|\| RUNTIME_STORAGE_ORIGINS_RESOLVED=""/,
+  )
+  assert.match(dockerfile, /RUNTIME_STORAGE_ORIGINS="\$RUNTIME_STORAGE_ORIGINS_RESOLVED"/)
+})
+
 test("a blank RUNTIME_MEDIA_ORIGIN leaves no key (every deployment that is not white-label)", () => {
   for (const value of [undefined, "", "   "]) {
     assert.ok(!("mediaOrigin" in buildRuntimeConfig({ RUNTIME_MEDIA_ORIGIN: value })), String(value))

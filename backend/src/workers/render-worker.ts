@@ -1,5 +1,6 @@
 // @reads packages/remotion/**
-import { remotionConcurrencyFor } from "./render-concurrency.js"
+import { remotionConcurrencyFor, renderFfmpegArgs } from "./render-concurrency.js"
+import { RenderEncoderError, RenderShortageError, RENDER_SHORTAGE_MESSAGE, isLastRenderRun, renderWatch, shortageRetriesOf, shortageRetryDelayMs, shortageTurnDelayMs, type RenderTrack } from "./render-shortage.js"
 import { Worker, DelayedError, type ConnectionOptions, type Job } from "bullmq"
 import { isUserQuietStopped, QUIET_STOP_RECHECK_MS } from "../lib/access-blocks.js"
 import { resolveEffectiveTier } from "@nodaro/shared/credits"
@@ -11,6 +12,8 @@ import { uploadFileToR2 } from "../lib/storage.js"
 import { resolveIsPublicOutput, mcpClientForcesPrivate } from "./output-visibility.js"
 import { createWorkDir, cleanupWorkDir, downloadFile, runFfmpeg, needsTranscode, transcodeToBrowserSafe, BROWSER_SAFE_VIDEO_ARGS, REMOTION_INPUT_VIDEO_ARGS , restoreVideoAudioFromSource } from "../providers/video/ffmpeg-utils.js"
 import { applyVideoWatermark } from "../utils/watermark.js"
+import { runWithVideoSourceContext } from "../lib/video-source-context.js"
+import { downloadEditingSource } from "../providers/video/editing-source.js"
 import { commitJobCredits, refundJobCredits, shouldSaveJobResult, markJobCompletedDetailed, generateAndUploadThumbnail, createAssetFromJob, isFinalJobAttempt, type MarkJobCompletedOutcome } from "./shared.js"
 import { markJobFailed } from "../lib/job-failure.js"
 import { addCaptionsRenderChargeId, addCaptionsRenderChargeOf, commitAddCaptionsRender } from "../lib/add-captions-nemotron-run.js"
@@ -454,7 +457,8 @@ async function renderSceneGraphViaFfmpeg(
   const videoPath = join(workDir, "input-video.mp4")
   const outputPath = join(workDir, "output.mp4")
 
-  // Download video
+  // Download video as given: this path stream-copies the picture whenever a
+  // browser plays it, so a conformed source would be delivered as it is.
   console.log(`[render-worker] FFmpeg fast path: downloading video`)
   await downloadFile(videoSrc, videoPath)
   await bullJob.updateProgress(50)
@@ -796,7 +800,9 @@ async function normalizeInputVideos(
     if (fileMap.has(url)) continue
     const inputName = `input-${randomUUID()}.mp4`
     const localPath = join(workDir, inputName)
-    await downloadFile(url, localPath)
+    // Its kept original when the run may read one, conformed as an editing
+    // step's source; an HDR picture tone-mapped to SDR (editing-source.ts).
+    await downloadEditingSource(url, localPath)
     audioByUrl.set(url, localPath)
 
     // Always transcode with all-intra keyframes (-g 1) so Remotion's
@@ -921,22 +927,38 @@ function withRenderAdmission(processRender: RenderProcessor) {
       throw new DelayedError()
     }
 
-    const admission = await admitOrPark({
-      job: bullJob, token, queue: "video-render", row: workerRowOf(jobId, jobRecord, (bullJob.data as { userId?: unknown }).userId),
-    })
-    if (!admission) throw new DelayedError()
-    const lane: RenderLaneExit = {}
-    let outcome: ReleaseOutcome = "failed"
+    // After the container refused a process or thread, renders run one at a
+    // time for a while (render-shortage.ts): one fits where two did not. Like
+    // the quiet stop — before the pickup CAS, at zero cost, looked at again
+    // shortly. Not a scene child: the render that started it is waiting on it.
+    const watch = renderWatch()
+    if (bullJob.name !== "scene-render-child" && watch.mustWaitTurn()) {
+      await bullJob.moveToDelayed(Date.now() + shortageTurnDelayMs(), token)
+      throw new DelayedError()
+    }
+    // Counted in right at the check, with nothing awaited in between: two
+    // pickups in the same moment cannot both find nobody running.
+    watch.enter()
     try {
-      const result = await runHolding(admission.hold, () => processRender(bullJob, token, jobRecord, lane))
-      outcome = lane.outcome ?? "completed"
-      return result
-    } catch (err) {
-      outcome = lane.outcome
-        ?? (err instanceof DrainAbortError || err instanceof DelayedError || !isFinalJobAttempt(bullJob) ? "requeued" : "failed")
-      throw err
+      const admission = await admitOrPark({
+        job: bullJob, token, queue: "video-render", row: workerRowOf(jobId, jobRecord, (bullJob.data as { userId?: unknown }).userId),
+      })
+      if (!admission) throw new DelayedError()
+      const lane: RenderLaneExit = {}
+      let outcome: ReleaseOutcome = "failed"
+      try {
+        const result = await runHolding(admission.hold, () => processRender(bullJob, token, jobRecord, lane))
+        outcome = lane.outcome ?? "completed"
+        return result
+      } catch (err) {
+        outcome = lane.outcome
+          ?? (err instanceof DrainAbortError || err instanceof DelayedError || !isFinalJobAttempt(bullJob) ? "requeued" : "failed")
+        throw err
+      } finally {
+        await admission.release(outcome)
+      }
     } finally {
-      await admission.release(outcome)
+      watch.leave()
     }
   }
 }
@@ -965,7 +987,8 @@ export function createRenderWorker() {
 
   return new Worker(
     "video-render",
-    withRenderAdmission(async (bullJob, token, jobRecord, lane) => {
+    // Whose run its input videos are read for, and whether it reads kept originals (lib/video-source.ts).
+    withRenderAdmission((bullJob, token, jobRecord, lane) => runWithVideoSourceContext((jobRecord?.user_id as string | undefined) ?? undefined, async () => {
       if (bullJob.name === "scene-render-child") {
         const { processSceneRenderChild } = await import("./scene3d-render-child.js")
         return processSceneRenderChild(bullJob, () => getBundlePath(SCENE3D_PLAN_TYPE), chromiumOptionsFor(SCENE3D_PLAN_TYPE))
@@ -1025,6 +1048,8 @@ export function createRenderWorker() {
       console.log(`[render-worker] Job ${jobId} picked up (tier=${userTier})`)
 
       const workDir = await createWorkDir("render")
+      // This render as the shortage watch sees it (render-shortage.ts), once its frames are being drawn.
+      let renderTrack: RenderTrack | undefined
 
       try {
         // A1/R1 (audit): CAS on live statuses + abort on 0 rows — a render
@@ -1137,12 +1162,16 @@ export function createRenderWorker() {
             let browser: Awaited<ReturnType<typeof openBrowser>> | undefined
             let stopped = false
             outputPath = join(workDir, "output.mp4")
+            const track = renderWatch().track()
+            renderTrack = track
             try {
               await withRenderCancellation({
                 jobId,
                 timeoutMs: 25 * 60 * 1000,
                 isCancelled: async () => !await shouldSaveJobResult(jobId),
                 isDraining: isWorkerDraining,
+                // Stuck after the container refused a process or thread: stopped now, not at a timeout minutes later.
+                stuck: () => track.stuck(),
                 cancel: async () => {
                   stopped = true
                   try { cancellation.cancel() }
@@ -1201,9 +1230,15 @@ export function createRenderWorker() {
                   puppeteerInstance: browser,
                   cancelSignal: cancellation.cancelSignal,
                   concurrency: remotionConcurrency,
+                  // The renderer's own ffmpeg, told its thread counts like every ffmpeg here (render-concurrency.ts).
+                  ffmpegOverride: renderFfmpegArgs,
                   timeoutInMilliseconds: 120_000,
                   logLevel: "warn",
+                  onStart: ({ frameCount, parallelEncoding }: { frameCount: number; parallelEncoding: boolean }) => {
+                    track.started({ frameCount, parallelEncoding })
+                  },
                   onProgress: ({ progress, renderedFrames, encodedFrames }: { progress: number; renderedFrames: number; encodedFrames: number }) => {
+                    track.progress({ renderedFrames, encodedFrames })
                     const overall = 40 + Math.round(progress * 50)
                     bullJob.updateProgress(overall).catch(() => {})
                     const pct = Math.floor(progress * 100)
@@ -1293,7 +1328,10 @@ export function createRenderWorker() {
           return
         }
         const errMsg = error instanceof Error ? error.message : String(error)
-        console.error(`[render-worker] Job ${jobId} failed:`, errMsg)
+        // A render the watch stopped carries a sentence for the user and what happened beside it.
+        const stoppedByWatch = error instanceof RenderShortageError || error instanceof RenderEncoderError
+        const errDetail = stoppedByWatch ? error.detail : errMsg
+        console.error(`[render-worker] Job ${jobId} failed:`, errDetail)
 
         // Terminal errors won't resolve on retry — skip BullMQ retries (return,
         // not throw). Non-terminal errors are rethrown so BullMQ retries them.
@@ -1301,21 +1339,46 @@ export function createRenderWorker() {
         // unavailable — deterministic, so retrying just delays the refund.
         const isTerminal = /composition.*not found|plan validation|zod|invalid plan|timed out|webgl/i.test(errMsg)
 
+        // The container refused a process or thread while this render ran
+        // (render-shortage.ts): the failure is the box's, whatever the renderer
+        // said of it — its own timeout, a frame that never arrived. Never an
+        // error that would fail the same way on an idle box.
+        const shortage = error instanceof RenderShortageError || (!isTerminal && renderTrack?.sawShortage() === true)
+        // The job's last run: the queue's final attempt, or its attempts used
+        // up counting the runs a shortage put back (they are not failed
+        // attempts to the queue).
+        const lastRun = isLastRenderRun(bullJob)
+
+        if (shortage && !lastRun) {
+          // Run it again after a real wait: five seconds later the container is as full as it was.
+          const earlier = shortageRetriesOf(bullJob.data)
+          const waitMs = shortageRetryDelayMs(earlier)
+          console.warn(`[render-worker] Job ${jobId}: the container had no process or thread free (${errDetail}) — running it again in ${Math.round(waitMs / 1000)} s`)
+          await bullJob.updateData({ ...(bullJob.data as RenderJobData), shortageRetries: earlier + 1 })
+          await bullJob.moveToDelayed(Date.now() + waitMs, token)
+          throw new DelayedError()
+        }
+
+        // What the user reads: for a shortage a sentence, never the renderer's
+        // raw timeout (it names internal addresses). The raw text is in the
+        // log line above, with the job's id.
+        const failureMessage = shortage ? RENDER_SHORTAGE_MESSAGE : errMsg
+
         // Finalize (mark failed) + refund only when the job will NOT run again:
-        // a terminal error (we return below), or the final BullMQ attempt.
+        // a terminal error (we return below), or its last run.
         // Refunding on a non-final retryable attempt would let a successful
         // retry deliver the render for free (commit_credits no-ops against an
         // already-refunded usage_log).
-        if (isTerminal || isFinalJobAttempt(bullJob)) {
+        if (isTerminal || lastRun) {
           // THE failure writer. Its CAS is what stops a concurrently-completed/
           // cancelled job (inflight reconcile cron, stall re-pick) being trampled
           // "completed" → "failed" (orphaning its committed credits + delivered
           // render), and what keeps this worker off a `pending_review` row.
-          const flipped = await markJobFailed(jobId, { error_message: errMsg })
+          const flipped = await markJobFailed(jobId, { error_message: failureMessage })
 
           // Only refund if WE flipped the row (refundJobCredits is idempotent anyway).
           if (flipped) {
-            await refundJobCredits(effectiveUsageLogId, jobId, errMsg)
+            await refundJobCredits(effectiveUsageLogId, jobId, failureMessage)
           }
         }
 
@@ -1324,11 +1387,19 @@ export function createRenderWorker() {
           lane.outcome = "failed"
           return
         }
+        // Its last run, but the queue still counts attempts (shortage retries
+        // are not failures to it): the row is failed and refunded, so the
+        // queue must not run it again.
+        if (lastRun && !isFinalJobAttempt(bullJob)) {
+          lane.outcome = "failed"
+          return
+        }
         throw error
       } finally {
         await cleanupWorkDir(workDir)
       }
-    }),
+    // Every render of a node's plan reads originals; a 3D scene's child render reads its own assets as before.
+    }, { readsOriginals: bullJob.name !== "scene-render-child" })),
     {
       connection: connection as unknown as ConnectionOptions,
       concurrency: config.RENDER_WORKER_CONCURRENCY,

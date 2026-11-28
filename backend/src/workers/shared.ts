@@ -1,4 +1,5 @@
 import type { Job } from "bullmq"
+import { withVideoSourceNotice } from "../lib/video-source-context.js"
 import { promises as fs } from "node:fs"
 import { randomUUID } from "node:crypto"
 import { dirname, join } from "node:path"
@@ -10,6 +11,7 @@ import { supabase } from "../lib/supabase.js"
 import { coveredMarkOf } from "../lib/covered-step.js"
 import { cleanAssetName } from "../lib/asset-names.js"
 import { getAppSettings } from "../lib/app-settings.js"
+import { settingsReadFailed } from "../lib/app-settings-read-status.js"
 import type { ProviderResult } from "../providers/provider.interface.js"
 import { uploadToR2, uploadFileToR2, uploadBufferToR2, uploadFileWithKeyToR2, storageChargeOf } from "../lib/storage.js"
 import { uploadJobScratchFile } from "../lib/job-scratch.js"
@@ -30,6 +32,7 @@ import type { LlmBillingLedgerWrite } from "../lib/llm-billing-ledger.js"
 import { ledgerLane, meteredSpendFromRow, rowBilling } from "../lib/llm-row-spend.js"
 export { meteredSpendFromRow }
 import { hasJobPolicyFor, type HeldCommitReplay } from "../lib/job-policy.js"
+import { routedSettleCandidate } from "../lib/video-route-policy.js"
 import { completedJobColumns } from "../lib/job-status.js"
 import { withOutputImageDimensions } from "../lib/job-output-dimensions.js"
 import { jobCostColumns, withPairedDisplayCost } from "../lib/job-cost-columns.js"
@@ -304,6 +307,18 @@ export async function markJobCompleted(
  */
 export type MarkJobCompletedOutcome = "completed" | "lost_race" | "blocked" | "held"
 
+/**
+ * The completion's `output_data` with what the job's video steps have to say
+ * about its result (an HDR source tone-mapped to SDR:
+ * `lib/video-source-context.ts`), as `warningCode` / `warningMessage`. The
+ * same fields object when there is nothing to say.
+ */
+function withSourceNotice(fields: Record<string, unknown>): Record<string, unknown> {
+  const output = fields.output_data
+  const noticed = withVideoSourceNotice(output)
+  return noticed === output ? fields : { ...fields, output_data: noticed }
+}
+
 export async function markJobCompletedDetailed(
   jobId: string,
   fields: Record<string, unknown>,
@@ -317,7 +332,7 @@ export async function markJobCompletedDetailed(
 ): Promise<MarkJobCompletedOutcome> {
   // `display_cost` is derived here from the row's own `provider_cost`, before
   // the gate, so a held row parks the pair and approve writes it as it is.
-  const stamped = await withPairedDisplayCost(await withOutputImageDimensions(fields))
+  const stamped = withSourceNotice(await withPairedDisplayCost(await withOutputImageDimensions(fields)))
 
   if (hasJobPolicyFor("result")) {
     const { applyResultGate } = await import("../lib/job-policy-gate.js")
@@ -639,7 +654,17 @@ export async function commitJobCredits(
   const { computeActualCredits, checkAndLogAnomaly } = await import("../ee/billing/credit-anomaly.js")
 
   try {
-    if (await CreditsService.trySettleManagedCredits(usageLogId)) return
+    const managed = await CreditsService.trySettleManagedCreditsOrReadLog(usageLogId)
+    if (managed.managed) return
+    // A video job the admin routed to the alternate route is charged by the one
+    // routed settlement (ee/billing/video-route-settlement.ts), from the job's own
+    // decision and route ledger — none of this call's figures reach it. A log whose
+    // price id no route can price is decided with no read; every other job —
+    // every job while nothing is routed — settles below, as always.
+    if (managed.log && (managed.log.routed || routedSettleCandidate(managed.log.action))) {
+      const { settleRoutedJob } = await import("../ee/billing/video-route-settlement.js")
+      if (await settleRoutedJob({ usageLogId, jobId, log: managed.log })) return
+    }
     if (metered && providerCostUsd && providerCostUsd > 0) {
       // usage_logs.action is the model identifier convention (checkAndLogAnomaly
       // below relies on the same). Fetched first so computeActualCredits can
@@ -1569,8 +1594,14 @@ export async function refundJobCredits(
     // or commit it whole (D10).
     if (await settleFailedMeteredJob(usageLogId, jobId, errorOrMessage)) return
     const { CreditsService: ManagedCredits } = await import("../ee/services/credits.js")
-    if (await ManagedCredits.trySettleManagedCredits(usageLogId)) return
-    if (isPostProcessingError(errorOrMessage)) {
+    const managed = await ManagedCredits.trySettleManagedCreditsOrReadLog(usageLogId)
+    if (managed.managed) return
+    // A routed video run that failed AFTER the route delivered (its post-processing
+    // failed) delivered nothing to its owner: its hold is released in full, and the
+    // task the route billed stays on its route ledger as a known loss.
+    const routedDelivery = isPostProcessingError(errorOrMessage) && (managed.log?.routed === true || (routedSettleCandidate(managed.log?.action) && await jobCarriesRouteDecision(jobId)))
+    if (routedDelivery) console.error(`[ALERT] job ${jobId}: a routed video run failed after the route delivered (post-processing); its hold is released in full (a recorded loss).`)
+    if (isPostProcessingError(errorOrMessage) && !routedDelivery) {
       const msg = errorOrMessage instanceof Error ? errorOrMessage.message : String(errorOrMessage)
       console.log(`[worker] Post-processing failure after provider delivered — not refunding credits for job ${jobId}: ${msg}`)
       return
@@ -1816,6 +1847,7 @@ export function generatedAssetMetadata(output: Record<string, unknown>, jobType:
   const { quality } = isRenderNodeType(jobType) ? renderResultStamp(output) : {}
   const name = type ? generatedAssetName(output, type) : undefined
   return {
+    ...(type === "video" && Array.isArray(output.unassembledClips) && output.unassembledClips.length ? { separateClipCount: output.unassembledClips.length } : {}),
     ...(thumbnailUrl ? { thumbnail_url: thumbnailUrl } : {}),
     ...(name ? { name } : {}),
     ...(quality ? { quality } : {}),
@@ -2198,13 +2230,22 @@ export async function refundLoopTrimAddon(
   try {
     const { data: usageLog, error } = await supabase
       .from("usage_logs")
-      .select("credits_used, metadata")
+      .select("credits_used, metadata, action, job_id")
       .eq("id", usageLogId)
       .single()
 
     if (error || !usageLog) {
       console.error(`[worker] refundLoopTrimAddon: usage_log not found for ${usageLogId}`)
       return
+    }
+    // A routed job is charged by the one routed settlement: its ledger records
+    // the add-ons it delivered (none for a trim that failed).
+    const action = typeof usageLog.action === "string" ? usageLog.action : null
+    if (routedSettleCandidate(action)) {
+      const { settleRoutedJob } = await import("../ee/billing/video-route-settlement.js")
+      const meta = usageLog.metadata as { reservation_mode?: unknown; video_route?: unknown } | null
+      const log = { action, credits_used: (usageLog.credits_used as number | null) ?? null, job_id: (usageLog.job_id as string | null) ?? null, routed: meta?.reservation_mode === "video-route" || meta?.video_route === true }
+      if (await settleRoutedJob({ usageLogId, jobId, log })) return
     }
 
     const reserved = (usageLog.credits_used as number | null) ?? 0
@@ -2272,4 +2313,29 @@ export async function refundSurroundRefineAddon(
     console.error(`[worker] refundSurroundRefineAddon failed for job ${jobId}:`, err)
     // Non-fatal: prefer NOT failing the whole job over a refund hiccup.
   }
+}
+
+/**
+ * Whether a job is PROVEN to carry a routing decision (`__videoRoute`, or a
+ * routed run's marker). With no routing policy ever saved in this environment
+ * nothing is routed: false, with no read. A read that keeps failing proves
+ * nothing, so it is false too: the job is settled exactly as an unrouted one
+ * is, and a routed one's hold is then released by the settlement sweep, which
+ * reads the job again.
+ */
+async function jobCarriesRouteDecision(jobId: string): Promise<boolean> {
+  try {
+    const settings = await getAppSettings()
+    if (!settingsReadFailed(settings) && !settings.video_route_policy) return false
+  } catch {
+    // Unknown: the job itself decides.
+  }
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const { data, error } = await supabase.from("jobs").select("input_data->__videoRoute, run:metadata->videoRouteRun").eq("id", jobId).maybeSingle()
+    if (error) continue
+    const raw = (data as Record<string, unknown> | null)?.__videoRoute
+    return raw != null || (data as Record<string, unknown> | null)?.run != null
+  }
+  console.error(`[worker] job ${jobId}: its routing decision could not be read; settled as an unrouted job`)
+  return false
 }

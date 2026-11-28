@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify"
 import { castSwapEngineFrom } from "@nodaro/shared/models"
 import { supabase } from "../../lib/supabase.js"
 import { castSwapSpelling } from "../../lib/video-remake-paths.js"
-import { loadedEngineDeliversResolution } from "../../lib/video-remake-delivered-resolution.js"
+import { loadedEngineDeliversResolution, loadedEngineDeliversTrendResolution } from "../../lib/video-remake-delivered-resolution.js"
 import { invalidateBalanceCache } from "../billing/balance-cache.js"
 import type { BillingContext } from "../../lib/billing-context.js"
 
@@ -163,7 +163,12 @@ export function resetFirstRemakeSchemaCheck(): void {
  * reads it: the engine in any vocabulary (`castSwapEngineFrom`; absent =
  * Nodaro Prism), its resolution (absent = the engine's default: 480p on
  * Prism, 720p on Pulse; a draft is 480p, and the legacy `quality: "draft"`
- * means 480p draft), and a preview. Everything else in the body is allowed.
+ * means 480p draft; read by the size delivered, `readsDeliveredResolution`:
+ * Prism's 720p, or its 480p where no step is offered), and a preview. On
+ * Nodaro Prism read the new way, a run that asks for `quality: "full"` above
+ * 480p is not covered (the covered run is the stepped-up one). Everything else
+ * in the body is allowed. A trend run is judged the same way: its injected body
+ * is the one the engine reads.
  */
 export function firstRemakeRunAllowed(body: unknown): boolean {
   if (!isRecord(body)) return false
@@ -171,6 +176,13 @@ export function firstRemakeRunAllowed(body: unknown): boolean {
   const engine = body.engine === undefined ? "seedance-2-5" : castSwapEngineFrom(body.engine)
   if (engine === undefined) return false
   const resolution = body.resolution
+  // Nodaro Prism's covered run is the 480p take (stepped up to 720p where the size is the one delivered): what
+  // "economy" (and no `quality`) asks for. "full" above 480p has the engine make that size itself, a different and
+  // dearer run: never covered, however the body is read here. (An engine that reads the body the new way although
+  // this rule would not, a body with an `upscale` key the engine now ignores, would make it Full.) At 480p there is
+  // no step, so "full" is the same run. An engine that does not take the choice is never sent it
+  // (middleware/video-remake-quality.ts).
+  if (engine === "seedance-2-5" && body.quality === "full" && resolution !== "480p") return false
   // Read the new way, Nodaro Prism's covered run is asked by the size it delivers: 720p (its 480p take stepped up),
   // absent = 720p; 480p where the deployment offers no step (then the engine's own size). Never 1080p or 4K.
   if (engine === "seedance-2-5" && readsDeliveredResolution(body)) {
@@ -187,12 +199,20 @@ export function firstRemakeRunAllowed(body: unknown): boolean {
 
 /**
  * Whether the loaded engine reads this body's `resolution` as the size delivered, as the engine decides it: it
- * declares `castSwap.deliveredResolution`, and the body is a direct run (no `trendRun`) that is no draft (`draft:
- * true`, the legacy `quality: "draft"`) and carries no `upscale` key.
+ * declares `castSwap.deliveredResolution`, and the body is no draft (`draft: true`, the legacy `quality: "draft"`),
+ * carries no `upscale` key, and is a direct run (no `trendRun`) or a trend run that says so (`trendRun.delivered:
+ * true`, ee/lib/trends/sizes.ts) on an engine that reads trend runs that way (`castSwap.trendDeliveredResolution`).
+ *
+ * A body that still sends `upscale` (no Nodaro client does) keeps being judged by the engine's size, whichever engine
+ * is loaded: an engine from before stage 5 reads it so, and against one that drops the key the judgement errs only
+ * toward not covering (a 720p preview it would make from 480p is judged a 720p take), never toward covering a larger
+ * run than the offer pays for. It goes once no engine version in use reads `upscale`.
  */
 export function readsDeliveredResolution(body: Record<string, unknown>): boolean {
   if (!loadedEngineDeliversResolution()) return false
-  return !Object.hasOwn(body, "upscale") && body.trendRun === undefined && body.draft !== true && body.quality !== "draft"
+  if (Object.hasOwn(body, "upscale") || body.draft === true || body.quality === "draft") return false
+  if (body.trendRun === undefined) return true
+  return isRecord(body.trendRun) && body.trendRun.delivered === true && loadedEngineDeliversTrendResolution()
 }
 
 /** Whether the request is a Video Remake RUN (either prefix), the one route the offer admits. */

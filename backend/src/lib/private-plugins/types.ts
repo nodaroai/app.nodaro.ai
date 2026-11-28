@@ -212,8 +212,26 @@ export interface PluginVideoGenOptions {
    *  caller prices the draft as the 480p run it is. */
   draft?: boolean
   /** Invoked with the provider task id as soon as it exists. The pro engine
-   * checkpoints it; jobs.provider_task_id is NEVER written (spec §6 linchpin). */
+   * checkpoints it; jobs.provider_task_id is NEVER written (spec §6 linchpin).
+   * A routed segment's id is the route's own (`alt:…`): `getVideoTaskStatus`
+   * reads it through the route. */
   onTaskCreated?: (taskId: string) => void | Promise<void>
+  /**
+   * ADDITIVE-OPTIONAL (`tk.capabilities.alternateRouteV2`). The run's routing
+   * decision as its pricing returned it (`route.token` of
+   * `computeGenerateVideoProPricing` / `computeEditVideoProPricing`): a
+   * Seedance 2.x segment sent with it runs on that route — never the default
+   * one — and its result carries `routed`. Absent: the default route.
+   */
+  routeToken?: string
+  /**
+   * ADDITIVE-OPTIONAL, required with `routeToken`: the segment's own key,
+   * stable across a resume (e.g. `seg-3`). The host records each start under
+   * it before the call, so a crash between the start and `onTaskCreated`
+   * never starts a second paid task for the same segment (the segment then
+   * fails instead), and records the segment's billed cost on the parent.
+   */
+  routeSegmentKey?: string
 }
 
 /**
@@ -223,6 +241,43 @@ export interface PluginVideoGenOptions {
 export interface PluginVideoGenResult {
   url: string
   taskId?: string
+  /**
+   * ADDITIVE-OPTIONAL. A segment that ran on the alternate route (sent with a
+   * `routeToken`): what the route billed, and the credits that charge is (the
+   * host's one rule, markup included). A parent settles its routed segments
+   * from these.
+   */
+  routed?: { costUsd: number | null; chargedCredits: number | null }
+}
+
+/**
+ * ADDITIVE-OPTIONAL on the result of `computeGenerateVideoProPricing` and
+ * `computeEditVideoProPricing` (`tk.capabilities.routedRuns`): present when
+ * the admin routed the model for that service and the route takes the run.
+ * Every figure is CHARGED credits (markup applied by the host); the plugin
+ * does no routed arithmetic. The run:
+ *   1. holds it with `tk.http.reserveRoutedRun(req, reply, jobId, route)`
+ *      (never `reserveCreditsForJob`), which returns the run `token`;
+ *   2. sends every segment with `routeToken: token` and its own stable
+ *      `routeSegmentKey`;
+ *   3. settles with `tk.jobs.settleRoutedRun(usageLogId, jobId, token)` (never
+ *      `commitJobCredits`): the host charges the fee plus each segment from
+ *      the parent's route ledger.
+ * Absent: the default pricing, as always.
+ */
+export interface PluginRoutedRunPricing {
+  /** The signed pricing (not a send token): what `reserveRoutedRun` holds. */
+  readonly quote: string
+  /** Each segment's routed price, charged credits, in segment order (display). */
+  readonly segmentChargedCredits: readonly number[]
+  /** The run's own fee, charged credits. */
+  readonly feeChargedCredits: number
+  /** Keyframes: the worst-case anchor images, charged credits (held; settled at the count generated). */
+  readonly anchorChargedCredits?: number
+  /** fee + every segment, charged credits: what the run holds. */
+  readonly reserveChargedCredits: number
+  /** Present on a workflow run's `proPricing.route` only: the host already held it and bound this send token. */
+  readonly token?: string
 }
 
 /**
@@ -493,6 +548,8 @@ export interface PluginProvidersToolkit {
     state: "processing" | "succeeded" | "failed"
     videoUrl?: string
     contentPolicy?: boolean
+    /** ADDITIVE-OPTIONAL: a routed segment's (`alt:r:` id) billed cost and the credits it charges (null while the route has reported no verified bill: the segment is then charged nothing yet and the run's settlement stays pending, with an alert); recorded on the parent's route ledger by the host. */
+    routed?: { costUsd: number | null; chargedCredits: number | null }
   }>
   /**
    * Mirrors `downloadYouTubeVideo` (`providers/video/youtube-video.ts`),
@@ -1294,6 +1351,10 @@ export interface PluginMediaToolkit {
   applyAudioFx(opts: PluginAudioFxOptions): Promise<{ outputPath: string }>
   /** Mirrors `applyImageWatermark` (`utils/watermark.ts`). */
   applyImageWatermark(buffer: Buffer): Promise<Buffer>
+  /** A completed segment's replay-safe, watermarked storage record. */
+  storeProDeliveryClip?(args: {
+    jobId: string; userId?: string; segment: number; sourceUrl: string; watermark: boolean
+  }): Promise<string>
   /**
    * Mirrors `uploadVideoMaybeWatermark` (`workers/shared.ts`) — also
    * transcodes to browser-safe when `watermark` is false. Used for the final
@@ -1823,6 +1884,7 @@ export interface PluginJobsToolkit {
     status: string
     input_data: Record<string, unknown> | null
     output_data: Record<string, unknown> | null
+    privateUgcAdmission?: unknown
     error_message: string | null
   } | null>
   /**
@@ -1901,6 +1963,36 @@ export interface PluginJobsToolkit {
   settleReservedJob?(input: PluginJobSettlement): Promise<PluginJobSettlementResult>
   checkpointReservedJob?(input: PluginJobSettlementCheckpoint): Promise<void>
   settleCheckpointedJob?(usageLogId: string): Promise<boolean>
+  /**
+   * ADDITIVE-OPTIONAL (`tk.capabilities.routedRuns`). Settles a routed run's
+   * parent job held with `http.reserveRoutedRun`: the host charges the fee plus
+   * each segment the run sent — its billed cost as the route reported it, by
+   * the host's one routed rule, from the parent's route ledger, collecting
+   * above the hold or releasing the rest. A segment that reported no verified
+   * bill leaves the settlement pending, and a bill far above the
+   * run's quote is held for an admin's decision; each raises an internal
+   * admin alert, and the call then rejects with nothing charged.
+   * `token` is the run token `reserveRoutedRun` returned. The plugin passes
+   * no figure. Never use `commitJobCredits` for such a job.
+   */
+  /** Save durable settlement inputs before publishing the delivered result. */
+  prepareRoutedRunSettlement?(
+    usageLogId: string, jobId: string, token: string,
+    opts?: { waiveFee?: boolean; anchorsGenerated?: number; nonVideoChargedCredits?: number },
+  ): Promise<void>
+  settleRoutedRun?(
+    usageLogId: string,
+    jobId: string,
+    token: string,
+    opts?: {
+      /** The run's fee is not charged (a run whose stitch failed: today's rule, the work without the fee). */
+      waiveFee?: boolean
+      /** Keyframes: how many anchor images the run generated; charged at the unit its hold was priced on, never more than it held. */
+      anchorsGenerated?: number
+      /** Delivered auxiliary work, bounded by the signed run quote. */
+      nonVideoChargedCredits?: number
+    },
+  ): Promise<void>
   /** Mirrors `commitJobCredits` (`workers/shared.ts`). */
   commitJobCredits(
     usageLogId: string | null | undefined,
@@ -1922,7 +2014,7 @@ export interface PluginJobsToolkit {
    * check against the current job's cancellation flag, internally throttled
    * to once per 4s.
    */
-  throwIfJobCancelled(): Promise<void>
+  throwIfJobCancelled(options?: { finishStartedVideo?: boolean }): Promise<void>
   /**
    * Shallow-merges `patch` into the job row's `output_data` (read-merge-
    * write) — used for per-segment checkpointing. See `toolkit.ts`'s
@@ -2165,6 +2257,8 @@ export interface PluginCreditReservation {
 
 /** Mirrors `CreditGuardOpts` (`middleware/credit-guard.ts`). */
 export interface PluginCreditGuardOpts {
+  /** Already charged credits for a routed request; undefined uses the ordinary pricing hook. */
+  computeChargedCredits?: (parsedBody: unknown) => number | undefined | Promise<number | undefined>
   computeCredits?: (parsedBody: unknown) => number | Promise<number>
   dedup?: boolean
   /** P14: wealth-check-only guard — the route never reserves in-request, so
@@ -2432,6 +2526,29 @@ export interface PluginHttpToolkit {
     modelResolver: (req: FastifyRequest) => string,
     opts?: PluginCreditGuardOpts,
   ): (req: FastifyRequest, reply: FastifyReply) => Promise<void>
+  /**
+   * ADDITIVE-OPTIONAL (`tk.capabilities.routedRuns`). Holds a routed run
+   * (`PluginRoutedRunPricing` from its pricing) for `jobId`: exactly
+   * `route.reserveChargedCredits` (charged credits — not marked up again),
+   * under the run's fee id, with the same balance check and refusals as
+   * `reserveCreditsForJob`. Resolves the reservation and the run `token`
+   * (bound to this job, its user and the environment, valid 48 h) that every
+   * segment is sent with; undefined when a reply was sent (a refusal, or a
+   * quote that does not verify — 503 `video_route_unavailable`).
+   */
+  /** Quote each UGC take on its selected route, plus the bounded auxiliary work. */
+  quoteUgcRoutedClip?(args: {
+    video: { tool: string; args: Readonly<Record<string, unknown>> }
+    takes: number
+    nonVideoChargedCredits: number
+    hasReferenceAudio?: boolean
+  }): Promise<PluginRoutedRunPricing | undefined>
+  reserveRoutedRun?(
+    req: FastifyRequest,
+    reply: FastifyReply,
+    jobId: string,
+    route: PluginRoutedRunPricing,
+  ): Promise<(PluginCreditReservation & { token: string }) | undefined>
   /** Mirrors `reserveCreditsForJob` (`middleware/credit-guard.ts`). */
   reserveCreditsForJob(
     req: FastifyRequest,
@@ -2638,6 +2755,12 @@ export interface PluginHttpToolkit {
     draft?: boolean
     referenceTaskType?: SeedanceReferenceTaskType
     durationsSec: ReadonlyArray<number | null>
+    /**
+     * ADDITIVE-OPTIONAL. The service the clip's job will run under (the parent's
+     * job type, e.g. "cast-swap"): a model the admin routed for it is quoted as
+     * its admission will hold it. Absent: the type of the job this call runs in.
+     */
+    routeService?: string
   }): Promise<{ hold: number; expected: number | null }>
   computeSeedanceDraftFinalizePricing?(args: {
     /** The draft's delivered length in seconds (rounded to the billed whole seconds). */
@@ -2646,6 +2769,12 @@ export interface PluginHttpToolkit {
     refVideoDurationsSec?: ReadonlyArray<number | null>
   }): Promise<{ creditId: string; baseCredits: number }>
   computeGenerateVideoProPricing(args: {
+    /** Planning alone does not reserve or contact a video supplier. */
+    planOnly?: boolean
+    /** The first generated segment continues a supplied opening video. */
+    hasOpeningVideo?: boolean
+    /** Re-plan an already reserved run without selecting its supplier again. */
+    existingReservation?: boolean
     sourceSegmentDurations?: number[]
     segmentMode?: "short" | "long" | "max"
     provider: string
@@ -2694,7 +2823,7 @@ export interface PluginHttpToolkit {
      *  does not depend on audio ignores it. Absent → the engine's own default,
      *  on. Additive-optional. */
     generateAudio?: boolean
-  }): Promise<GenerateVideoProPricing>
+  }): Promise<GenerateVideoProPricing & { /** ADDITIVE-OPTIONAL: present when the run is routed (`PluginRoutedRunPricing`). */ route?: PluginRoutedRunPricing }>
   /**
    * Mirrors `computeEditVideoProPricing` (`ee/billing/edit-video-pro-credits.ts`)
    * — same runtime-gated dynamic `import()` shim as
@@ -2706,7 +2835,7 @@ export interface PluginHttpToolkit {
     sourceUrl?: string
     spanStart: number
     spanEnd: number
-  }): Promise<EditVideoProPricing>
+  }): Promise<EditVideoProPricing & { /** ADDITIVE-OPTIONAL: present when the run is routed (`PluginRoutedRunPricing`). */ route?: PluginRoutedRunPricing }>
   /**
    * Mirrors `computeGenerateVideoProContinuationPricing`
    * (`ee/billing/generate-video-pro-credits.ts`, 2026-07-21) — the CONTINUE
@@ -2722,6 +2851,10 @@ export interface PluginHttpToolkit {
    * continue surface; the continue route responds 503 instead of crashing.
    */
   computeGenerateVideoProContinuationPricing?(args: {
+    hasOpeningVideo?: boolean
+    /** Authenticated source run: a continuation stays on its original supplier. */
+    sourceJobId?: string
+    sourceUserId?: string
     provider: string
     resolution: string
     /** The PARENT plan's per-segment durations (money-authoritative — from
@@ -2745,7 +2878,7 @@ export interface PluginHttpToolkit {
      *  does not depend on audio ignores it. Absent → the engine's own default,
      *  on. Additive-optional. */
     generateAudio?: boolean
-  }): Promise<GenerateVideoProPricing>
+  }): Promise<GenerateVideoProPricing & { /** ADDITIVE-OPTIONAL: present when the model is routed for the service (`PluginRoutedRunPricing`). */ route?: PluginRoutedRunPricing }>
   /**
    * Mirrors `sendInternalError` (`lib/http-errors.ts`) — logs `err` server-side
    * and sends a sanitized `internal_error` 500 with the curated `clientMessage`
@@ -4264,6 +4397,37 @@ export interface PluginCapabilities {
    * image-to-video and text-to-video lanes, with today's same-price fallback.
    */
   readonly alternateRouteV2?: boolean
+  /**
+   * The host holds and settles a plugin's routed multi-segment run end to end
+   * (`PluginRoutedRunPricing`, `http.reserveRoutedRun`, `jobs.settleRoutedRun`,
+   * `routeSegmentKey`): a plugin routes a run only when this is true.
+   */
+  readonly routedRuns?: boolean
+  /**
+   * The host honours `jobs.throwIfJobCancelled({ finishStartedVideo: true })`:
+   * a stop requested while a video send is under way lets that send finish
+   * (it is delivered and charged) and starts nothing after it. Absent: an
+   * older host, where a stop cancels as it always did; a plugin must not
+   * pass the option's behaviour off as available there.
+   */
+  readonly proStopFinishesSegment?: boolean
+  /**
+   * The host accepts a completion delivered without the normal assembly:
+   * `output_data.deliveryMode` `"simple_cuts"` or `"separate_clips"`, with
+   * `unassembledClips` and `deliveryWarnings`, and retries the assembly in
+   * the background, through `services.videoAssemblyRecovery`, at no charge. Absent: an older host; a plugin completes a
+   * run only with its assembled video there.
+   */
+  readonly proDeliveryFallback?: boolean
+  /**
+   * Video Remake's Quality choice (2026-11-27, lib/video-remake-quality.ts): this host knows
+   * `quality: "full" | "economy"` on a Video Remake run and its estimate — its first-Remake offer reads it
+   * (a Full run above 480p is not covered) — and reads the estimate's `quality` / `qualityOffered` /
+   * `engineResolution` and the completion's `quality` and before-upscale fields. The engine honours the
+   * choice only where this is true; on an older host it reads the older "draft" alone and refuses the two
+   * values, and makes every request exactly as before the choice.
+   */
+  readonly castSwapQuality?: boolean
 }
 
 /**
@@ -5587,15 +5751,20 @@ export interface PluginSupports {
      * turned it on (read at load). Where it is offered is the estimate's to
      * say (`upscaleOffered`), never this flag's. Absent: none of this, and the
      * field is not sent (lib/video-remake-upscale-choice.ts).
+     *
+     * The request read that way is removed (stage 5 of the delivered
+     * resolution): the platform answers none of these fields any more (a
+     * quote's are dropped on the way out, ee/lib/video-remake-estimate-answer.ts)
+     * and reads this flag only to word the admin's Precise upscale rows as the
+     * step's kill switches.
      */
     readonly upscaleChoice?: boolean
     /**
      * What the upscale choice's "next" delivers, per engine (or Flash choice) and engine size, e.g.
      * `{ "nodaro-prism": { "480p": "720p", "720p": "1080p", "1080p": "4k" }, … }` (2026-11-24). What the
-     * engine CAN do, present only while its switch is on: the platform removes what the admin switched off
-     * (`nodaro_motion_precise_upscale` read as a kill switch, as the engine reads it) and answers the rest as
-     * `upscaleTo` on `GET /v1/video-remake/style-choice`. Read defensively (`upscaleNextOf`,
-     * lib/video-remake-upscale-choice.ts): an unknown engine id, size or target is dropped, never thrown on.
+     * engine CAN do, present only while its switch is on. The platform answered it, less what the admin
+     * switched off, as `upscaleTo` on `GET /v1/video-remake/style-choice` until the request read that way was
+     * removed (stage 5): it is read by nothing now, and kept while engines still declare it.
      */
     readonly upscaleNext?: PluginCastSwapUpscaleNext
     /**
@@ -5616,6 +5785,18 @@ export interface PluginSupports {
      * (lib/video-remake-portion.ts).
      */
     readonly shortClips?: boolean
+    /**
+     * Long clips (decided 2026-11-25 and 2026-11-27): a whole run on one engine (Nodaro Prism, not its
+     * Flash choice) with the Precise style takes a source clip longer than 30 s, up to `maxSourceSec`
+     * seconds, and runs it in parts joined into one result of the source's length. No request field:
+     * a long source simply runs. Over `maxSourceSec`, 400 `long_clip_too_long`; Full Quality of such a
+     * run, 409 `long_clip_no_full_quality`. Such a job carries its part plan (`longClip` on the queue
+     * payload, `__longClip` hidden in its input) and may complete with only its first parts
+     * (`partial` in its output, `durationSec` the delivered length). Declared only while the
+     * deployment's engine switch is on (read at load). Absent, or a `maxSourceSec` that is not a
+     * finite number over 30: none of this (lib/video-remake-portion.ts).
+     */
+    readonly longClips?: { readonly maxSourceSec: number }
     /**
      * Video Remake's delivered resolution (2026-11-26): a run and its estimate that carry no `upscale`
      * key read `resolution` as the size DELIVERED (`"480p" | "720p" | "1080p" | "4k"`), however the engine
@@ -5638,6 +5819,35 @@ export interface PluginSupports {
      * lib/video-remake-delivered-resolution.ts): an unknown engine id, size or `from` is dropped, never thrown on.
      */
     readonly deliveredResolutions?: PluginCastSwapDeliveredResolutions
+    /**
+     * Trend runs read by the size delivered too (stage 4 of the delivered resolution): a trend run body
+     * whose `trendRun` carries `delivered: true` has its `resolution` read as the size DELIVERED, as a
+     * direct run's is (`deliveredResolution`, its refusals and its answers included); a trend body
+     * without the marker (a draft, or one composed by an older platform) is read as before. Declared
+     * only while the deployment has turned it on, and read by the platform only beside
+     * `deliveredResolution`: it adds the marker, and lists a trend's delivered sizes, only from an
+     * engine that declares both (lib/video-remake-delivered-resolution.ts
+     * `engineDeliversTrendResolution`). Absent: every trend run as before.
+     */
+    readonly trendDeliveredResolution?: boolean
+    /**
+     * Video Remake's Quality choice (2026-11-27): a run and its estimate read the delivered-resolution way take
+     * `quality: "full" | "economy"` ("economy", and a request naming neither: the size made one below and stepped
+     * up, as before the choice; "full": the engine makes the delivered size itself, no step). Only for a request
+     * that names it, the estimate answers `quality`, `qualityOffered` and (economy) `engineResolution`, and the
+     * completed job's output `quality` and, where the step was applied, the take before it. Declared only while
+     * the delivered-resolution mode is on (read at load). Absent: the engine accepts the older `quality: "draft"`
+     * alone and refuses any other value, so the platform never sends it the choice
+     * (middleware/video-remake-quality.ts, lib/video-remake-quality.ts).
+     */
+    readonly quality?: boolean
+    /**
+     * The delivered sizes each engine choice can make itself in Full, e.g. `{ "nodaro-prism": ["480p", "720p",
+     * "1080p"], "nodaro-pulse": ["720p", "1080p"] }`. The platform keeps those a step also delivers on this
+     * deployment and answers them as `quality` on `GET /v1/video-remake/style-choice`. Read defensively
+     * (`qualityFullOf`, lib/video-remake-quality.ts): an unknown engine id or size is dropped, never thrown on.
+     */
+    readonly qualityFull?: Readonly<Record<string, ReadonlyArray<"480p" | "720p" | "1080p" | "4k">>>
   }
 }
 
@@ -6335,7 +6545,22 @@ export interface PluginUgcService {
   clipContentKey?(ticket: unknown, nonce: number, runKey?: string): string | null
 }
 
+export interface PluginVideoAssemblyInput {
+  jobId: string
+  jobType: "generate-video-pro" | "edit-video-pro"
+  userId: string
+  shouldWatermark: boolean
+  attemptId: string
+  clips: Array<{ segment: number; url: string }>
+  canvas?: { width: number; height: number }
+  retainedCuts?: { headUrl?: string; tailUrl?: string }
+}
+
 export interface PluginServices {
+  /** Finish a previously delivered set of clips using local media operations. */
+  videoAssemblyRecovery?: {
+    assemble(input: PluginVideoAssemblyInput): Promise<{ videoUrl: string }>
+  }
   /** Public read projection for extension documents. Called only after the
    * host's share-by-link authorization. Null means unsupported; never return
    * raw authoring state as a fallback. Pure: no jobs, storage or writes. */
@@ -6454,9 +6679,9 @@ export interface PluginAlternateRouteRequest {
 
 /**
  * Why `start` refused. `created` is what the plugin knows of the upstream:
- *   - "none": refused before a task existed (core falls back at once);
- *   - "unknown": no answer (a timeout) — a task may exist and be billed. Core
- *     falls back and raises an alert naming the job. Never retry such a create.
+ *   - "none": refused before a task existed;
+ *   - "unknown": no answer (a timeout) — a task may exist and be billed.
+ * Never retry an unknown create. Admin-routed jobs never change suppliers.
  * A rejection without this shape is read as "unknown".
  */
 export interface PluginAlternateRouteStartError {
@@ -6479,13 +6704,34 @@ export type PluginAlternateRoutePoll =
   | {
       state: "done"
       resultUrl: string
-      /** What the upstream billed for the task, in USD: a V2 host settles a routed run's charge from it. */
+      /**
+       * The task's verified bill, in USD: a V2 host settles a routed run's
+       * charge from it, and from nothing else. Absent: the settlement stays
+       * pending.
+       */
       providerCostUsd?: number
+      /**
+       * ADDITIVE-OPTIONAL. What `providerCostUsd` is: "receipt", a money amount
+       * the upstream reported for the task; "billed-seconds", the seconds the
+       * upstream's own record says it billed (`billedSec`) at the route's
+       * agreed rate. Both are a verified bill. Absent with a
+       * `providerCostUsd`: read as "receipt".
+       */
+      costBasis?: "billed-seconds" | "receipt"
+      /** A rate-table estimate from observed usage. Recorded; never a bill, and never settled from. */
+      estimatedCostUsd?: number
       providerMs?: number
       /** ADDITIVE-OPTIONAL (V2). The seconds the upstream billed (compared with the admission quote's). */
       billedSec?: number
+      /**
+       * ADDITIVE-OPTIONAL (V2). When the upstream's own record says the task
+       * finished (an ISO timestamp). The host counts the task's bill on that
+       * day in its daily reconciliation against `spend()`; absent, it uses the
+       * time it first read the task done.
+       */
+      completedAt?: string
     }
-  /** Ended without a result and NOT charged (a refusal included): core falls back. */
+  /** Ended without a result and NOT charged (a refusal included). Admin-routed jobs never fall back. */
   | { state: "failed" | "expired"; message: string; code?: string }
   /** This process cannot read that task (no key here): core leaves the job alone for a process that can. */
   | { state: "unreadable" }
@@ -6495,7 +6741,10 @@ export interface PluginAlternateRoutesService {
    * Pure and synchronous: the plugin's switch and rules. A route id, or null for "not mine".
    *
    * Two kinds of consult (a V2 host):
-   *   - LEGACY: the admin setting leaves the model on the default route. Only
+   *   - LEGACY: no routing policy has ever been saved in this environment
+   *     (once an admin saves one, even one that leaves every model on the
+   *     default route, this consult never happens again for a routable
+   *     model: the saved choice is the only thing that routes). Only
    *     the image-to-video and text-to-video lanes ask, at run time, with the
    *     prepared request exactly as an older host builds it — `service` and
    *     `kind` are ABSENT. A yes runs at the default price with today's
@@ -6505,13 +6754,13 @@ export interface PluginAlternateRoutesService {
    *     known there (`service` and `kind` always set; media URLs as the person
    *     gave them, before re-encoding). A yes is stored on the job and held
    *     from `quote()`; the run is never asked again and never falls back. A
-   *     null keeps that one request on the default route at the default price.
+   *     null refuses that request without selecting a different supplier.
    */
   accepts(req: PluginAlternateRouteRequest): { routeId: string } | null
   /**
    * Submits the run, once per job (core holds the job before calling). Resolves
    * with an opaque task reference; rejects with a `PluginAlternateRouteStartError`.
-   * `plannedCostUsd` is recorded when the finished task reports no figure.
+   * `plannedCostUsd` is an estimate only; it never replaces a monetary receipt.
    */
   start(
     routeId: string,
@@ -6541,12 +6790,31 @@ export interface PluginAlternateRoutesService {
    * `price_not_configured`). `prices()` is for listings only.
    */
   quote?(req: PluginAlternateRouteRequest): { billedSeconds: number; usd: number } | null
+  /** A pricing-only plan: no prompts or invented media URLs; never submits a task. */
+  quotePlan?(plan: {
+    model: string
+    service: string
+    resolution: string
+    outputSec: number
+    referenceVideoDurationsSec: readonly number[]
+    referenceTaskType?: "edit" | "extend" | "reference"
+    draft?: boolean
+    generateAudio?: boolean
+  }): { routeId: string; usd: number; billedSeconds: number } | null
   /**
    * ADDITIVE-OPTIONAL (V2). Whether this route knows `model` at all (the
    * admin page greys out a model it cannot take, and the host refuses to
    * route one). Pure; never throws. Absent = the models `prices()` names.
    */
   capable?(model: string): boolean
+  /**
+   * ADDITIVE-OPTIONAL (V2). Why `accepts` would refuse `req`: a stable
+   * kebab-case code (e.g. "adaptive-without-first-frame"), or null when it
+   * would accept. Pure; never throws. The host records it beside a refused
+   * request (Admin → Video route's coverage). Absent: the
+   * host records only that the route declined.
+   */
+  explain?(req: PluginAlternateRouteRequest): string | null
   /**
    * ADDITIVE-OPTIONAL (V2). The route's prepaid account right now: what it
    * can still spend and what running tasks hold. Null when it cannot be read.
@@ -6558,7 +6826,19 @@ export interface PluginAlternateRoutesService {
    * `sinceIso` (an ISO timestamp), and the video seconds it billed. Null when
    * it cannot be read. Never throws.
    */
-  spend?(sinceIso: string): Promise<{ actualUsd: number; videoSeconds: number } | null>
+  spend?(sinceIso: string): Promise<{ actualUsd: number; videoSeconds: number | null } | null>
+  /**
+   * ADDITIVE-OPTIONAL. What this route takes TODAY with no routing policy
+   * saved (the legacy consult): each model and service it runs on its own
+   * rules. `service` is the job type of a platform video lane, or of the
+   * plugin feature whose steps it takes. The Admin
+   * page shows these as on the alternate route today and pre-fills an
+   * environment's FIRST save with them, so saving a policy does not silently
+   * move that traffic to the default route. Display and pre-fill only:
+   * nothing is routed from it. Pure and synchronous; never throws. Absent:
+   * the host cannot know, and the page says so before the first save.
+   */
+  legacyRouting?(): ReadonlyArray<{ model: string; service: string }>
 }
 
 // ============================================================================

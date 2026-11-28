@@ -1,11 +1,14 @@
 "use client"
 
+import { useNodeVideoPrice } from "@/hooks/use-seedance-ref-price"
 import { useT } from "@/lib/i18n"
 import { memo, useState, useMemo, useEffect } from "react"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
 import { useShallow } from "zustand/react/shallow"
 import { Scissors, Loader2, AlertCircle, Type, Images, Video } from "lucide-react"
 import { BaseNode } from "./base-node"
+import { useRepairedCanvasVideo } from "@/hooks/use-repaired-video"
+import { ProClipDownloads } from "./pro-clip-downloads"
 import { NodeQuickStrip } from "./node-quick-strip"
 import { HandleWithPopover, HANDLE_COLORS, TEXT_HANDLE_COLOR } from "./handle-with-popover"
 import { EditableNodeLabel } from "./editable-node-label"
@@ -29,25 +32,6 @@ const isPickerType = (s: string) => VISUAL_PARAMETER_PICKER_NODE_TYPES.has(s)
 const ACCEPTS_VIDEO      = (t: string) => isValidEditVideoProConnection("video",           t, isPickerType)
 const ACCEPTS_PROMPT     = (t: string) => isValidEditVideoProConnection("prompt",          t, isPickerType)
 const ACCEPTS_IMAGE_REFS = (t: string) => isValidEditVideoProConnection("imageReferences", t, isPickerType)
-
-// Coarse popup-time credit ESTIMATE only, matching NODE_DEFINITIONS' documented
-// default scenario (provider seedance-2, spanStart 0, spanEnd 8 — an 8s
-// single-segment replace at 720p with a probed tail ref; see nodes.ts and
-// ee/billing/edit-video-pro-credits.ts). UNLIKE generate-video-pro's badge —
-// one buildVideoCreditModelIdentifier() lookup that IS the accurate
-// default-case answer — edit-video-pro's real cost is a multi-term formula
-// (fee + per-second ref-rate × (span + head/tail-loss + ref adjustments))
-// with no single cache key to resolve it live client-side; the ONLY key that
-// exists today ("edit-video-pro", the flat fee-base) resolves to just 100,
-// which would understate the true charge by roughly an order of magnitude —
-// worse than a clearly-labeled coarse constant. Task 14's
-// estimateEditVideoProCredits(data) replaces this with the real per-render
-// dynamic estimate; the true charge is always computed server-side at
-// probe-at-reserve time regardless.
-//
-// Re-denominated 2026-07-30 (was 67 at the old base, alongside a fee-base of
-// 10). A coarse constant still has to be coarse in the RIGHT units.
-const EDIT_VIDEO_PRO_CREDIT_FALLBACK = 670
 
 // Bottom-anchored 3-pip stack, 28px apart (mirrors generate-video-pro-node's
 // spacing convention). `video` sits closest to the bottom — it's the
@@ -75,9 +59,10 @@ function EditVideoProNodeComponent({ id, data, selected }: NodeProps) {
   const status = (nodeData.executionStatus as string | undefined) ?? "idle"
   const results = (nodeData.generatedResults as GeneratedResult[] | undefined) ?? []
   const activeIndex = (nodeData.activeResultIndex as number | undefined) ?? 0
+  useRepairedCanvasVideo(id, results)
   const activeResult = results[activeIndex]
   const activeUrl = activeResult?.url ?? (nodeData.generatedVideoUrl as string | undefined)
-  const credits = EDIT_VIDEO_PRO_CREDIT_FALLBACK
+  const { credits } = useNodeVideoPrice(id, 0)
 
   // Reset the video-error gate whenever the active result changes (mirrors
   // generate-video-pro-node.tsx / voice-changer-pro-node.tsx) so a stale
@@ -246,6 +231,7 @@ function EditVideoProNodeComponent({ id, data, selected }: NodeProps) {
           </div>
         )}
       </BaseNode>
+      <ProClipDownloads clips={activeResult?.unassembledClips} />
 
       {/* Video result: rich player overlay filling the transparent node —
           same shared component the other video-result nodes use (expand /

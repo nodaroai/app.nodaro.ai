@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest"
-import { render, screen } from "@testing-library/react"
+import { fireEvent, render, screen } from "@testing-library/react"
 
 // ---------------------------------------------------------------------------
 // Mocks — all declared before the component import. Harness mirrors
@@ -71,6 +71,8 @@ vi.mock("../editable-node-label", () => ({
 vi.mock("../node-quick-strip", () => ({
   NodeQuickStrip: ({ children }: any) => <div data-testid="quick-strip">{children}</div>,
 }))
+
+vi.mock("@/hooks/use-auth", () => ({ useCachedUserId: () => undefined, getCachedUserId: () => undefined }))
 
 vi.mock("../gvp-continue-control", () => ({
   GvpContinueControl: () => null,
@@ -172,6 +174,23 @@ describe("GenerateVideoProNode — content-policy rewrite disclosure", () => {
     expect(
       screen.getByText(/Segment 2 prompt was adjusted to pass the provider's content screen\./),
     ).toBeInTheDocument()
+  })
+
+  it("keeps the first clip playable and provides a download for every delivered segment", () => {
+    const clips = [{ url: BASE_RESULT.url, segment: 1 }, { url: "https://cdn.example.com/part-2.mp4", segment: 2 }]
+    renderNode({ executionStatus: "completed", generatedResults: [{ ...BASE_RESULT, unassembledClips: clips }] })
+    expect(screen.getByTestId("video-result-overlay")).toBeInTheDocument()
+    fireEvent.click(screen.getByText("Download separate clips (2)"))
+    expect(screen.getByRole("link", { name: /Play · 2/i })).toHaveAttribute("href", clips[1]!.url)
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {})
+    try {
+      fireEvent.click(screen.getByRole("button", { name: /Download · 2/i }))
+      // An address on no storage this deployment names keeps the proxy link (lib/video-result-download.ts); the server names the file.
+      expect(click.mock.instances[0]).toHaveProperty("download", "")
+      expect((click.mock.instances[0] as unknown as HTMLAnchorElement).href).toContain(`/v1/image-proxy?url=${encodeURIComponent(clips[1]!.url)}&download=1`)
+    } finally {
+      click.mockRestore()
+    }
   })
 
   it("pluralizes for multiple rewritten segments", () => {

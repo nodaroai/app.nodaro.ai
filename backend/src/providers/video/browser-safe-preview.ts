@@ -29,6 +29,7 @@ import { deliveredPictureFilter, isHdr } from "./extend-stitch-args.js"
 import { cameraMegapixelsOf, canvasPeakMemoryMiB, UHD_CANVAS } from "./ffmpeg-memory-model.js"
 import { ffmpegEffectiveThreads } from "./ffmpeg-threads.js"
 import { probeMatched, type MatchedProbe } from "./matched-encode.js"
+import { workingCopyCodecArgs } from "./working-copy-encode.js"
 
 /**
  * Whether the browser-safe step would change this file: its picture is not
@@ -187,6 +188,19 @@ function previewColourTags(probe: MatchedProbe): string[] {
  * 128k (as the browser-safe step has always written it).
  */
 export function previewEncodeArgs(input: string, output: string, probe: MatchedProbe, crf: string = PREVIEW_DEFAULT_CRF): string[] {
+  return pictureChainArgs(input, output, probe, ["-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "fast", "-crf", crf])
+}
+
+/**
+ * The one chain the preview and the editing source are encoded through: the
+ * picture filter (`deliveredPictureFilter`: an HDR picture tone-mapped to SDR,
+ * a full-range one to limited range, odd sides cropped to even), the colour
+ * tags, the sound as AAC 128k and the MP4 layout. Only `quality` (the picture
+ * codec's options) tells the two apart, so an editing step's source holds the
+ * very frames, timing and sound of the preview — the file its run was priced
+ * on — at a higher picture quality.
+ */
+function pictureChainArgs(input: string, output: string, probe: MatchedProbe, quality: readonly string[]): string[] {
   const filter = deliveredPictureFilter(probe)
   return [
     // Errors only, and no progress line: a long encode of a damaged picture
@@ -194,12 +208,61 @@ export function previewEncodeArgs(input: string, output: string, probe: MatchedP
     "-v", "error", "-nostats",
     "-y", "-i", input,
     ...(filter ? ["-vf", filter] : []),
-    "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "fast", "-crf", crf,
+    ...quality,
     ...previewColourTags(probe),
     "-movflags", "+faststart",
     "-c:a", "aac", "-b:a", "128k",
     output,
   ]
+}
+
+/**
+ * The picture options of an editing step's source (decided 2026-11-22): the
+ * working copy's near-lossless 8-bit H.264 (`working-copy-encode.ts`: CRF 6,
+ * preset fast, its rate cap) in 4:2:0, the format every editing step was built
+ * on (the preview's), so a step that copies the picture still writes a file a
+ * browser plays.
+ */
+export const EDITING_SOURCE_PICTURE_ARGS: readonly string[] = workingCopyCodecArgs("yuv420p")
+
+/**
+ * The ffmpeg arguments of an editing step's source made from a kept original
+ * (or an HDR file) `input`, probed as `probe`: the preview's chain
+ * (`pictureChainArgs`) at the working copy's quality.
+ */
+export function editingSourceEncodeArgs(input: string, output: string, probe: MatchedProbe): string[] {
+  return pictureChainArgs(input, output, probe, EDITING_SOURCE_PICTURE_ARGS)
+}
+
+/**
+ * Encode an editing step's source of `input` (probed as `probe`) to `output`:
+ * admitted at the preview's memory prediction, held to `timeoutMs` once
+ * admitted (at most the preview's own limit), stopped by `signal` like the
+ * preview; `onAdmitted` is told when it starts. A result with no video frame
+ * is a failure, as the preview's is.
+ */
+export async function encodeEditingSource(
+  input: string,
+  output: string,
+  probe: MatchedProbe,
+  opts: { readonly timeoutMs: number; readonly signal?: AbortSignal; readonly onAdmitted?: () => void },
+): Promise<string> {
+  const { signal } = opts
+  try {
+    await runFfmpeg(editingSourceEncodeArgs(input, output, probe), Math.min(opts.timeoutMs, previewTimeoutMs(probe)), {
+      peakMemoryMiB: previewPeakMemoryMiB(probe),
+      ...(signal ? { signal, stopOnAbort: true } : {}),
+      ...(opts.onAdmitted ? { onAdmitted: opts.onAdmitted } : {}),
+    })
+  } catch (err) {
+    if (signal?.aborted) throw signal.reason ?? err
+    throw err
+  }
+  const check = await decodedVideoFrames(output, 1)
+  if (check.kind !== "frames") {
+    throw Object.assign(new Error("[browser-safe-preview] the editing source has no video frame"), check.kind === "none" ? { noVideoFrame: true as const } : { cause: check.cause })
+  }
+  return output
 }
 
 /** The picture size the preview is sized for: the probe's, else 4K (the largest a provider delivers today). */
@@ -240,10 +303,21 @@ export const PREVIEW_MAX_TIMEOUT_MS = 30 * 60 * 1000
  * (`lib/video-result-store.ts`).
  */
 export function previewTimeoutMs(probe: MatchedProbe): number {
+  const wanted = previewAllowanceMs(probe)
+  if (wanted === undefined) return PREVIEW_MAX_TIMEOUT_MS
+  return Math.min(PREVIEW_MAX_TIMEOUT_MS, Math.max(DEFAULT_FFMPEG_TIMEOUT_MS, wanted))
+}
+
+/**
+ * The time the preview's model allows a picture's encode before any floor or
+ * cap: `PREVIEW_SEC_PER_4K_SEC` per second of picture, scaled by its size
+ * against 4K; undefined when its length does not read. What an editing
+ * source's conform is checked against before it starts (`editing-source.ts`).
+ */
+export function previewAllowanceMs(probe: MatchedProbe): number | undefined {
   const seconds = probe.videoDurationSec ?? probe.durationSec
-  if (seconds === undefined || !(seconds > 0)) return PREVIEW_MAX_TIMEOUT_MS
+  if (seconds === undefined || !(seconds > 0)) return undefined
   const canvas = previewCanvas(probe)
   const scale = (canvas.width * canvas.height) / (UHD_CANVAS.width * UHD_CANVAS.height)
-  const wanted = Math.ceil(seconds * PREVIEW_SEC_PER_4K_SEC * scale * 1000)
-  return Math.min(PREVIEW_MAX_TIMEOUT_MS, Math.max(DEFAULT_FFMPEG_TIMEOUT_MS, wanted))
+  return Math.ceil(seconds * PREVIEW_SEC_PER_4K_SEC * scale * 1000)
 }

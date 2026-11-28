@@ -1,6 +1,6 @@
 ---
-generated_at: 2026-11-18T19:43:09.061Z
-generated_from: d0de23eefc
+generated_at: 2026-11-27T15:50:40.627Z
+generated_from: 4162b88591
 ---
 
 # Nodaro Workflow Editor — General Patterns
@@ -165,6 +165,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `list` — List
 - `llm-chat` — Generate Text - Any LLM
 - `location` — Location Asset
+- `long-image` — Long Image
 - `loop-subject` — Loop Subject
 - `loop-video` — Loop Video
 - `lottie-overlay` — Lottie Overlay

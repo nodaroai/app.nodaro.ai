@@ -122,7 +122,7 @@ describe("every row of the batch names its clip (editor)", () => {
         k === c.failedIteration ? [] : [[results[k]!, { url: results[k]!, quality: "proxy", clipKey }] as const],
       ),
     )
-    const stamps = fanOutRowStamps("apply-edl", results, landed, rowSent!)
+    const stamps = fanOutRowStamps("apply-edl", results, results.map(url => landed.get(url)), rowSent!)
     expect(stamps[c.failedIteration]).toEqual(c.expectedFailedStamp)
     const plan = planOf(c)
     const nodes = [plan, ...c.nodes, fixture.render]
@@ -141,14 +141,14 @@ describe("every row of the batch names its clip (editor)", () => {
   it("a row the batch never ran is marked cancelled, its clip kept; a failed one is not", () => {
     const c = fixture.cases.find((x) => (x as { expectedStamps?: unknown }).expectedStamps)!
     const { rowSent } = run(c)
-    const stamps = fanOutRowStamps("apply-edl", ["", "", ""], new Map(), rowSent!, new Set([2]))
+    const stamps = fanOutRowStamps("apply-edl", ["", "", ""], [], rowSent!, new Set([2]))
     expect(stamps).toEqual([
       { quality: "proxy", clipKey: "0-1000" },
       { quality: "proxy", clipKey: "4000-5000" },
       { quality: "proxy", clipKey: "6000-7000", cancelled: true },
     ])
     // Not a render: nothing was sent for, so a stopped row is `{}` as before.
-    expect(fanOutRowStamps("generate-image", [""], new Map(), undefined, new Set([0]))).toEqual([{}])
+    expect(fanOutRowStamps("generate-image", [""], [], undefined, new Set([0]))).toEqual([{}])
   })
 
   it("a failed iteration's row still names its clip: the same stamps the server assembles", () => {
@@ -164,7 +164,7 @@ describe("every row of the batch names its clip (editor)", () => {
           k === failedIteration ? [] : [[results[k]!, { url: results[k]!, quality: "proxy", clipKey }] as const],
         ),
       )
-      expect(fanOutRowStamps("apply-edl", results, landed, rowSent!), c.name).toEqual(expectedStamps)
+      expect(fanOutRowStamps("apply-edl", results, results.map(url => landed.get(url)), rowSent!), c.name).toEqual(expectedStamps)
     }
   })
 })
@@ -195,6 +195,6 @@ describe("both engines stamp through the one rule, on the list row only", () => 
     expect(orchestrator).toMatch(/assembleFanOutResult\(settled, items\.length, node\.type, rowSent\)/)
     const list = read("../list-execution.ts")
     expect(list).toMatch(/browserRenderRowSentStamps\([^)]*fanOut\.rows\)/)
-    expect(list).toMatch(/fanOutRowStamps\(node\.type, results, landed, rowSent, cancelledRows\)/)
+    expect(list).toMatch(/fanOutRowStamps\(node\.type, results, landedRows, rowSent, cancelledRows\)/)
   })
 })

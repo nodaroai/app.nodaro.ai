@@ -90,6 +90,8 @@ Motion sheets are **compose-only**: they use the motion clips the entity **alrea
 |----------|------|---------|
 | Motion sheet overlaying 4 motion clips the entity already has | `0 + 66` | **66**<!-- credits: reference-sheet:assembly-motion --> |
 
+A motion sheet's clips are read the way an editing node reads its video input: from a clip's kept original when it has one (an HDR, 10-bit or HEVC generation: see [Video originals and previews](../../design/video-original-and-preview.md)), converted to SDR first when its picture is HDR (the job's output then carries `warningCode: "hdr_tone_mapped"`), else from the clip as given. The sheet itself is an 8-bit H.264 MP4, as before.
+
 ## Requirements & errors
 
 - The connected entity **must have a saved main image**. Without one, the node returns `main_image_required` — approve a main image in the entity's Studio first.

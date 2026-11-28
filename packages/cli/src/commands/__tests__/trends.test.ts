@@ -232,8 +232,14 @@ describe("trends command", () => {
     expect(emit).toHaveBeenCalledWith({ jobId: "j1" }, expect.objectContaining({ json: true }))
   })
 
+  it("--resolution 4k is sent as it is: whether the trend offers it is the server's to say (its page lists the sizes delivered)", async () => {
+    mocks.run.mockResolvedValueOnce({ jobId: "j1" })
+    await runCmd("trends", "run", "dance", "--slot", "p=https://u", "--resolution", "4k")
+    expect(mocks.run.mock.calls[0]![1]).toEqual({ slots: { p: { images: ["https://u"] } }, resolution: "4k" })
+  })
+
   it("an unknown --resolution is refused by the parser", async () => {
-    await expect(runCmd("trends", "run", "dance", "--resolution", "4k")).rejects.toThrow()
+    await expect(runCmd("trends", "run", "dance", "--resolution", "8k")).rejects.toThrow()
     expect(mocks.run).not.toHaveBeenCalled()
   })
 

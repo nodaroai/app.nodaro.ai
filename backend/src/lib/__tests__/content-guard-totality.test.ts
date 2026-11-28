@@ -15,7 +15,7 @@
  *
  * `// @test-watches` is for the test selector; the reads are direct.
  */
-// @test-watches backend/src/providers/kie/image.ts backend/src/lib/prompt-policy.ts backend/src/lib/insert-job.ts backend/src/lib/http-errors.ts backend/src/services/workflow-engine/node-executor.ts backend/src/routes/character-training.ts backend/src/*.ts Dockerfile
+// @test-watches backend/src/providers/kie/image.ts backend/src/providers/kie/long-image.ts backend/src/lib/prompt-policy.ts backend/src/lib/insert-job.ts backend/src/lib/http-errors.ts backend/src/services/workflow-engine/node-executor.ts backend/src/routes/character-training.ts backend/src/*.ts Dockerfile
 import { describe, it, expect } from "vitest"
 import { readdirSync, readFileSync } from "node:fs"
 import { resolve, dirname } from "node:path"
@@ -32,6 +32,8 @@ describe("content-guard totality", () => {
   // video's wire check is a change of its own, not yet made.)
   it.each([
     ["providers/kie/image.ts", "buildKlingImage4Request(", "runKieTask("],
+    // Kling 4.0's long image (Long Image) runs the same mention pass on its prompt.
+    ["providers/kie/long-image.ts", "buildLongImageRequest(run, sentUrlOf)", "runKieTask("],
   ])("%s asks the guard on the rewritten prompt before the provider is called", (file, build, call) => {
     const src = read(file)
     const at = src.indexOf(build)

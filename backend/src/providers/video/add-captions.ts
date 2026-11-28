@@ -1,5 +1,6 @@
+import { downloadEditingSource } from "./editing-source.js"
 import { join } from "node:path"
-import { downloadFile, runFfmpeg, createWorkDir, cleanupWorkDir } from "./ffmpeg-utils.js"
+import { runFfmpeg, createWorkDir, cleanupWorkDir } from "./ffmpeg-utils.js"
 
 interface AddCaptionsOptions {
   readonly videoUrl: string
@@ -34,7 +35,7 @@ export async function addCaptions(options: AddCaptionsOptions): Promise<string> 
     const outputPath = join(workDir, "output.mp4")
 
     console.log(`[addCaptions] Downloading video`)
-    await downloadFile(videoUrl, inputPath)
+    await downloadEditingSource(videoUrl, inputPath)
 
     // The argv string reaches drawtext without a shell, so a real newline in
     // `text` is the line break — and the only spelling of one drawtext honours.

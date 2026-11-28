@@ -175,6 +175,7 @@ describe("voiced-video handler — wired references ride along (#1396)", () => {
     expect(mocks.mockImageToVideo).toHaveBeenCalledWith(
       "https://x.png", "seedance-2-5", "she greets", 12, undefined,
       expect.objectContaining({ referenceVideoUrls: REFS, referenceAudioUrls: ["https://r2.example.com/tts.mp3"] }),
+      { routeJob: { jobId: "job-1", jobType: "voiced-video" } },
     )
     // Measured from the raw provider output, before the voice mux.
     expect(mocks.mockMeasure).toHaveBeenCalledWith({
@@ -371,6 +372,7 @@ describe("voiced-video handler — audio_driven (Seedance 2)", () => {
       8,
       undefined,
       expect.objectContaining({ referenceAudioUrls: ["https://r2.example.com/tts.mp3"], generateAudio: false }),
+      { routeJob: { jobId: "job-1", jobType: "voiced-video" } },
     )
     expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -407,6 +409,8 @@ describe("voiced-video handler — audio_driven (Seedance 2)", () => {
       videoUrl: VIDEO_RESULT.url,
       audioTracks: [{ url: "https://r2.example.com/tts.mp3", startTime: 0, volume: 100, sourceType: "audio" }],
       keepOriginalAudio: false,
+      // The provider's picture as it is (decided 2026-11-22: the steps that finish a generation keep 10-bit).
+      keepPicture: true,
     }]])
     expect(mocks.mockWatermarkLocalVideoAndUpload).toHaveBeenCalled()
     expect(mocks.mockUploadVideoMaybeWatermark).not.toHaveBeenCalled()
@@ -427,6 +431,7 @@ describe("voiced-video handler — audio_driven (Seedance 2)", () => {
     // The draft itself is rendered as a draft (480p is the route's job)…
     expect(mocks.mockImageToVideo).toHaveBeenCalledWith(
       "https://x.png", "seedance-2-5", "she greets", 8, undefined, expect.objectContaining({ draft: true, generateAudio: false }),
+      { routeJob: { jobId: "job-1", jobType: "voiced-video" } },
     )
     // …and records the exact track it muxed.
     expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(expect.objectContaining({

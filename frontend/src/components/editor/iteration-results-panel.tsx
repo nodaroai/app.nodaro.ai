@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label"
 import { ImageLightbox } from "@/components/ui/image-lightbox"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { cn } from "@/lib/utils"
+import { fetchVideoDownload } from "@/lib/video-result-download"
 import { CachedImage } from "@/components/ui/cached-image"
 import { WaveformAudioPlayer } from "@/components/audio-player"
 import { useT } from "@/lib/i18n"
@@ -36,18 +37,29 @@ function getMediaIcon(mediaType: "image" | "video" | "audio" | "text") {
   }
 }
 
-async function downloadFile(url: string, filename: string) {
+function saveBlob(blob: Blob, filename: string) {
+  const blobUrl = URL.createObjectURL(blob)
+  const a = document.createElement("a")
+  a.href = blobUrl
+  // download-site: saves bytes already fetched; a video's come through fetchVideoDownload
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(blobUrl)
+}
+
+async function downloadIterationResult(url: string, filename: string, mediaType: "image" | "video" | "audio" | "text") {
+  // A video result: its kept original when it has one, saved under the
+  // original's own extension (lib/video-result-download.ts).
+  const original = mediaType === "video" ? await fetchVideoDownload(url) : undefined
+  if (original) {
+    saveBlob(original.blob, filename.replace(/\.[a-z0-9]+$/i, `.${original.ext}`))
+    return
+  }
   try {
     const response = await fetch(url)
-    const blob = await response.blob()
-    const blobUrl = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = blobUrl
-    a.download = filename
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(blobUrl)
+    saveBlob(await response.blob(), filename)
   } catch {
     // Fallback: open in new tab
     window.open(url, "_blank")
@@ -55,7 +67,7 @@ async function downloadFile(url: string, filename: string) {
 }
 
 function getFileExtension(url: string, mediaType: "image" | "video" | "audio" | "text"): string {
-  const match = url.match(/\.(png|jpg|jpeg|webp|gif|svg|avif|heic|heif|mp4|mov|webm|mp3|wav|ogg)(\?|$)/i)
+  const match = url.match(/\.(png|jpg|jpeg|webp|gif|svg|avif|heic|heif|mp4|mov|webm|mkv|mp3|wav|ogg)(\?|$)/i)
   if (match) return match[1].toLowerCase()
   switch (mediaType) {
     case "image": return "png"
@@ -105,7 +117,7 @@ function IterationCard({
   const handleDownload = useCallback(() => {
     if (!resultIsUrl) return
     const ext = getFileExtension(result, mediaType)
-    downloadFile(result, `iteration-${index + 1}.${ext}`)
+    void downloadIterationResult(result, `iteration-${index + 1}.${ext}`, mediaType)
   }, [result, resultIsUrl, index, mediaType])
 
   const handleContinue = useCallback(() => {
@@ -300,7 +312,7 @@ export function IterationResultsPanel({
     try {
       for (let i = 0; i < mediaResults.length; i++) {
         const ext = getFileExtension(mediaResults[i], mediaType)
-        await downloadFile(mediaResults[i], `result-${i + 1}.${ext}`)
+        await downloadIterationResult(mediaResults[i], `result-${i + 1}.${ext}`, mediaType)
         // Small delay between downloads to avoid browser blocking
         if (i < mediaResults.length - 1) {
           await new Promise((r) => setTimeout(r, 300))

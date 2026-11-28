@@ -14,6 +14,7 @@ import { labelOf, useT, tx } from "@/lib/i18n"
 import { IMAGE_CRITIC_MODE_LABEL } from "@/lib/image-critic-mode-copy"
 import { useAppDir } from "@/lib/locale-store"
 import { cn } from "@/lib/utils"
+import { openVideoDownload } from "@/lib/video-result-download"
 import { CachedImage } from "@/components/ui/cached-image"
 import { WaveformAudioPlayer } from "@/components/audio-player"
 import { PreviewBadge, isPreviewOutput } from "@/components/render/preview-badge"
@@ -660,16 +661,21 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
   }
 
   const handleDownload = () => {
-    if (outputUrl) {
-      const a = document.createElement("a")
-      a.href = outputUrl
-      const ext = isVideo ? ".mp4" : isAudio ? ".mp3" : ".png"
-      a.download = `job-${job.id}${ext}`
-      a.target = "_blank"
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-    }
+    if (!outputUrl) return
+    // A video: its kept original when it has one (lib/video-result-download.ts).
+    if (isVideo) openVideoDownload(outputUrl, () => downloadOutputAsBefore(outputUrl))
+    else downloadOutputAsBefore(outputUrl)
+  }
+
+  const downloadOutputAsBefore = (url: string) => {
+    const a = document.createElement("a")
+    a.href = url
+    const ext = isVideo ? ".mp4" : isAudio ? ".mp3" : ".png"
+    a.download = `job-${job.id}${ext}`
+    a.target = "_blank"
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
   }
 
   const handleDelete = async () => {

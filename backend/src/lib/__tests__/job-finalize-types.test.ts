@@ -110,9 +110,12 @@ describe("NOT_GENERIC_RECOVERABLE", () => {
   // declaring finalize:own-writer: the generic media finalize would keep only the
   // base picture and settle the hold, losing the layers and the per-image row) to 76,
   // and Suno Speech (a worker unit declaring finalize:own-writer: the Suno tail
-  // stores both takes, which the generic media finalize would cut to one) to 77.
-  it("has exactly 77 members", () => {
-    expect(NOT_GENERIC_RECOVERABLE.size).toBe(77)
+  // stores both takes, which the generic media finalize would cut to one) to 77,
+  // and Long Image (a worker unit declaring finalize:own-writer: its picture is
+  // stored as what its bytes are, which the generic media finalize does not
+  // know to do for it) to 78.
+  it("has exactly 78 members", () => {
+    expect(NOT_GENERIC_RECOVERABLE.size).toBe(78)
   })
 
   it("denies generate-script and no other entity handler key", () => {

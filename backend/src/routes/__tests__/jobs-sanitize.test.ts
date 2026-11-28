@@ -180,3 +180,29 @@ describe("server submission context stays private", () => {
     })
   }
 })
+
+describe("sanitizeJobForPublic — the owner-only output fields (Video Remake's version before upscale)", () => {
+  const output = {
+    videoUrl: "https://cdn.example/j1.mp4",
+    resolution: "1080p",
+    quality: "economy",
+    __castSwapEngineResolution: "720p",
+    __castSwapEngineVideoUrl: "https://cdn.example/j1-engine.mp4",
+    __castSwapEngineWidth: 1280,
+    __castSwapEngineHeight: 720,
+  }
+  const job = { ...(baseJob as Record<string, unknown>), status: "completed", job_type: "cast-swap", output_data: output } as never
+  const ANSWERED = { videoUrl: "https://cdn.example/j1.mp4", resolution: "1080p", quality: "economy" }
+
+  it("the job's owner reads them", () => {
+    const out = sanitizeJobForPublic(job, false, { userId: "u1" }) as unknown as Record<string, unknown>
+    expect(out.output_data).toEqual({ ...ANSWERED, engineVideoUrl: "https://cdn.example/j1-engine.mp4", engineWidth: 1280, engineHeight: 720, engineResolution: "720p" })
+  })
+
+  it("an admin reading someone else's job, another reader, and a read that names no reader: none of them", () => {
+    for (const [isAdmin, reader] of [[true, { userId: "an-admin" }], [false, { userId: "u2" }], [false, undefined], [true, undefined]] as const) {
+      const out = sanitizeJobForPublic(job, isAdmin, reader) as unknown as Record<string, unknown>
+      expect(out.output_data, JSON.stringify({ isAdmin, reader })).toEqual(ANSWERED)
+    }
+  })
+})

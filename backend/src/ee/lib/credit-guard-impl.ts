@@ -3,6 +3,7 @@
 // is true. This keeps community/business builds free of any credit-system code
 // at runtime.
 
+import { admitRoutedVideo } from "../billing/video-route-admission.js"
 import type { FastifyRequest, FastifyReply } from "fastify"
 import { CreditsService, PriceNotConfiguredError, getModelCreditCostFromDB, checkRunSetCredits, DEPLOYMENT_OUT_OF_CREDITS, type ReserveResult, type CreditProfile, type StorageProfile } from "../billing/credits.js"
 import { supabase } from "../../lib/supabase.js"
@@ -127,6 +128,11 @@ export async function routeCreditOverride(
   modelIdentifier: string,
   opts: CreditGuardOpts | undefined,
 ): Promise<number | undefined> {
+  const charged = await opts?.computeChargedCredits?.(req.body, req)
+  if (charged !== undefined) {
+    if (!Number.isFinite(charged) || charged < 0) throw new PriceNotConfiguredError(modelIdentifier)
+    return charged
+  }
   if (!opts?.computeCredits) return undefined
   const baseCredits = await opts.computeCredits(req.body, req)
   if (baseCredits === undefined) return undefined
@@ -305,7 +311,7 @@ export function creditGuardImpl(
         if (handlePriceNotConfigured(err, reply, routeName)) return
         throw err
       }
-    } else if (opts?.computeCredits) {
+    } else if (opts?.computeCredits || opts?.computeChargedCredits) {
       try {
         computedCreditOverride = await routeCreditOverride(req, modelIdentifier, opts)
       } catch (err) {
@@ -453,12 +459,18 @@ export function creditGuardImpl(
       const checkedProfile: CreditProfile = pendingCover
         ? { ...(profile as CreditProfile), subscription_credits: ((profile as CreditProfile).subscription_credits ?? 0) + pendingCover.cover }
         : (profile as CreditProfile)
+      let preflightCredits = computedCreditOverride
+      if (!batchIds && !opts?.checkOnly && modelIdentifier.startsWith("seedance-2")) {
+        const { videoPreflightQuote } = await import("../billing/video-route-preflight.js")
+        const routed = await videoPreflightQuote(req, modelIdentifier, routeName, opts?.routedVideoInput)
+        if (routed) preflightCredits = routed.price + (routed.withAddons ? await routedAddonCredits(req, modelIdentifier) : 0)
+      }
       const checkModel = (identifier: string) => CreditsService.checkCreditsWithProfile(
         userId,
         checkedProfile,
         identifier,
         req.isAppRun,
-        computedCreditOverride,
+        preflightCredits,
         {
           webFreeMode: req.webFreeMode ?? false,
           communityInstance,
@@ -641,12 +653,36 @@ async function workspaceAffords(
   return { ok: false, statusCode: refusal.status, body: { error: { code: refusal.code, message: refusal.message } } }
 }
 
+/** The key on a usage log's `metadata` that marks a routed video reservation (read by ee/billing/managed-job-settlement.ts). */
+export const ROUTED_RESERVATION_MARK = "video_route"
+
+/** Marks a usage log as a routed video reservation. Never throws: a missed mark leaves the policy row to decide, as before. */
+async function markRoutedReservation(usageLogId: string, jobId: string): Promise<void> {
+  try {
+    const { data, error } = await supabase.from("usage_logs").select("metadata").eq("id", usageLogId).maybeSingle()
+    if (error) throw new Error(error.message)
+    const metadata = { ...((data?.metadata as Record<string, unknown> | null) ?? {}), [ROUTED_RESERVATION_MARK]: true }
+    const written = await supabase.from("usage_logs").update({ metadata }).eq("id", usageLogId)
+    if (written.error) throw new Error(written.error.message)
+  } catch (err) {
+    console.error(`[credit-guard] job ${jobId}: marking its routed reservation failed: ${err instanceof Error ? err.message : String(err)}`)
+  }
+}
+
+/** The add-ons a route's pricing step noted for this request, marked up at `modelIdentifier` as the default hold marks them. */
+export async function routedAddonCredits(req: FastifyRequest, modelIdentifier: string): Promise<number> {
+  const base = (req.priceNotes?.adjustments ?? [])
+    .filter((a) => (a.code === "loop_trim_addon" || a.code === "voiced_audio_addon") && typeof a.baseCredits === "number" && a.baseCredits > 0)
+    .reduce((sum, a) => sum + (a.baseCredits as number), 0)
+  return base > 0 ? markedUpCredits(base, modelIdentifier) : 0
+}
+
 export async function reserveCreditsForJobImpl(
   req: FastifyRequest,
   reply: FastifyReply,
   jobId: string,
   modelIdentifier: string,
-  options?: { oncePerJob?: boolean; retainJobOnFailure?: boolean; holdCredits?: number },
+  options?: { oncePerJob?: boolean; retainJobOnFailure?: boolean; holdCredits?: number; routedRun?: { token: string; env: string } },
 ): Promise<ReserveResult | undefined> {
   const userId = req.userId
   if (!userId) {
@@ -660,9 +696,30 @@ export async function reserveCreditsForJobImpl(
 
   const routeName = req.url.split("?")[0] ?? "unknown"
 
+  // A routable video model the admin put on the alternate route
+  // (video-route-admission.ts): the route is decided and stored on the job
+  // here, and the job is held at the route's quote. Null — the shipped state —
+  // holds as always. No quote for a routed run is a 503, never the default price.
+  let routedHold: number | undefined
+  if (options?.holdCredits === undefined) {
+    try {
+      const routed = await admitRoutedVideo({ jobId, priceId: modelIdentifier })
+      // The route prices the video; the run's add-ons (the seamless-loop trim,
+      // the voice track) are held exactly as on the default route, on top.
+      if (routed) routedHold = routed.holdCredits + (await routedAddonCredits(req, modelIdentifier))
+    } catch (err) {
+      if (!options?.oncePerJob && !options?.retainJobOnFailure) await supabase.from("jobs").delete().eq("id", jobId)
+      if (handlePriceNotConfigured(err, reply, routeName)) return undefined
+      console.error(`[credit-guard] ${routeName} video route admission failed for job ${jobId}:`, err)
+      reply.status(503).send({ error: { code: "video_route_unavailable", message: "This video cannot be started right now. Please try again." } })
+      return undefined
+    }
+  }
+
   // A metered LLM hold (A2): the balance is checked against the hold itself
   // before the RPC, so a short balance is a clear 402 with no usage log left.
-  const holdCredits = options?.holdCredits
+  // A routed video hold is checked the same way.
+  const holdCredits = options?.holdCredits ?? routedHold
   if (holdCredits !== undefined && !(await holdCovered(req, reply, jobId, modelIdentifier, holdCredits, routeName, options))) {
     return undefined
   }
@@ -705,6 +762,7 @@ export async function reserveCreditsForJobImpl(
         // A metered hold wins over the guard's pre-check figure.
         creditOverride: holdCredits ?? req.creditReservation?.creditOverride,
         ...(options?.oncePerJob ? { oncePerJob: true } : {}),
+        ...(options?.routedRun ? { routedRun: options.routedRun } : {}),
         webFreeMode: req.webFreeMode,
         communityInstance: req.appAuthorization?.appKind === "community_instance",
         // Welcome credits opt-in: the guard already refused every non-extension
@@ -724,6 +782,11 @@ export async function reserveCreditsForJobImpl(
         should_watermark: reservation.watermark,
       })
       .eq("id", jobId)
+
+    // A job admitted on the alternate route: its reservation says so itself, so every later
+    // settle of it knows it is routed from the usage log it already holds, whatever that
+    // process sees of the routing policy. (Routed jobs only: nothing is written for any other.)
+    if (routedHold !== undefined) await markRoutedReservation(reservation.usageLogId, jobId)
 
     req.creditReservation = {
       usageLogId: reservation.usageLogId,
@@ -794,26 +857,42 @@ async function holdCovered(
   modelIdentifier: string,
   holdCredits: number,
   routeName: string,
-  options: { retainJobOnFailure?: boolean } | undefined,
+  options: { retainJobOnFailure?: boolean; oncePerJob?: boolean } | undefined,
 ): Promise<boolean> {
   const userId = req.userId!
   let check: Awaited<ReturnType<typeof CreditsService.checkCredits>>
   try {
-    const runCover = await firstRemakeCoverAvailable(userId, jobId, req.billingContext)
+    // A hold that is not a video's (a metered LLM call) is checked exactly as it
+    // always was: the video-only inputs below (the Remake step, the surface's
+    // free-video rules) are read for a video hold alone.
+    const videoHold = readsVideoBody(modelIdentifier.split(":")[0] ?? "")
+    const remakeStep = videoHold ? await videoRemakeStepOf(req) : null
+    const runCover = await firstRemakeCoverAvailable(userId, remakeStep !== null ? trustedPluginParentJobId(req) : jobId, req.billingContext)
     check = await CreditsService.checkCredits(userId, modelIdentifier, req.isAppRun, holdCredits, {
       billingContext: req.billingContext,
       webFreeMode: req.webFreeMode ?? false,
+      ...(videoHold ? {
+        communityInstance: req.appAuthorization?.appKind === "community_instance",
+        video: req.freeVideoRequest ?? freeVideoRequestOf(req.body as Record<string, unknown> | undefined),
+      } : {}),
+      ...(remakeStep !== null ? { freeVideoLimitsLifted: true } : {}),
       ...(runCover > 0 ? { firstRemakeCover: runCover } : {}),
     })
   } catch (err) {
-    if (!options?.retainJobOnFailure) await supabase.from("jobs").delete().eq("id", jobId)
+    if (!options?.oncePerJob && !options?.retainJobOnFailure) await supabase.from("jobs").delete().eq("id", jobId)
     if (handlePriceNotConfigured(err, reply, routeName)) return false
     console.error(`[credit-guard] ${routeName} metered hold check failed:`, err)
     reply.status(500).send({ error: { code: "credit_check_failed", message: "Failed to check credits" } })
     return false
   }
   if (check.allowed) return true
-  if (!options?.retainJobOnFailure) await supabase.from("jobs").delete().eq("id", jobId)
+  // The balance check may observe the debit of a concurrent reservation.
+  // Its replay RPC verifies the owner, payer, price and amount under a lock.
+  if (options?.oncePerJob) {
+    const { data, error } = await supabase.from("jobs").select("usage_log_id").eq("id", jobId).eq("user_id", userId).maybeSingle()
+    if (!error && data?.usage_log_id) return true
+  }
+  if (!options?.oncePerJob && !options?.retainJobOnFailure) await supabase.from("jobs").delete().eq("id", jobId)
   if (check.code === MODEL_DISABLED_CODE) {
     const refusal = modelDisabledRefusal(check.error)
     reply.status(refusal.statusCode).send(refusal.body)

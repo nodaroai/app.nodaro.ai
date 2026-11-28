@@ -38,6 +38,7 @@ async function downloadJson(workflowId: string, name: string): Promise<void> {
   const url = URL.createObjectURL(blob)
   const a = document.createElement("a")
   a.href = url
+  // download-site: a file this page made (a JSON or text export), no stored result
   a.download = `${(name || "conversation").replace(/[^a-z0-9]/gi, "-").toLowerCase()}-template.json`
   document.body.appendChild(a)
   a.click()

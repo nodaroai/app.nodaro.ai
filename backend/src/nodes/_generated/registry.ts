@@ -6,6 +6,7 @@ import { descriptor as unit_clip_pack } from "../clip-pack/descriptor.generated.
 import { descriptor as unit_episode_chapters } from "../episode-chapters/descriptor.generated.js" // unit:episode-chapters
 import { descriptor as unit_episode_trailer } from "../episode-trailer/descriptor.generated.js" // unit:episode-trailer
 import { descriptor as unit_gif_to_video } from "../gif-to-video/descriptor.generated.js" // unit:gif-to-video
+import { descriptor as unit_long_image } from "../long-image/descriptor.generated.js" // unit:long-image
 import { descriptor as unit_remove_audio } from "../remove-audio/descriptor.generated.js" // unit:remove-audio
 import { descriptor as unit_shot_cuts } from "../shot-cuts/descriptor.generated.js" // unit:shot-cuts
 import { descriptor as unit_speaker_layout } from "../speaker-layout/descriptor.generated.js" // unit:speaker-layout
@@ -19,6 +20,7 @@ export const UNIT_REGISTRY: Readonly<Record<string, UnitDescriptor>> = Object.as
   "episode-chapters": unit_episode_chapters, // unit:episode-chapters
   "episode-trailer": unit_episode_trailer, // unit:episode-trailer
   "gif-to-video": unit_gif_to_video, // unit:gif-to-video
+  "long-image": unit_long_image, // unit:long-image
   "remove-audio": unit_remove_audio, // unit:remove-audio
   "shot-cuts": unit_shot_cuts, // unit:shot-cuts
   "speaker-layout": unit_speaker_layout, // unit:speaker-layout

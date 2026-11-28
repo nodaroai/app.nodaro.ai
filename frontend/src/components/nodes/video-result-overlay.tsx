@@ -7,13 +7,14 @@ import { copyToClipboard } from "@/lib/utils"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { EditVideoButton } from "./edit-video-button"
 import { useSeamlessVideoLoop } from "@/hooks/use-seamless-video-loop"
-import { downloadVideoFile } from "./video-unplayable"
+import { downloadVideoFile } from "@/lib/video-result-download"
 import { useVideoUnplayable, VideoUnplayableNotice } from "./video-unplayable-notice"
 
 interface VideoResultOverlayProps {
   url: string
   videoAutoplay: boolean
-  label: string
+  /** The node's name. Not read any more: a Download is named by the server after the file it saves (lib/video-result-download.ts). */
+  label?: string
   hasResults: boolean
   onExpand: () => void
   onDelete: () => void
@@ -38,7 +39,6 @@ interface VideoResultOverlayProps {
 function VideoResultOverlayComponent({
   url,
   videoAutoplay,
-  label,
   hasResults,
   onExpand,
   onDelete,
@@ -61,7 +61,7 @@ function VideoResultOverlayComponent({
   // no preview copy, decided 2026-11-22): say so and offer Download, rather
   // than the node's "failed to load" state, which is for a file that is gone.
   const { unplayable, onError: handleError } = useVideoUnplayable(url, onVideoError)
-  const download = () => downloadVideoFile(url, label)
+  const download = () => downloadVideoFile(url)
   return (
     <div
       style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', borderRadius: squareBottom ? '12px 12px 0 0' : 12, overflow: 'hidden', zIndex: 10 }}
@@ -91,7 +91,7 @@ function VideoResultOverlayComponent({
           if (videoAutoplay) video.play().catch(() => {})
         }}
       />
-      {unplayable && <VideoUnplayableNotice url={url} label={label} />}
+      {unplayable && <VideoUnplayableNotice url={url} />}
       {hasResults && (
         <div className="absolute top-2 right-2 opacity-0 group-hover/video:opacity-100 transition-opacity">
           <button

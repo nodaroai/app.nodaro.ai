@@ -49,6 +49,7 @@
  * `trackUserId` so it never bills the user's storage quota, and best-effort
  * deleted once the final output exists or the render is cancelled.
  */
+import { downloadEditingSource } from "./editing-source.js"
 import { createHash } from "node:crypto"
 import { promises as fs } from "node:fs"
 import { join } from "node:path"
@@ -437,7 +438,10 @@ export async function renderEdlTimeline(options: EdlTimelineOptions): Promise<Ed
       const localPath = join(workDir, `src-${sourcePaths.size}.${src.kind === "audio" ? "m4a" : "mp4"}`)
       // A source original can be many gigabytes (a 3-hour camera file ~15 GB):
       // the staged big-media limits, not the flat 120 s (Track 0.19).
-      await downloadFile(src.url, localPath, { limits: BIG_MEDIA_DOWNLOAD_LIMITS })
+      // A picture source: its kept original when the run may read one,
+      // conformed as an editing step's source (editing-source.ts).
+      if (src.kind === "video") await downloadEditingSource(src.url, localPath, { download: { limits: BIG_MEDIA_DOWNLOAD_LIMITS } })
+      else await downloadFile(src.url, localPath, { limits: BIG_MEDIA_DOWNLOAD_LIMITS })
       sourcePaths.set(id, localPath)
       audioPresent.set(id, await hasAudioStream(localPath))
       if (wantVideo && src.kind === "video") {

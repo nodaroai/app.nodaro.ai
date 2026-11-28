@@ -6,6 +6,7 @@ import { NodeComponent as unit_clip_pack } from "../clip-pack/node" // unit:clip
 import { NodeComponent as unit_episode_chapters } from "../episode-chapters/node" // unit:episode-chapters
 import { NodeComponent as unit_episode_trailer } from "../episode-trailer/node" // unit:episode-trailer
 import { NodeComponent as unit_gif_to_video } from "../gif-to-video/node" // unit:gif-to-video
+import { NodeComponent as unit_long_image } from "../long-image/node" // unit:long-image
 import { NodeComponent as unit_remove_audio } from "../remove-audio/node" // unit:remove-audio
 import { NodeComponent as unit_shot_cuts } from "../shot-cuts/node" // unit:shot-cuts
 import { NodeComponent as unit_speaker_layout } from "../speaker-layout/node" // unit:speaker-layout
@@ -19,6 +20,7 @@ export const UNIT_COMPONENTS: Readonly<Record<string, UnitNodeComponent>> = Obje
   "episode-chapters": unit_episode_chapters, // unit:episode-chapters
   "episode-trailer": unit_episode_trailer, // unit:episode-trailer
   "gif-to-video": unit_gif_to_video, // unit:gif-to-video
+  "long-image": unit_long_image, // unit:long-image
   "remove-audio": unit_remove_audio, // unit:remove-audio
   "shot-cuts": unit_shot_cuts, // unit:shot-cuts
   "speaker-layout": unit_speaker_layout, // unit:speaker-layout

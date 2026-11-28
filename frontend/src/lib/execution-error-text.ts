@@ -155,6 +155,10 @@ function nodeFailuresText(message: string): string | null {
 
 /** Node refusals the server records with a stable `errorCode`, shown in the reader's language. */
 const NODE_CODE_TEXT: Readonly<Record<string, MessageKey>> = {
+  // A video stopped (or timed out) after it had started: it finishes in My Library and is charged
+  // (the server's stop rule, backend/src/lib/stop-rule.ts — codes mirrored here).
+  stopped_finishing: "nodeRun.stoppedFinishing",
+  timed_out_finishing: "nodeRun.timedOutFinishing",
   // A review-on use-case node about to run once per list item.
   [USE_CASE_REVIEW_LIST_DRIVEN]: "nodeRun.tightenReviewListDriven",
   // A use-case run's recordings that cannot run (usecaseRecordingsProblem, and a Master audio that is not audio).

@@ -6,6 +6,7 @@ import { creditUnitLabel } from "@/lib/credit-units"
 import { useAppRunnerStore } from "@/hooks/use-app-runner-store"
 import { usePresentationStore } from "@/hooks/use-presentation-store"
 import { getNodeLabel, getOutputType } from "@/lib/presentation-utils"
+import { videoDownloadLinkProps } from "@/lib/video-result-download"
 import { useT } from "@/lib/i18n"
 import { type RunSlot, type RunSlotNodeState } from "@/components/app-runner/types"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
@@ -90,6 +91,8 @@ export function ChatView({
 
   // The result viewer (a frozen run + the clicked node). Opened from a message.
   const [viewer, setViewer] = useState<{ slot: RunSlot; nodeId: string } | null>(null)
+
+  const viewerSlot = viewer && (slots.find(slot => slot.id === viewer.slot.id) ?? viewer.slot)
 
   // Auto-scroll when a NEW run message appears (not on every progress tick —
   // that would fight a user who scrolled up to read an earlier run mid-stream).
@@ -198,7 +201,7 @@ export function ChatView({
         </div>
       </div>
 
-      {viewer && (
+      {viewer && viewerSlot && (
         <FullscreenView
           asOverlay
           orderedInputNodes={orderedInputNodes}
@@ -206,10 +209,10 @@ export function ChatView({
           getNodeStatus={() => "completed"}
           getResult={() => ({})}
           getCardTitle={getNodeLabel}
-          resolveResult={(nodeId) => resolveSlotResult(viewer.slot, nodeId)}
+          resolveResult={(nodeId) => resolveSlotResult(viewerSlot, nodeId)}
           isPreview={(nodeId, url) => {
             const node = [...orderedInputNodes, ...orderedOutputNodes].find((n) => n.id === nodeId)
-            const out = viewer.slot.nodeStates[nodeId]?.output as Record<string, unknown> | undefined
+            const out = viewerSlot.nodeStates[nodeId]?.output as Record<string, unknown> | undefined
             return outputIsPreview(node?.type, undefined, out, url)
           }}
           initialNodeId={viewer.nodeId}
@@ -352,6 +355,7 @@ function ChatMessage({
                   text={out?.text as string | undefined}
                   onOpenMedia={u ? openResult : undefined}
                   progress={isRunning ? combinedProgress[node.id] : undefined}
+                  clipOutput={out}
                   preview={outputIsPreview(node.type, undefined, out as Record<string, unknown> | undefined)}
                 />
               )
@@ -386,7 +390,8 @@ function ChatMessage({
               </button>
             )}
             {isDone && downloadUrl && (
-              <a href={downloadUrl} download className="inline-flex items-center gap-1 hover:text-foreground">
+              // A stored video: its kept original when it has one (lib/video-result-download.ts).
+              <a {...videoDownloadLinkProps(downloadUrl)} className="inline-flex items-center gap-1 hover:text-foreground">
                 <Download className="h-3 w-3" /> {tr("common.download")}
               </a>
             )}
@@ -408,6 +413,7 @@ function ChatMessage({
                     url={u}
                     text={out?.text as string | undefined}
                     onOpenMedia={u ? openResult : undefined}
+                    clipOutput={out}
                     preview={outputIsPreview(node?.type, undefined, out as Record<string, unknown> | undefined)}
                   />
                 )

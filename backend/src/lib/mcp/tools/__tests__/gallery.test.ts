@@ -431,6 +431,22 @@ function makeChainableSingle(row: unknown) {
 }
 
 describe("get_asset tool", () => {
+  it("carries a clip delivered in part intact and says it is not the whole clip", async () => {
+    const partial = { deliveredSec: 48.25, sourceSec: 120, parts: { delivered: 2, planned: 5 }, reason: "part_failed", message: "We remade the first 0:48 of 2:00." }
+    const row = { id: "g1", user_id: "u1", status: "completed", job_type: "cast-swap", output_data: { videoUrl: "https://r2/remake.mp4", durationSec: 48.25, partial } }
+    ;(supabase.from as unknown as ReturnType<typeof vi.fn>).mockReturnValue(makeChainableSingle(row))
+    const server = buildServer()
+    registerGallery({ server, session: readSession(), fastify: Fastify() })
+    const result = await callTool(server, "get_asset", { job_id: JOB_UUID })
+    const text = JSON.parse(result.content[0]!.text!) as { data: { output_data: Record<string, unknown> }; guidance?: string }
+    expect(text.data.output_data.partial).toEqual(partial)
+    expect(text.guidance).toContain("only the first 48.3 s of the 120 s clip")
+    expect(((result as { structuredContent?: { outputData?: Record<string, unknown> } }).structuredContent?.outputData)?.partial).toEqual(partial)
+    ;(supabase.from as unknown as ReturnType<typeof vi.fn>).mockReturnValue(makeChainableSingle({ ...row, output_data: { videoUrl: "https://r2/remake.mp4", durationSec: 120 } }))
+    const whole = await callTool(server, "get_asset", { job_id: JOB_UUID })
+    expect(JSON.parse(whole.content[0]!.text!).guidance).toBeUndefined()
+  })
+
   it("returns asset data when owned", async () => {
     ;(supabase.from as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
       makeChainableSingle({

@@ -84,11 +84,12 @@ import {
   listPublished,
   setFavorite,
 } from "../lib/trends/store.js"
-import { engineOf, shownChips, trendChoiceId, trendChoiceName, trendResolutions, trendRunRequestSchema, type ChipKey } from "../lib/trends/schemas.js"
+import { engineOf, shownChips, trendChoiceId, trendChoiceName, trendRunRequestSchemaFor, type ChipKey } from "../lib/trends/schemas.js"
+import { readTrendSizesHere, trendRunSizes, trendSizesKeepKey, type TrendRunSizes, type TrendSizesHere } from "../lib/trends/sizes.js"
 import { loadedEngineTakesRoleFace } from "../../lib/cast-swap-role-face.js"
 import { pickText } from "../lib/trends/localize.js"
 import { emptyFillLookOf, emptyFillOf, type TrendEmptyFill } from "../lib/trends/empty-fill.js"
-import { PUBLIC_READ_LIMIT, guestKeep, guestLocale, keptHit, sendPublicRead } from "../lib/trends/public-read.js"
+import { PUBLIC_READ_LIMIT, guestKeep, guestLocale, keptHit, sendPublicRead, sendUnkeptPublicRead } from "../lib/trends/public-read.js"
 import { watchTrendCatalogForEdge } from "../lib/trends/catalog-stamp.js"
 import { neutralBreakdown, privacyCreditsOf, withStepFolded } from "../../lib/nodaro-motion-quote.js"
 import { publishedTagUsage, readTagLabels, tagLabel, type TagLabels } from "../lib/trends/tags.js"
@@ -113,7 +114,7 @@ import {
 } from "../lib/trends/run-helpers.js"
 import type {
   Choice,
-  TrendResolution,
+  TrendRunSize,
   TrendRow,
   TrendSlot,
   TrendExample,
@@ -203,9 +204,19 @@ export interface TrendDetail extends TrendCard {
    * The resolutions a run of this trend may ask for, its default first:
    * Nodaro Prism `["480p", "720p", "1080p"]` (480p is plain; a run
    * makes a draft only with `draft: true`, at 480p), Nodaro Pulse
-   * `["720p", "1080p"]` (no draft).
+   * `["720p", "1080p"]` (no draft). With `deliveredResolution`, the sizes a
+   * run is DELIVERED at for the trend's engine choice here, exactly as
+   * `GET /v1/video-remake/style-choice` answers them (e.g. `["720p",
+   * "1080p", "4k"]`; sizes.ts).
    */
-  resolutions: TrendResolution[]
+  resolutions: TrendRunSize[]
+  /**
+   * Present (`true`) only when `resolutions` are the sizes a run is
+   * delivered at (this deployment's engine reads trend runs that way): a
+   * run's `resolution` names the size it receives, "4k" among them. Absent:
+   * the sizes the engine makes, as before.
+   */
+  deliveredResolution?: true
   /**
    * `chips`: the chips the person may set on this slot (its kind's order; `[]`
    * = none, so no chips row). A chip not listed is fixed by the trend, and a
@@ -436,7 +447,7 @@ export function detailSlotOf(data: TrendVersionData, s: TrendVersionData["slots"
   }
 }
 
-function toDetail(row: TrendRow, version: number, data: TrendVersionData, locale: string, isFavorite: boolean): TrendDetail | null {
+function toDetail(row: TrendRow, version: number, data: TrendVersionData, locale: string, isFavorite: boolean, sizes: TrendRunSizes): TrendDetail | null {
   const shown = toCard(row, data, locale, isFavorite)
   if (!shown) return null
   // The page's `original` (with its length and preview start) replaces the card's; both are the shown original.
@@ -451,7 +462,9 @@ function toDetail(row: TrendRow, version: number, data: TrendVersionData, locale
     // A trend made on a Flash choice is named by it, with that choice's resolutions.
     engine: trendChoiceId(data),
     engineName: trendChoiceName(data),
-    resolutions: [...trendResolutions(data)],
+    resolutions: [...sizes.sizes],
+    // Only where the sizes are sizes delivered: every other page keeps exactly its keys of before.
+    ...(sizes.delivered ? { deliveredResolution: true as const } : {}),
     slots: data.slots.map((s) => detailSlotOf(data, s, locale)),
     examples: listedExamples(data).map((ex) => {
       const slots: Record<string, string[]> = {}
@@ -500,7 +513,10 @@ function trendRunError(reply: FastifyReply, e: TrendRunError) {
  * the composed engine body and the engine check. Null after replying.
  */
 async function prepareRun(req: FastifyRequest, reply: FastifyReply): Promise<{ composed: ComposedTrendRun; sessionId?: string } | null> {
-  const parsed = trendRunRequestSchema.safeParse(req.body)
+  // How this deployment's engine reads a trend run's size (sizes.ts), read once: the schema, the trend's sizes and
+  // the body all follow it.
+  const here = await readTrendSizesHere()
+  const parsed = trendRunRequestSchemaFor(here).safeParse(req.body)
   if (!parsed.success) {
     badRequest(reply, parsed.error)
     return null
@@ -523,7 +539,12 @@ async function prepareRun(req: FastifyRequest, reply: FastifyReply): Promise<{ c
     const example = storedExampleRequest(found.data, parsed.data.example)
     const { example: _public, ...rest } = parsed.data
     const request = { ...rest, ...(example !== undefined ? { example } : {}) }
-    composed = composeTrendRun({ id: found.row.id, slug: found.row.slug, version: found.version, data: found.data }, request)
+    composed = composeTrendRun(
+      { id: found.row.id, slug: found.row.slug, version: found.version, data: found.data },
+      request,
+      // Only read the delivered way: every other run is composed exactly as before.
+      here.delivered ? { sizes: trendRunSizes(found.data, here) } : {},
+    )
   } catch (e) {
     if (e instanceof TrendRunError) {
       trendRunError(reply, e)
@@ -709,7 +730,12 @@ export async function trendRoutes(app: FastifyInstance) {
     const { slug } = req.params as { slug: string }
     const rawLocale = parsed.data.locale
     try {
-      const kept = await guestKeep(userId, JSON.stringify(["page", slug, guestLocale(req, rawLocale)]))
+      // The sizes are read before the kept answer's key is made: the page and its key use the same answer.
+      const here: TrendSizesHere = await readTrendSizesHere()
+      const sizesKey = trendSizesKeepKey(here)
+      const kept = sizesKey.keep
+        ? await guestKeep(userId, JSON.stringify(sizesKey.key === null ? ["page", slug, guestLocale(req, rawLocale)] : ["page", slug, guestLocale(req, rawLocale), sizesKey.key]))
+        : null
       const hit = keptHit(kept)
       if (hit !== undefined) return sendPublicRead(reply, userId, rawLocale, null, hit)
 
@@ -719,8 +745,10 @@ export async function trendRoutes(app: FastifyInstance) {
         resolveLocale(req, userId, rawLocale),
         userId === null ? new Set<string>() : favoriteIds(userId, [found.row.id]),
       ])
-      const detail = toDetail(found.row, found.version, found.data, locale, favs.has(found.row.id))
+      const detail = toDetail(found.row, found.version, found.data, locale, favs.has(found.row.id), trendRunSizes(found.data, here))
       if (!detail) return notFound(reply)
+      // Sizes read without the settings they depend on: answered, never kept here or by a shared cache.
+      if (!sizesKey.keep) return sendUnkeptPublicRead(reply, { data: detail })
       return sendPublicRead(reply, userId, rawLocale, kept, { data: detail })
     } catch (e) {
       return unavailableOrInternal(reply, req, e, "Failed to read trend")

@@ -4,7 +4,9 @@
  * (`TRASHED_JOB_COLUMN`), it stays restorable for `TRASH_RETENTION_DAYS`, and
  * the purge (lib/job-trash-purge.ts) then deletes it for good through
  * `deleteJobWithPrivateMedia` — the job delete as it always was: its child
- * jobs and private media go, a copy saved to the Library stays. Its session links are kept
+ * jobs and private media go, a copy saved to the Library stays, and the files
+ * its server-only record held go unless something still uses them
+ * (lib/deleted-job-files.ts). Its session links are kept
  * while it is in the Trash, so a restored job is back where it was. Nothing is
  * refunded on a delete or a purge.
  *

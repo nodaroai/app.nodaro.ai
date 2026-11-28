@@ -212,6 +212,7 @@ export async function generateCreatureMotionRoutes(app: FastifyInstance) {
           force_private: true,
           user_id: userId,
           status: "pending",
+          job_type: "generate-creature-motion",
           input_data: {
             ...withResolvedModel(buildJobInputData(parsed.data, "generate-creature-motion"), "generate-creature-motion"),
             prompt,

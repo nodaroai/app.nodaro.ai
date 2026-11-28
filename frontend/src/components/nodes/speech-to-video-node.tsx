@@ -23,6 +23,7 @@ import { NodeJobProgress } from "./node-job-progress"
 import { EditableNodeLabel } from "./editable-node-label"
 import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import type { SpeechToVideoData, GeneratedResult } from "@/types/nodes"
+import { downloadVideoFile } from "@/lib/video-result-download"
 
 const isPickerType = (s: string) => VISUAL_PARAMETER_PICKER_NODE_TYPES.has(s)
 const ACCEPTS_IMAGE          = (t: string) => isValidSpeechToVideoConnection("image",          t, isPickerType)
@@ -268,7 +269,7 @@ function SpeechToVideoNodeComponent({ id, data, selected }: NodeProps) {
           className="w-full h-full object-cover rounded-xl"
           onLoadedMetadata={(e) => { const v = e.currentTarget; if (v.videoWidth > 0) handleLoadDimensions({ width: v.videoWidth, height: v.videoHeight }); if (shouldPlay) v.play().catch(() => {}) }}
           autoPlay={shouldPlay} muted loop={shouldPlay} playsInline />
-          {unplayableVideo.unplayable && activeUrl && <VideoUnplayableNotice url={activeUrl} label={(nodeData.label as string | undefined) ?? ""} />}
+          {unplayableVideo.unplayable && activeUrl && <VideoUnplayableNotice url={activeUrl} />}
 
         {/* Version badge - top left */}
         {results.length > 1 && (
@@ -300,7 +301,7 @@ function SpeechToVideoNodeComponent({ id, data, selected }: NodeProps) {
           </button>
           <button type="button" aria-label={t("cfgshared.download")}
             className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-            onClick={(e) => { e.stopPropagation(); const a = document.createElement('a'); a.href = `/v1/image-proxy?url=${encodeURIComponent(activeUrl!)}&download=1`; a.download = `${nodeData.label || 'video'}.mp4`; a.click() }} title={t("cfgshared.download")}>
+            onClick={(e) => { e.stopPropagation(); downloadVideoFile(activeUrl!) }} title={t("cfgshared.download")}>
             <Download className="w-3.5 h-3.5" />
           </button>
           <button type="button" aria-label={t("cfgshared.copyUrl")}

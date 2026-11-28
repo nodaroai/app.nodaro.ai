@@ -15,6 +15,9 @@ import {
 import { grantYearlyPlanMonthlyCredits } from "./yearly-plan-monthly-credits.js"
 import { recordKieCreditSnapshot, fetchKieCreditSnapshotsSince } from "../routes/admin-kie-credits.js"
 import { kieRunwayAlert } from "./kie-low-balance-alert.js"
+import { retryRoutedSettlements } from "./video-route-settlement.js"
+import { runAccountReconciliationOnce, runBalanceCheckOnce, runOncePerEnvironment, runReconciliationOnce } from "./video-route-watch.js"
+import { videoRouteSchemaState } from "../../lib/video-route-schema.js"
 import { sweepStaleDcrRegistrations } from "../../lib/oauth-dcr-sweep.js"
 import { sweepAbandonedCopilotWorkflows } from "../copilot/abandoned-sweep.js"
 import { sweepUnsyncedConsents } from "../lib/consent-loops-sync.js"
@@ -193,6 +196,26 @@ export function startCleanupCron(): void {
   // See lib/reconcile/types.ts STALE_THRESHOLD_MS.
 
   // Free user media cleanup -- daily at 03:00 UTC
+  // Routed video jobs whose settlement could not complete (a failed read, no
+  // receipt from the metered settle) are settled again every 15 minutes. Best
+  // effort, never throws (ee/billing/video-route-settlement.ts).
+  cron.schedule("*/15 * * * *", () => { void runOncePerEnvironment("settle-sweep", 15 * 60_000, () => retryRoutedSettlements()) })
+  // The alternate route's daily reconciliation — yesterday's recorded cost of
+  // routed jobs against the route's own spend — at 00:20 (the servers run on UTC). Best effort,
+  // never throws; a no-op with no route here or no routing ever saved.
+  cron.schedule("20 0 * * *", () => { void runReconciliationOnce() })
+  // The route's whole account, once per account (ee/billing/video-route-account.ts): tried every hour,
+  // so a pass that failed, or could not read the account's spend, is retried the same day. A day
+  // already done costs one settings read. Never throws; a no-op with no route or no routing saved.
+  cron.schedule("40 * * * *", () => { void runAccountReconciliationOnce() })
+  // The routed-video schema check (lib/video-route-schema.ts) -- every minute, on
+  // EVERY server and outside any once-per-environment lease: each process keeps
+  // its own answer, for at most VIDEO_ROUTE_SCHEMA_RECHECK_MS, and asks the
+  // database again only once that answer is stale (a tick in between reads
+  // nothing). So a newly applied schema file, or a piece that goes missing, is
+  // noticed and alerted on without a save or a restart. Never throws into the cron.
+  cron.schedule("* * * * *", () => { void videoRouteSchemaState().catch(() => {}) })
+
   cron.schedule("0 3 * * *", async () => {
     console.log("[cron] Starting free user media cleanup...")
     const start = Date.now()
@@ -341,6 +364,11 @@ export function startCleanupCron(): void {
     } catch (err) {
       console.error("[cron] KIE credit snapshot failed:", err)
     }
+
+    // The admin's balance floors (Admin → Video route): the alternate route's
+    // account and the default provider's, read after the snapshot above.
+    // Best effort, never throws (ee/billing/video-route-watch.ts).
+    await runBalanceCheckOnce()
 
     // Low-balance runway alert, ahead of the account actually hitting zero
     // (2026-08-31 20:31Z: the first signal was four user jobs failing with

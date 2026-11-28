@@ -1,14 +1,15 @@
 /**
- * Trend Radar storage (migration 576): the settings row, the sources, the
- * candidates and their daily readings. Service-role reads and writes only;
- * the routes shape what leaves the server.
+ * Trend Radar storage (migrations 576, 735): the settings row, the sources,
+ * the candidates and their daily readings. Service-role reads and writes
+ * only; the routes shape what leaves the server.
  *
  * Staging runs dev code on the shared database before the migration reaches
  * it, so a missing table is `TrendRadarUnavailableError` (the routes answer
- * 503), never a crash.
+ * 503), never a crash, and every read or write of a column 735 added is made
+ * again without it when the database does not have it yet.
  */
 import { supabase } from "../../../lib/supabase.js"
-import { isMissingTableError } from "../../../lib/postgrest-errors.js"
+import { isMissingColumnError, isMissingTableError } from "../../../lib/postgrest-errors.js"
 import { israelParts } from "../../notifications/israel-time.js"
 import { dayChangePct } from "./labels.js"
 import {
@@ -19,6 +20,7 @@ import {
   type TrendCandidateCard,
   type TrendCandidateEvent,
   type TrendCandidateLabel,
+  type TrendCandidatePlatforms,
   type TrendCandidatePost,
   type TrendCandidateReading,
   type TrendCandidateSearch,
@@ -41,9 +43,21 @@ export class TrendRadarUnavailableError extends Error {
   }
 }
 
-function fail(what: string, error: { code?: string | null; message?: string } | null): never {
+type DbError = { code?: string | null; message?: string }
+
+function fail(what: string, error: DbError | null): never {
   if (isMissingTableError(error)) throw new TrendRadarUnavailableError()
   throw new Error(`[trend-radar] ${what}: ${error?.message ?? "unknown error"}`)
+}
+
+/**
+ * Runs a statement with the columns 735 added; on a database that does not
+ * have them yet (staging ahead of main), once more without them.
+ */
+async function withAddedColumns<T>(run: (added: boolean) => PromiseLike<{ data: T; error: DbError | null }>): Promise<{ data: T; error: DbError | null }> {
+  const first = await run(true)
+  if (!first.error || !isMissingColumnError(first.error)) return first
+  return run(false)
 }
 
 // ── rows ─────────────────────────────────────────────────────────────────────
@@ -99,6 +113,13 @@ interface CandidateRow {
   trend_id: string | null
   created_at: string
   updated_at: string
+  // Migration 735 — absent on a row read from a database without them.
+  platforms?: TrendCandidatePlatforms | null
+  creators_capped?: boolean | null
+  first_posted_at?: string | null
+  last_read_at?: string | null
+  /** Post id -> plays at the last reading; the run's alone, never served. */
+  panel?: Record<string, number> | null
 }
 
 interface ReadingRow {
@@ -107,10 +128,29 @@ interface ReadingRow {
   creators: number
   plays: number
   posts: number
+  growth_pct?: number | null
 }
 
-const CANDIDATE_COLS =
+const BASE_CANDIDATE_COLS =
   "id, name, slug, status, label, sound_name, duration_sec, creators, plays, day_change_pct, first_seen_kind, first_seen_name, first_seen_url, first_seen_at, top_post, posts, templates_elsewhere, search, history, summary, reject_reason, passed_at, trend_id, created_at, updated_at"
+/** The served columns 735 added (`panel` is not served: only the run selects it). */
+const ADDED_CANDIDATE_COLS = "platforms, creators_capped, first_posted_at, last_read_at"
+
+/** The candidate columns, with or without the ones 735 added. */
+function candidateCols(added: boolean, extra = ""): string {
+  return added ? `${BASE_CANDIDATE_COLS}, ${ADDED_CANDIDATE_COLS}${extra}` : BASE_CANDIDATE_COLS
+}
+
+/** The candidate update keys that are columns 735 added. */
+const ADDED_WRITE_KEYS = ["platforms", "creators_capped", "first_posted_at", "last_read_at", "panel"] as const
+
+function withoutAddedKeys(row: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(row).filter(([k]) => !(ADDED_WRITE_KEYS as readonly string[]).includes(k)))
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+}
 
 export function toCard(r: CandidateRow): TrendCandidateCard {
   return {
@@ -122,10 +162,14 @@ export function toCard(r: CandidateRow): TrendCandidateCard {
     soundName: r.sound_name,
     durationSec: r.duration_sec,
     creators: r.creators,
+    creatorsCapped: r.creators_capped === true,
     plays: Number(r.plays),
     dayChangePct: r.day_change_pct,
     firstSeen: { kind: r.first_seen_kind, name: r.first_seen_name, url: r.first_seen_url, firstSeenAt: r.first_seen_at },
     topPost: r.top_post,
+    platforms: isRecord(r.platforms) ? (r.platforms as TrendCandidatePlatforms) : {},
+    firstPostedAt: r.first_posted_at ?? null,
+    lastReadAt: r.last_read_at ?? null,
     passedAt: r.passed_at,
     trendId: r.trend_id,
     createdAt: r.created_at,
@@ -309,6 +353,7 @@ const SORT_COLUMNS: Record<TrendCandidateSort, { column: string; ascending: bool
   creators: { column: "creators", ascending: false },
   dayChange: { column: "day_change_pct", ascending: false },
   firstSeen: { column: "first_seen_at", ascending: false },
+  plays: { column: "plays", ascending: false },
 }
 
 /** A page of cards; `next` is the offset of the following page (the list is small). */
@@ -316,37 +361,46 @@ export async function listCandidates(params: ListCandidatesParams): Promise<{ da
   const limit = Math.min(Math.max(params.limit ?? 50, 1), 200)
   const offset = params.cursor ? Math.max(0, Number.parseInt(params.cursor, 10) || 0) : 0
   const sort = SORT_COLUMNS[params.sort ?? "creators"]
-  let q = supabase.from("trend_radar_candidates").select(CANDIDATE_COLS)
-  if (params.status) q = q.eq("status", params.status)
-  else q = q.not("status", "in", "(rejected,archived)")
-  q = q.order(sort.column, { ascending: sort.ascending, nullsFirst: false }).order("updated_at", { ascending: false }).range(offset, offset + limit)
-  const { data, error } = await q
+  const { data, error } = await withAddedColumns((added) => {
+    let q = supabase.from("trend_radar_candidates").select(candidateCols(added))
+    if (params.status) q = q.eq("status", params.status)
+    else q = q.not("status", "in", "(rejected,archived)")
+    return q.order(sort.column, { ascending: sort.ascending, nullsFirst: false }).order("updated_at", { ascending: false }).range(offset, offset + limit)
+  })
   if (error) fail("list candidates", error)
-  const rows = (data ?? []) as CandidateRow[]
+  const rows = (data ?? []) as unknown as CandidateRow[]
   const page = rows.slice(0, limit)
   return { data: page.map(toCard), next: rows.length > limit ? String(offset + limit) : null }
 }
 
 export async function readCandidateRow(id: string): Promise<CandidateRow | null> {
-  const { data, error } = await supabase.from("trend_radar_candidates").select(CANDIDATE_COLS).eq("id", id).maybeSingle()
+  const { data, error } = await withAddedColumns((added) => supabase.from("trend_radar_candidates").select(candidateCols(added)).eq("id", id).maybeSingle())
   if (error) fail("read candidate", error)
-  return (data ?? null) as CandidateRow | null
+  return (data ?? null) as unknown as CandidateRow | null
 }
 
 export async function readCandidateBySlug(slug: string): Promise<CandidateRow | null> {
-  const { data, error } = await supabase.from("trend_radar_candidates").select(CANDIDATE_COLS).eq("slug", slug).maybeSingle()
+  const { data, error } = await withAddedColumns((added) => supabase.from("trend_radar_candidates").select(candidateCols(added)).eq("slug", slug).maybeSingle())
   if (error) fail("read candidate by slug", error)
-  return (data ?? null) as CandidateRow | null
+  return (data ?? null) as unknown as CandidateRow | null
 }
 
 export async function listReadings(candidateId: string): Promise<TrendCandidateReading[]> {
-  const { data, error } = await supabase
-    .from("trend_radar_readings")
-    .select("candidate_id, day, creators, plays, posts")
-    .eq("candidate_id", candidateId)
-    .order("day", { ascending: true })
+  const { data, error } = await withAddedColumns((added) =>
+    supabase
+      .from("trend_radar_readings")
+      .select(added ? "candidate_id, day, creators, plays, posts, growth_pct" : "candidate_id, day, creators, plays, posts")
+      .eq("candidate_id", candidateId)
+      .order("day", { ascending: true }),
+  )
   if (error) fail("list readings", error)
-  return ((data ?? []) as ReadingRow[]).map((r) => ({ date: r.day, creators: r.creators, plays: Number(r.plays), posts: r.posts }))
+  return ((data ?? []) as unknown as ReadingRow[]).map((r) => ({
+    date: r.day,
+    creators: r.creators,
+    plays: Number(r.plays),
+    posts: r.posts,
+    growthPct: r.growth_pct === null || r.growth_pct === undefined ? null : Number(r.growth_pct),
+  }))
 }
 
 export async function readCandidate(id: string, thresholds: TrendRadarThresholds): Promise<TrendCandidate | null> {
@@ -392,20 +446,17 @@ export async function upsertCandidate(input: NewCandidate): Promise<CandidateRow
     return existing
   }
   const now = new Date().toISOString()
-  const { data, error } = await supabase
-    .from("trend_radar_candidates")
-    .insert({
-      name: input.name,
-      slug: input.slug,
-      first_seen_kind: input.firstSeen.kind,
-      first_seen_name: input.firstSeen.name,
-      first_seen_url: input.firstSeen.url,
-      first_seen_at: now,
-      templates_elsewhere: input.templatesElsewhere ?? [],
-      history: [{ at: now, event: "first_seen", detail: `First seen on ${input.firstSeen.name}` }],
-    })
-    .select(CANDIDATE_COLS)
-    .single()
+  const row = {
+    name: input.name,
+    slug: input.slug,
+    first_seen_kind: input.firstSeen.kind,
+    first_seen_name: input.firstSeen.name,
+    first_seen_url: input.firstSeen.url,
+    first_seen_at: now,
+    templates_elsewhere: input.templatesElsewhere ?? [],
+    history: [{ at: now, event: "first_seen", detail: `First seen on ${input.firstSeen.name}` }],
+  }
+  const { data, error } = await withAddedColumns((added) => supabase.from("trend_radar_candidates").insert(row).select(candidateCols(added)).single())
   if (error) {
     // Two runs racing on the same slug: the other one's row wins.
     if (error.code === "23505") {
@@ -414,18 +465,24 @@ export async function upsertCandidate(input: NewCandidate): Promise<CandidateRow
     }
     fail("create candidate", error)
   }
-  return data as CandidateRow
+  return data as unknown as CandidateRow
 }
 
-/** The candidates the run re-reads: everything an admin has not decided on. */
+/**
+ * The candidates the run re-reads: everything an admin has not decided on,
+ * with what the run alone reads (`panel`, `last_read_at`). On a database
+ * without 735's columns the rows carry neither key.
+ */
 export async function listOpenCandidates(): Promise<CandidateRow[]> {
-  const { data, error } = await supabase
-    .from("trend_radar_candidates")
-    .select(CANDIDATE_COLS)
-    .in("status", ["watching", "candidate", "slowing"])
-    .order("updated_at", { ascending: true })
+  const { data, error } = await withAddedColumns((added) =>
+    supabase
+      .from("trend_radar_candidates")
+      .select(candidateCols(added, ", panel"))
+      .in("status", ["watching", "candidate", "slowing"])
+      .order("updated_at", { ascending: true }),
+  )
   if (error) fail("list open candidates", error)
-  return (data ?? []) as CandidateRow[]
+  return (data ?? []) as unknown as CandidateRow[]
 }
 
 export interface ReadingInput {
@@ -433,13 +490,15 @@ export interface ReadingInput {
   creators: number
   plays: number
   posts: number
+  /** Growth per day over the posts this reading and the previous one both saw. */
+  growthPct?: number | null
 }
 
 /** Writes the day's reading (a second read of the same day replaces it) and answers every reading, oldest first. */
 export async function writeReading(candidateId: string, reading: ReadingInput): Promise<TrendCandidateReading[]> {
-  const { error } = await supabase
-    .from("trend_radar_readings")
-    .upsert({ candidate_id: candidateId, day: reading.day, creators: reading.creators, plays: reading.plays, posts: reading.posts, read_at: new Date().toISOString() }, { onConflict: "candidate_id,day" })
+  const row: Record<string, unknown> = { candidate_id: candidateId, day: reading.day, creators: reading.creators, plays: reading.plays, posts: reading.posts, read_at: new Date().toISOString() }
+  const withGrowth: Record<string, unknown> = { ...row, growth_pct: reading.growthPct ?? null }
+  const { error } = await withAddedColumns((added) => supabase.from("trend_radar_readings").upsert(added ? withGrowth : row, { onConflict: "candidate_id,day" }))
   if (error) fail("write reading", error)
   return listReadings(candidateId)
 }
@@ -459,6 +518,12 @@ export interface CandidateUpdate {
   rejectReason?: string | null
   passedAt?: string | null
   trendId?: string | null
+  // Migration 735 — dropped from the write on a database without them.
+  platforms?: TrendCandidatePlatforms
+  creatorsCapped?: boolean
+  firstPostedAt?: string | null
+  lastReadAt?: string | null
+  panel?: Record<string, number> | null
   /** Appended to the history. */
   event?: { event: string; detail: string | null }
 }
@@ -470,9 +535,16 @@ export async function updateCandidate(id: string, update: CandidateUpdate): Prom
   const current = await readCandidateRow(id)
   if (!current) throw new Error(`[trend-radar] candidate ${id} not found`)
   const row = candidatePatch(current, update)
-  const { data, error } = await supabase.from("trend_radar_candidates").update(row).eq("id", id).select(CANDIDATE_COLS).single()
+  const { data, error } = await withAddedColumns((added) =>
+    supabase
+      .from("trend_radar_candidates")
+      .update(added ? row : withoutAddedKeys(row))
+      .eq("id", id)
+      .select(candidateCols(added))
+      .single(),
+  )
   if (error) fail("update candidate", error)
-  return data as CandidateRow
+  return data as unknown as CandidateRow
 }
 
 /**
@@ -484,15 +556,17 @@ export async function updateOpenCandidate(id: string, update: CandidateUpdate): 
   const current = await readCandidateRow(id)
   if (!current || !OPEN_STATUSES.includes(current.status)) return null
   const row = candidatePatch(current, update)
-  const { data, error } = await supabase
-    .from("trend_radar_candidates")
-    .update(row)
-    .eq("id", id)
-    .in("status", [...OPEN_STATUSES])
-    .select(CANDIDATE_COLS)
-    .maybeSingle()
+  const { data, error } = await withAddedColumns((added) =>
+    supabase
+      .from("trend_radar_candidates")
+      .update(added ? row : withoutAddedKeys(row))
+      .eq("id", id)
+      .in("status", [...OPEN_STATUSES])
+      .select(candidateCols(added))
+      .maybeSingle(),
+  )
   if (error) fail("update open candidate", error)
-  return (data as CandidateRow | null) ?? null
+  return (data as unknown as CandidateRow | null) ?? null
 }
 
 function candidatePatch(current: CandidateRow, update: CandidateUpdate): Record<string, unknown> {
@@ -512,6 +586,11 @@ function candidatePatch(current: CandidateRow, update: CandidateUpdate): Record<
   if (update.rejectReason !== undefined) row.reject_reason = update.rejectReason
   if (update.passedAt !== undefined) row.passed_at = update.passedAt
   if (update.trendId !== undefined) row.trend_id = update.trendId
+  if (update.platforms !== undefined) row.platforms = update.platforms
+  if (update.creatorsCapped !== undefined) row.creators_capped = update.creatorsCapped
+  if (update.firstPostedAt !== undefined) row.first_posted_at = update.firstPostedAt
+  if (update.lastReadAt !== undefined) row.last_read_at = update.lastReadAt
+  if (update.panel !== undefined) row.panel = update.panel
   if (update.event) row.history = [...(current.history ?? []), { at: now, ...update.event }].slice(-200)
   return row
 }
@@ -523,7 +602,7 @@ export async function pruneReadings(retentionDays: number): Promise<void> {
   if (error) fail("prune readings", error)
 }
 
-export async function readSummary(): Promise<TrendRadarSummary> {
+export async function readSummary(): Promise<Omit<TrendRadarSummary, "reading"> & { runnerUserId: string | null }> {
   const s = await readSettings()
   const counts = { candidates: 0, watching: 0, slowing: 0 }
   const { data, error } = await supabase.from("trend_radar_candidates").select("status").in("status", ["candidate", "watching", "slowing"])
@@ -540,7 +619,17 @@ export async function readSummary(): Promise<TrendRadarSummary> {
     counts,
     searchesToday: s.searchesDate === today || s.searchesDate === s.lastRunDate ? s.searchesToday : 0,
     dailySearchBudget: s.thresholds.dailySearchBudget,
+    runnerUserId: s.runnerUserId,
   }
+}
+
+/** The credits the account the run searches as holds, or null when it cannot be read. */
+export async function readRunnerCredits(runnerUserId: string | null): Promise<number | null> {
+  if (!runnerUserId) return null
+  const { data, error } = await supabase.from("profiles").select("subscription_credits, topup_credits").eq("id", runnerUserId).maybeSingle()
+  if (error || !data) return null
+  const p = data as { subscription_credits: number | null; topup_credits: number | null }
+  return (p.subscription_credits ?? 0) + (p.topup_credits ?? 0)
 }
 
 export async function readPublicSettings(): Promise<TrendRadarSettings> {

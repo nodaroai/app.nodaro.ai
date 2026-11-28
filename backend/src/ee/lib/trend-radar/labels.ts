@@ -4,10 +4,17 @@
  */
 import type { TrendCandidateLabel, TrendCandidateReading, TrendCandidateStatus, TrendRadarThresholds } from "./types.js"
 
-/** Plays growth from the previous reading, in percent; `null` with fewer than two readings or no base. */
+/**
+ * The latest reading's growth, in percent: its `growthPct` (per day, over the
+ * posts it and the previous reading both saw) when it has one; otherwise —
+ * a reading from before that was measured, or one whose posts were all new —
+ * the change in summed plays from the previous reading. `null` with fewer
+ * than two readings or no base.
+ */
 export function dayChangePct(readings: readonly TrendCandidateReading[]): number | null {
   if (readings.length < 2) return null
   const last = readings[readings.length - 1]!
+  if (typeof last.growthPct === "number" && Number.isFinite(last.growthPct)) return last.growthPct
   const prev = readings[readings.length - 2]!
   if (prev.plays <= 0) return null
   return Math.round(((last.plays - prev.plays) / prev.plays) * 1000) / 10

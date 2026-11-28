@@ -29,9 +29,9 @@ import {
  * sweep had to act. For a run that failed or was cancelled (`graceMs` ago), or
  * is gone: every held child is released. For a run still going `longParentMs`
  * after its held child completed: released, with an `[ALERT]` — 12 hours, while
- * the longest Video Remake run's own budget is 7 h 45 min
- * (providers/video/cast-swap-budget.ts: masked "auto", the face check's ladder
- * and the longest upscale wait) and the bound stays under the 24 hours
+ * the longest Video Remake run's own budget is 8 h 16 min
+ * (providers/video/cast-swap-budget.ts: masked "auto", the face check's ladder,
+ * the longest upscale wait and a long clip's plan and join) and the bound stays under the 24 hours
  * after which the First Remake offer stops waiting for a run's holds
  * (migration 684, `p_ignore_holds`).
  *

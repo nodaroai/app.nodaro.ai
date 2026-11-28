@@ -235,6 +235,42 @@ describe("cancelInFlightChildJobs — adoption split (audit A2)", () => {
     expect(mocks.refundMock).toHaveBeenCalledWith("j-fan")
   })
 
+  // The stop rule (lib/stop-rule.ts): a Seedance 2.x video whose task already started is being
+  // made and will be finished by the reconcile sweep. It is never cancelled and refunded here.
+  it("a started Seedance 2.x video that cannot be adopted (a fan-out iteration, an orphan) is left to finish: not cancelled, not refunded", async () => {
+    mocks.rows.push(
+      { id: "j-fan-video", input_data: { node_id: "node-3", iterationIndex: 2, type: "image-to-video", provider: "seedance-2-5" }, provider_task_id: "task-2", usage_log_id: "ul-3", credits: 5, job_type: "image-to-video" },
+      { id: "j-orphan-video", input_data: { type: "text-to-video", provider: "seedance-2" }, provider_task_id: "task-3", usage_log_id: "ul-4", credits: 5, job_type: "text-to-video" },
+    )
+
+    const { cancelled, adoptable } = await cancelInFlightChildJobs("exec-1", "owner-1")
+
+    expect(cancelled).toBe(0)
+    expect(adoptable.size).toBe(0)
+    expect(mocks.refundMock).not.toHaveBeenCalled()
+    expect(mocks.updateMock).not.toHaveBeenCalled()
+  })
+
+  it("a run ended as a penalty (a blocked account) cancels a started video too", async () => {
+    mocks.rows.push({ id: "j-fan-video", input_data: { node_id: "node-3", iterationIndex: 2, type: "image-to-video", provider: "seedance-2-5" }, provider_task_id: "task-2", usage_log_id: "ul-3", credits: 5, job_type: "image-to-video" })
+    const { cancelled } = await cancelInFlightChildJobs("exec-1", "owner-1", { punitive: true })
+    expect(cancelled).toBe(1)
+    expect(mocks.refundMock).toHaveBeenCalledWith("j-fan-video")
+  })
+
+  it("the same lanes on another model, or a Seedance 2.x video with no task yet, keep today's cancel + refund", async () => {
+    mocks.rows.push(
+      { id: "j-other-model", input_data: { node_id: "node-3", iterationIndex: 2, type: "image-to-video", provider: "kling-3.0" }, provider_task_id: "task-2", usage_log_id: "ul-3", credits: 5, job_type: "image-to-video" },
+      { id: "j-not-started", input_data: { node_id: "node-4", iterationIndex: 1, type: "image-to-video", provider: "seedance-2-5" }, provider_task_id: null, usage_log_id: "ul-4", credits: 5, job_type: "image-to-video" },
+    )
+
+    const { cancelled } = await cancelInFlightChildJobs("exec-1", "owner-1")
+
+    expect(cancelled).toBe(2)
+    expect(mocks.refundMock).toHaveBeenCalledWith("j-other-model")
+    expect(mocks.refundMock).toHaveBeenCalledWith("j-not-started")
+  })
+
   it("POST-provider row WITHOUT node_id (legacy/orphan) → cancelled, not adopted", async () => {
     mocks.rows.push({
       id: "j-orphan",

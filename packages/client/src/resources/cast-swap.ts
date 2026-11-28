@@ -56,7 +56,9 @@ import type { NodaroClientCore } from "../core.js"
  * `preview_out_of_range`, with a part of the clip `portion_unavailable`,
  * `portion_incomplete`, `portion_with_preview`, `portion_not_for_trends`,
  * `portion_out_of_range`, `source_too_long` and `long_source_unpriceable`
- * (see `portionStart`), `unnamed_role_needs_picture` (a role with no name
+ * (see `portionStart`), `long_clip_too_long` (a whole clip longer than
+ * `styleChoice()`'s `longClips.maxSourceSec`, where it answers one; see
+ * {@link VideoRemakeLongClips}), `unnamed_role_needs_picture` (a role with no name
  * and no image), `no_roles_in_preview` (a preview that would change nothing,
  * judged on what it sends: no role kept in it with images, no fixed
  * reference, no `prePrompt` or `postPrompt` and no art style), `prompt_too_long`
@@ -302,7 +304,10 @@ export interface VideoRemakeParams {
    * is `true`, 2–30 seconds. With a part ({@link portionStart} and
    * {@link portionSec}) or a 4 s `preview`, where
    * {@link VideoRemakeStyleChoice.portion} is `true`, the source may be longer
-   * than 30 s, up to 10 minutes.
+   * than 30 s, up to 10 minutes. Where {@link VideoRemakeStyleChoice.longClips}
+   * answers a length, a whole run on Nodaro Prism with the Precise style may
+   * take a source longer than 30 s, up to that length, made in parts (see
+   * {@link VideoRemakeLongClips}).
    */
   videoUrl: string
   /**
@@ -476,10 +481,18 @@ export interface VideoRemakeParams {
    */
   faceMasking?: VideoRemakeFaceMasking
   /**
-   * `"draft"` means 480p draft.
-   * @deprecated use `resolution` + `draft`.
+   * How the delivered size is made (see {@link VideoRemakeQuality}):
+   * `"economy"` (the default) renders one size below and upscales the result
+   * to `resolution`; `"full"` renders at `resolution` itself, with no upscale
+   * step, and costs more. Where {@link VideoRemakeStyleChoice.quality} lists
+   * the size for the engine choice; anywhere else there is one way to make the
+   * size and the request is made that way (never refused for it). Not read on
+   * a draft. Call `estimate()` once per value to price each.
+   *
+   * `"draft"` is the older value, a 480p draft: use `resolution` + `draft`
+   * instead of it.
    */
-  quality?: "draft"
+  quality?: VideoRemakeQuality | "draft"
   /** A generation session to file the result in. */
   sessionId?: string
   /** The client app that sent the run (stored on the job as `input_data.origin`). */
@@ -514,6 +527,21 @@ export interface VideoRemakeParams {
 export type VideoRemakeResolution = "480p" | "720p" | "1080p" | "4k"
 
 /**
+ * How a Video Remake run's delivered size is made (`quality` on `run()` and
+ * `estimate()`, on the estimate's answer and on a completed job's output):
+ *
+ * - `"economy"` (the default): rendered one size below (the estimate's
+ *   `engineResolution`), then upscaled to the size delivered. Faces and motion
+ *   can look processed.
+ * - `"full"`: rendered at the size delivered. No upscaling. Costs more.
+ *
+ * The choice exists where {@link VideoRemakeStyleChoice.quality} lists the
+ * size for the engine choice, and an estimate's `qualityOffered` says whether
+ * a given request has it.
+ */
+export type VideoRemakeQuality = "full" | "economy"
+
+/**
  * The Video Remake keys of a completed job's output (`GET /v1/jobs/:id`,
  * `output_data`) that a client reads; the output carries others too.
  */
@@ -522,14 +550,44 @@ export interface VideoRemakeJobOutput {
   videoUrl?: string
   /** The engine the run used, by its public id. */
   engine?: VideoRemakeEngineChoice
-  /** The video's length in seconds: on a run of a part ({@link VideoRemakeParams.portionStart}), the part's length. */
+  /**
+   * The video's length in seconds: on a run of a part
+   * ({@link VideoRemakeParams.portionStart}), the part's length; on a clip
+   * delivered in part ({@link partial}), the delivered length.
+   */
   durationSec?: number
+  /**
+   * Present only when a clip made in parts ({@link VideoRemakeLongClips})
+   * was delivered in part: the video covers the source's first
+   * `partial.deliveredSec` seconds, not the whole clip. Absent: the whole
+   * clip (or the part asked for).
+   */
+  partial?: VideoRemakePartial
   /**
    * The size the video was delivered at (see {@link VideoRemakeResolution}).
    * Rarely smaller than the size asked for, when that size could not be
    * finished: this says the size the video has.
    */
   resolution?: VideoRemakeResolution
+  /**
+   * How the size was made (see {@link VideoRemakeQuality}). Only on a run
+   * whose request named `quality`.
+   */
+  quality?: VideoRemakeQuality
+  /**
+   * The video before the upscale step, at the size it was rendered at: only
+   * on a run whose request named `quality`, made the `"economy"` way, whose
+   * upscale step was applied, and only on its owner's own reads of the job
+   * (never on someone else's, a public job's included). Show it beside
+   * `videoUrl` ("Before upscale").
+   */
+  engineVideoUrl?: string
+  /** The width of {@link engineVideoUrl}, in pixels. */
+  engineWidth?: number
+  /** The height of {@link engineVideoUrl}, in pixels. */
+  engineHeight?: number
+  /** The size {@link engineVideoUrl} was rendered at. */
+  engineResolution?: Exclude<VideoRemakeResolution, "4k">
   [key: string]: unknown
 }
 
@@ -703,7 +761,8 @@ export interface VideoRemakePlanRolesParams {
    * The clip, a public http(s) URL, 4–30 s (2–30 s where
    * {@link VideoRemakeStyleChoice.shortClips} is `true`; up to 10 minutes
    * with a part or a preview where {@link VideoRemakeStyleChoice.portion} is
-   * `true`).
+   * `true`; a whole clip up to {@link VideoRemakeStyleChoice.longClips}'s
+   * length on Nodaro Prism, where it answers one).
    */
   videoUrl: string
   /**
@@ -879,6 +938,9 @@ export interface VideoRemakePlannedRoles {
  *   {@link VideoRemakeParams.portionStart}): `portion_unavailable`,
  *   `portion_incomplete`, `portion_with_preview`, `portion_out_of_range`,
  *   `source_too_long` and `long_source_unpriceable` (each 400);
+ * - `long_clip_too_long` (400): a whole clip on Nodaro Prism longer than
+ *   {@link VideoRemakeStyleChoice.longClips}'s `maxSourceSec`, where it
+ *   answers one;
  * - `image_unreadable` (400): an image could not be fetched, is larger than
  *   10 MB, or is not a PNG, JPEG, WebP or GIF (the envelope's `details.index`, read as
  *   `NodaroError.details.details.index`: its position in `images`, from 0);
@@ -913,6 +975,7 @@ export type VideoRemakePlanRolesRefusalCode =
   | "portion_out_of_range"
   | "source_too_long"
   | "long_source_unpriceable"
+  | "long_clip_too_long"
   | "image_unreadable"
   | "plan_roles_failed"
   | "previz_not_available"
@@ -1002,6 +1065,25 @@ export interface VideoRemakeEstimate {
    * Absent from a server whose engine does not answer it.
    */
   resolution?: VideoRemakeResolution
+  /**
+   * How THIS quote is made (see {@link VideoRemakeQuality}). Only when the
+   * request named `quality` (`"full"` or `"economy"`), on a server whose
+   * engine takes the choice. It can differ from the value asked for: where
+   * the size can be made one way only, it says that way.
+   */
+  quality?: VideoRemakeQuality
+  /**
+   * `true` only when both ways exist for this request. `false`: only the
+   * way {@link quality} names can be had for it (say so beside the control).
+   * Read it on the `"economy"` estimate. Only when the request named
+   * `quality`.
+   */
+  qualityOffered?: boolean
+  /**
+   * The size the video is rendered at before it is upscaled to `resolution`.
+   * Only when {@link quality} is `"economy"`.
+   */
+  engineResolution?: Exclude<VideoRemakeResolution, "4k">
 }
 
 /** `VideoRemakeEstimate.firstRemakeOffer` / `TrendEstimate.firstRemakeOffer`. */
@@ -1105,6 +1187,9 @@ export interface VideoRemakeFullQualityResult {
  * - `insufficient_credits` (402), or in a workspace `budget_exceeded`,
  *   `member_cap_exceeded` or `user_allowance_exceeded`;
  * - `job_blocked` (422): the request was blocked by the job policy;
+ * - `long_clip_no_full_quality` (409): the run was a clip longer than 30 s
+ *   made in parts (see {@link VideoRemakeLongClips}), which has no Full
+ *   Quality yet; run it again at the resolution you want;
  * - `job_read_failed` (503, retryable), `estimate_unavailable` (503, try
  *   again shortly), `host_too_old` (503).
  *
@@ -1123,6 +1208,7 @@ export type VideoRemakeFullQualityRefusalCode =
   | "member_cap_exceeded"
   | "user_allowance_exceeded"
   | "job_blocked"
+  | "long_clip_no_full_quality"
   | "job_read_failed"
   | "estimate_unavailable"
   | "host_too_old"
@@ -1248,6 +1334,18 @@ export interface VideoRemakeStyleChoice {
    */
   resolutions?: Partial<Record<VideoRemakeEngineChoice, VideoRemakeResolution[]>>
   /**
+   * Per engine choice, the delivered sizes where a run has a Quality choice
+   * here ({@link VideoRemakeParams.quality}), smallest first: e.g.
+   * `{ "nodaro-prism": ["720p", "1080p"], "nodaro-pulse": ["1080p"] }`. Show
+   * the Quality control for exactly these (an estimate's `qualityOffered`
+   * then says whether a given request has it). An engine choice left out has
+   * none. `{}`, or absent from an older server: no Quality control. `"4k"` is
+   * listed only for an engine choice that renders 4K itself here; where
+   * {@link resolutions} offers 4K and this does not list it, 4K is rendered
+   * at 1080p and upscaled (Full is not available at 4K for that choice).
+   */
+  quality?: Partial<Record<VideoRemakeEngineChoice, VideoRemakeResolution[]>>
+  /**
    * Whether a run, its estimate and {@link VideoRemakeResource.planRoles}
    * take a part of the clip here ({@link VideoRemakeParams.portionStart} and
    * {@link VideoRemakeParams.portionSec}): one answer for the deployment, not
@@ -1267,6 +1365,57 @@ export interface VideoRemakeStyleChoice {
    * `clip_out_of_range`).
    */
   shortClips?: boolean
+  /**
+   * Whether a whole clip longer than 30 s runs here, made in parts and
+   * joined into one result, and up to how long (see
+   * {@link VideoRemakeLongClips}): one answer for the deployment, a length
+   * only where the deployment's engine has it switched on. `null`, or absent
+   * from an older server: no clip over 30 s runs whole.
+   */
+  longClips?: VideoRemakeLongClips | null
+}
+
+/**
+ * Long clips ({@link VideoRemakeStyleChoice.longClips}): where offered, a
+ * whole run (no `preview`, no `portionStart`, not a trend run) on Nodaro
+ * Prism, not its Flash choice, with the Precise style may take a source
+ * longer than 30 s, up to `maxSourceSec`. It needs no request field: the run
+ * is made in parts, which are joined into one result of the source's length.
+ * The estimate prices the run that will be made. A whole clip over
+ * `maxSourceSec` is refused 400 `long_clip_too_long`; any other engine, style
+ * or run keeps the 30 s limit (`clip_out_of_range`). Full Quality is not
+ * offered for such a run (409 `long_clip_no_full_quality`).
+ *
+ * Such a job may complete with only its first parts: see
+ * {@link VideoRemakeJobOutput.partial}.
+ */
+export interface VideoRemakeLongClips {
+  /** The longest source clip run in parts, in seconds (more than 30). */
+  maxSourceSec: number
+}
+
+/** Why a clip made in parts was delivered only up to a part ({@link VideoRemakePartial.reason}). Open-ended. */
+export type VideoRemakePartialReason = "part_failed" | "short_take" | "joined_length" | (string & {})
+
+/**
+ * A clip made in parts delivered in part ({@link VideoRemakeJobOutput.partial}):
+ * a later part failed after its retries (`"part_failed"`), its take came out
+ * too short (`"short_take"`) or the joined take did not have the parts'
+ * length (`"joined_length"`), and the job completed with the clip from its
+ * start up to that part, never with a gap. The undelivered parts' renders are
+ * released, not charged; the run's own fee is the whole clip's, as quoted.
+ * Nothing retries the rest on its own.
+ */
+export interface VideoRemakePartial {
+  /** The delivered length in seconds (the output's `durationSec`). */
+  deliveredSec: number
+  /** The source clip's length in seconds. */
+  sourceSec: number
+  /** The parts delivered, of the parts the clip was planned in. */
+  parts: { delivered: number; planned: number }
+  reason: VideoRemakePartialReason
+  /** One sentence to show the person, in English. */
+  message: string
 }
 
 /**

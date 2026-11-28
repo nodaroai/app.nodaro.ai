@@ -365,9 +365,9 @@ export function registerVideoVerbs({ server, session, fastify, videoRemakeSizes 
         openWorldHint: true,
       },
     _meta: {
-      "ui/resourceUri": "ui://nodaro/widget/v5/job-video",
+      "ui/resourceUri": "ui://nodaro/widget/v6/job-video",
       ui: {
-        resourceUri: "ui://nodaro/widget/v5/job-video",
+        resourceUri: "ui://nodaro/widget/v6/job-video",
         visibility: ["model", "app"],
       },
     },
@@ -719,9 +719,9 @@ export function registerVideoVerbs({ server, session, fastify, videoRemakeSizes 
         openWorldHint: true,
       },
     _meta: {
-      "ui/resourceUri": "ui://nodaro/widget/v5/job-video",
+      "ui/resourceUri": "ui://nodaro/widget/v6/job-video",
       ui: {
-        resourceUri: "ui://nodaro/widget/v5/job-video",
+        resourceUri: "ui://nodaro/widget/v6/job-video",
         visibility: ["model", "app"],
       },
     },
@@ -918,9 +918,9 @@ export function registerVideoVerbs({ server, session, fastify, videoRemakeSizes 
         openWorldHint: true,
       },
     _meta: {
-      "ui/resourceUri": "ui://nodaro/widget/v5/job-video",
+      "ui/resourceUri": "ui://nodaro/widget/v6/job-video",
       ui: {
-        resourceUri: "ui://nodaro/widget/v5/job-video",
+        resourceUri: "ui://nodaro/widget/v6/job-video",
         visibility: ["model", "app"],
       },
     },
@@ -1068,9 +1068,9 @@ export function registerVideoVerbs({ server, session, fastify, videoRemakeSizes 
         openWorldHint: true,
       },
     _meta: {
-      "ui/resourceUri": "ui://nodaro/widget/v5/job-video",
+      "ui/resourceUri": "ui://nodaro/widget/v6/job-video",
       ui: {
-        resourceUri: "ui://nodaro/widget/v5/job-video",
+        resourceUri: "ui://nodaro/widget/v6/job-video",
         visibility: ["model", "app"],
       },
     },
@@ -1162,8 +1162,8 @@ export function registerVideoVerbs({ server, session, fastify, videoRemakeSizes 
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v5/job-video",
-        ui: { resourceUri: "ui://nodaro/widget/v5/job-video", visibility: ["model", "app"] },
+        "ui/resourceUri": "ui://nodaro/widget/v6/job-video",
+        ui: { resourceUri: "ui://nodaro/widget/v6/job-video", visibility: ["model", "app"] },
       },
     },
     async (args) => {
@@ -1297,9 +1297,9 @@ export function registerVideoVerbs({ server, session, fastify, videoRemakeSizes 
         openWorldHint: true,
       },
     _meta: {
-      "ui/resourceUri": "ui://nodaro/widget/v5/job-video",
+      "ui/resourceUri": "ui://nodaro/widget/v6/job-video",
       ui: {
-        resourceUri: "ui://nodaro/widget/v5/job-video",
+        resourceUri: "ui://nodaro/widget/v6/job-video",
         visibility: ["model", "app"],
       },
     },
@@ -1412,9 +1412,9 @@ export function registerVideoVerbs({ server, session, fastify, videoRemakeSizes 
         openWorldHint: true,
       },
     _meta: {
-      "ui/resourceUri": "ui://nodaro/widget/v5/job-image",
+      "ui/resourceUri": "ui://nodaro/widget/v6/job-image",
       ui: {
-        resourceUri: "ui://nodaro/widget/v5/job-image",
+        resourceUri: "ui://nodaro/widget/v6/job-image",
         visibility: ["model", "app"],
       },
     },
@@ -1571,9 +1571,9 @@ export function registerVideoVerbs({ server, session, fastify, videoRemakeSizes 
         openWorldHint: true,
       },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v5/job-video",
+        "ui/resourceUri": "ui://nodaro/widget/v6/job-video",
         ui: {
-          resourceUri: "ui://nodaro/widget/v5/job-video",
+          resourceUri: "ui://nodaro/widget/v6/job-video",
           visibility: ["model", "app"],
         },
       },
@@ -1782,9 +1782,9 @@ export function registerVideoVerbs({ server, session, fastify, videoRemakeSizes 
         openWorldHint: true,
       },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v5/job-video",
+        "ui/resourceUri": "ui://nodaro/widget/v6/job-video",
         ui: {
-          resourceUri: "ui://nodaro/widget/v5/job-video",
+          resourceUri: "ui://nodaro/widget/v6/job-video",
           visibility: ["model", "app"],
         },
       },
@@ -1981,9 +1981,9 @@ export function registerVideoVerbs({ server, session, fastify, videoRemakeSizes 
         openWorldHint: true,
       },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v5/job-video",
+        "ui/resourceUri": "ui://nodaro/widget/v6/job-video",
         ui: {
-          resourceUri: "ui://nodaro/widget/v5/job-video",
+          resourceUri: "ui://nodaro/widget/v6/job-video",
           visibility: ["model", "app"],
         },
       },
@@ -2126,9 +2126,9 @@ export function registerVideoVerbs({ server, session, fastify, videoRemakeSizes 
         openWorldHint: true,
       },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v5/job-video",
+        "ui/resourceUri": "ui://nodaro/widget/v6/job-video",
         ui: {
-          resourceUri: "ui://nodaro/widget/v5/job-video",
+          resourceUri: "ui://nodaro/widget/v6/job-video",
           visibility: ["model", "app"],
         },
       },
@@ -2277,9 +2277,9 @@ export function registerVideoVerbs({ server, session, fastify, videoRemakeSizes 
         openWorldHint: true,
       },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v5/job-video",
+        "ui/resourceUri": "ui://nodaro/widget/v6/job-video",
         ui: {
-          resourceUri: "ui://nodaro/widget/v5/job-video",
+          resourceUri: "ui://nodaro/widget/v6/job-video",
           visibility: ["model", "app"],
         },
       },
@@ -2397,9 +2397,9 @@ export function registerVideoVerbs({ server, session, fastify, videoRemakeSizes 
         openWorldHint: true,
       },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v5/job-video",
+        "ui/resourceUri": "ui://nodaro/widget/v6/job-video",
         ui: {
-          resourceUri: "ui://nodaro/widget/v5/job-video",
+          resourceUri: "ui://nodaro/widget/v6/job-video",
           visibility: ["model", "app"],
         },
       },
@@ -2525,9 +2525,9 @@ export function registerVideoVerbs({ server, session, fastify, videoRemakeSizes 
         openWorldHint: true,
       },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v5/job-video",
+        "ui/resourceUri": "ui://nodaro/widget/v6/job-video",
         ui: {
-          resourceUri: "ui://nodaro/widget/v5/job-video",
+          resourceUri: "ui://nodaro/widget/v6/job-video",
           visibility: ["model", "app"],
         },
       },
@@ -2633,9 +2633,9 @@ export function registerVideoVerbs({ server, session, fastify, videoRemakeSizes 
         openWorldHint: true,
       },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v5/job-video",
+        "ui/resourceUri": "ui://nodaro/widget/v6/job-video",
         ui: {
-          resourceUri: "ui://nodaro/widget/v5/job-video",
+          resourceUri: "ui://nodaro/widget/v6/job-video",
           visibility: ["model", "app"],
         },
       },
@@ -2734,9 +2734,9 @@ export function registerVideoVerbs({ server, session, fastify, videoRemakeSizes 
         openWorldHint: true,
       },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v5/job-video",
+        "ui/resourceUri": "ui://nodaro/widget/v6/job-video",
         ui: {
-          resourceUri: "ui://nodaro/widget/v5/job-video",
+          resourceUri: "ui://nodaro/widget/v6/job-video",
           visibility: ["model", "app"],
         },
       },
@@ -2862,9 +2862,9 @@ export function registerVideoVerbs({ server, session, fastify, videoRemakeSizes 
         openWorldHint: true,
       },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v5/job-video",
+        "ui/resourceUri": "ui://nodaro/widget/v6/job-video",
         ui: {
-          resourceUri: "ui://nodaro/widget/v5/job-video",
+          resourceUri: "ui://nodaro/widget/v6/job-video",
           visibility: ["model", "app"],
         },
       },
@@ -2967,8 +2967,8 @@ export function registerVideoVerbs({ server, session, fastify, videoRemakeSizes 
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v5/job-video",
-        ui: { resourceUri: "ui://nodaro/widget/v5/job-video", visibility: ["model", "app"] },
+        "ui/resourceUri": "ui://nodaro/widget/v6/job-video",
+        ui: { resourceUri: "ui://nodaro/widget/v6/job-video", visibility: ["model", "app"] },
       },
     },
     async (args) => {
@@ -3021,8 +3021,8 @@ export function registerVideoVerbs({ server, session, fastify, videoRemakeSizes 
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v5/job-video",
-        ui: { resourceUri: "ui://nodaro/widget/v5/job-video", visibility: ["model", "app"] },
+        "ui/resourceUri": "ui://nodaro/widget/v6/job-video",
+        ui: { resourceUri: "ui://nodaro/widget/v6/job-video", visibility: ["model", "app"] },
       },
     },
     async (args) => {
@@ -3107,8 +3107,8 @@ export function registerVideoVerbs({ server, session, fastify, videoRemakeSizes 
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v5/job-video",
-        ui: { resourceUri: "ui://nodaro/widget/v5/job-video", visibility: ["model", "app"] },
+        "ui/resourceUri": "ui://nodaro/widget/v6/job-video",
+        ui: { resourceUri: "ui://nodaro/widget/v6/job-video", visibility: ["model", "app"] },
       },
     },
     async (args) => {
@@ -3158,8 +3158,8 @@ export function registerVideoVerbs({ server, session, fastify, videoRemakeSizes 
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v5/job-video",
-        ui: { resourceUri: "ui://nodaro/widget/v5/job-video", visibility: ["model", "app"] },
+        "ui/resourceUri": "ui://nodaro/widget/v6/job-video",
+        ui: { resourceUri: "ui://nodaro/widget/v6/job-video", visibility: ["model", "app"] },
       },
     },
     async (args) => {
@@ -3438,8 +3438,8 @@ export function registerVideoVerbs({ server, session, fastify, videoRemakeSizes 
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v5/job-video",
-        ui: { resourceUri: "ui://nodaro/widget/v5/job-video", visibility: ["model", "app"] },
+        "ui/resourceUri": "ui://nodaro/widget/v6/job-video",
+        ui: { resourceUri: "ui://nodaro/widget/v6/job-video", visibility: ["model", "app"] },
       },
     },
     async (args) => {

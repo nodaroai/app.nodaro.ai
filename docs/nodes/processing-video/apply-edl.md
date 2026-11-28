@@ -42,6 +42,10 @@ Selecting a render also sets the **Transcript** output to the transcript that re
 - When that check fails or cannot be made (the render carries no record of its own job, as in a list run), the **Transcript** output is cleared rather than left as another cut's. A node that takes it then gets no transcript, so **Add Captions** falls back to its own caption sources: by default it transcribes the selected cut itself, and with auto-transcribe off and no caption text it reports that it has no caption source.
 - A render cut with no transcript wired has none, so selecting it clears the **Transcript** output too.
 
+## Source file
+
+When the video connected to this node is a generation result that kept its original file beside its playable copy (an HDR, 10-bit or HEVC video: see [Video originals and previews](../../design/video-original-and-preview.md)), the node works from that original, not from the copy, and still outputs an 8-bit H.264 MP4. An HDR picture (HLG or PQ) is converted to SDR first, by the same conversion as the result's playable copy, so the output looks like the copy you played; an HDR video you upload is converted the same way. All of a run's conversions together get up to 15 minutes; a video too long to convert in what is left is read as before: the playable copy, or an upload as it is. When a picture was converted, the job's output says so: `output_data.warningCode` is `hdr_tone_mapped`, with an English `warningMessage`. If the original cannot be used (it is gone, it is over the node's download limit, or converting it fails or would take too long), the node works from the playable copy, as before. The price is the same either way.
+
 ## Configuration
 
 | Field | Type | Default | Description |

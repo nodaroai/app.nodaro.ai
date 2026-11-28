@@ -423,7 +423,8 @@ describe("seedance-2-0-extend — today's transport, unchanged", () => {
     expect(endFrame).toBeUndefined()
     // Deep equality, not a subset: no `outputFormat` key may appear.
     expect(opts).toEqual(OPTIONS_TODAY)
-    expect(reconcileOpts).toBeUndefined()
+    // Only the route context: still no onTaskCreated (no default-upstream task is persisted).
+    expect(reconcileOpts).toEqual({ routeJob: { jobId: "job-1", jobType: "extend-video" } })
   })
 
   it("the tail and the last frame go to the job's scratch folder, on no one's quota (decided 2026-10-09)", async () => {
@@ -475,7 +476,8 @@ describe("seedance-2-5-extend — the provider guide's recipe", () => {
     expect(aspect).toBe("adaptive")
     // Deep equality, not a subset: no start image, no `outputFormat` without the lever.
     expect(opts).toEqual(OPTIONS_25)
-    expect(reconcileOpts).toBeUndefined()
+    // Only the route context: still no onTaskCreated (no default-upstream task is persisted).
+    expect(reconcileOpts).toEqual({ routeJob: { jobId: "job-1", jobType: "extend-video" } })
   })
 
   it("names the seconds it adds in the prompt", async () => {
@@ -527,7 +529,7 @@ describe("seedance-2-5-extend — the provider guide's recipe", () => {
 
   it("STILL persists no KIE task — the reconcile cron must never ship the raw extension", async () => {
     await run()
-    expect(mocks.mockTextToVideo.mock.calls[0]![5]).toBeUndefined()
+    expect(mocks.mockTextToVideo.mock.calls[0]![5]).toEqual({ routeJob: { jobId: "job-1", jobType: "extend-video" } })
   })
 
   it("the deliverable: the extend stitch of source+extension, watermarked, finalized", async () => {
@@ -634,6 +636,8 @@ describe("the extend stitch, on every Seedance provider", () => {
       smartCut: { framesFromPrev: 8, framesFromNext: 8 },
       fallbackTrims: { trimEndFrames: 4, trimStartFrames: 3 },
       audioFadeSec: 0.15,
+      // An unwatermarked run joins two 10-bit clips in 10-bit HEVC (decided 2026-11-22).
+      keepTenBit: true,
     })
   })
 
@@ -647,6 +651,8 @@ describe("the extend stitch, on every Seedance provider", () => {
       workDir: STITCH_DIR,
       fallbackTrims: { trimEndFrames: 0, trimStartFrames: 0 },
       audioFadeSec: 0.15,
+      // An unwatermarked run joins two 10-bit clips in 10-bit HEVC (decided 2026-11-22).
+      keepTenBit: true,
     })
   })
 
@@ -1058,7 +1064,8 @@ describe("kling-4-extend — the tail recipe on Kling 4", () => {
     // (Kling 4.0's sound is always on) and no container lever.
     expect(opts).toEqual({ resolution: "720p", referenceVideoUrls: [TAIL_URL], aspectRatio: "16:9" })
     // No KIE task persisted: a reconcile finalize would ship the unstitched extension.
-    expect(reconcileOpts).toBeUndefined()
+    // Only the route context: still no onTaskCreated (no default-upstream task is persisted).
+    expect(reconcileOpts).toEqual({ routeJob: { jobId: "job-1", jobType: "extend-video" } })
   })
 
   it("renders its 5 s default when no length is set, and the seconds the route queues", async () => {

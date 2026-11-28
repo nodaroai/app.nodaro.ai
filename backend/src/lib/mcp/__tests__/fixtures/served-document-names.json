@@ -90,6 +90,7 @@
  "get_node_skill list": "tools: list_models | models: -",
  "get_node_skill llm-chat": "tools: list_models | models: -",
  "get_node_skill location": "tools: list_models | models: -",
+ "get_node_skill long-image": "tools: list_models | models: -",
  "get_node_skill loop-subject": "tools: get_picker_catalog list_models | models: -",
  "get_node_skill loop-video": "tools: list_models loop_video | models: -",
  "get_node_skill lottie-overlay": "tools: list_models | models: -",

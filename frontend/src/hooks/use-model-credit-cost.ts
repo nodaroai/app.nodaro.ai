@@ -118,8 +118,8 @@ function seedanceRefQuoteQuery(quoteKey: string) {
       if (!request) throw new Error("not a Seedance reference-video quote key")
       return estimateSeedanceRefCredits(request)
     },
-    // A key names its clips by URL: a new clip is a new key.
-    staleTime: Infinity,
+    // Routing and prices can change while a node keeps its inputs.
+    staleTime: 30_000,
     retry: false,
   }
 }
@@ -193,12 +193,12 @@ export function useSeedanceRefQuote(quoteKey: string | undefined): SeedanceRefQu
   const readOnly = useReadOnlyCanvas()
   // The app's one client, named explicitly: the run estimate reads this cache
   // through `getCachedModelCredits`, which has no React context either.
-  const { data } = useQuery({
+  const { data, isError } = useQuery({
     ...seedanceRefQuoteQuery(quoteKey ?? ""),
     enabled: !readOnly && !!quoteKey && hasCredits(),
     gcTime: 30 * 60_000,
   }, queryClient)
-  return data
+  return isError ? undefined : data
 }
 
 /** Public model-cost metadata; community builds never request billing data. */

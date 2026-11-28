@@ -24,6 +24,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 
 vi.mock("@/ee/hooks/use-model-credits", () => ({
   getCachedCredits: vi.fn(),
+  getCachedVideoProCredits: vi.fn(() => undefined),
 }))
 
 import { getCachedCredits } from "@/ee/hooks/use-model-credits"

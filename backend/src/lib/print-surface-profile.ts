@@ -28,20 +28,24 @@ import { pathToFileURL } from "node:url"
  * `--media-origin` prints /config.js's `mediaOrigin` instead of the profile,
  * with the same guarantees (the backend decides it from its own resolved
  * profile and config: see `renderMediaOriginForRuntimeConfig`).
+ * `--storage-origins` prints its `storageOrigins` the same way: the origins
+ * the download routes accept (`renderStorageOriginsForRuntimeConfig`).
  */
 const isCli = Boolean(process.argv[1]) && import.meta.url === pathToFileURL(process.argv[1]).href
 
 if (isCli) {
   process.env.DOTENV_CONFIG_QUIET ??= "true"
   try {
-    const { renderMediaOriginForRuntimeConfig, renderSurfaceProfileForRuntimeConfig } = await import("./surface-profile-runtime-config.js")
+    const { renderMediaOriginForRuntimeConfig, renderStorageOriginsForRuntimeConfig, renderSurfaceProfileForRuntimeConfig } = await import("./surface-profile-runtime-config.js")
     const { readUiStringManifest } = await import("./surface-strings.js")
     const flag = process.argv.indexOf("--ui-strings-dir")
     const dir = flag === -1 ? undefined : process.argv[flag + 1]
     process.stdout.write(
       process.argv[2] === "--media-origin"
         ? renderMediaOriginForRuntimeConfig()
-        : renderSurfaceProfileForRuntimeConfig(dir ? (product) => readUiStringManifest(product, dir) : undefined),
+        : process.argv[2] === "--storage-origins"
+          ? renderStorageOriginsForRuntimeConfig()
+          : renderSurfaceProfileForRuntimeConfig(dir ? (product) => readUiStringManifest(product, dir) : undefined),
     )
   } catch (err) {
     console.error("[print-surface-profile] could not resolve the surface profile:", (err as Error).message)

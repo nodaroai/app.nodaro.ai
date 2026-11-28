@@ -2,8 +2,10 @@
 // @registry frontend/src/nodes/*/price-id.ts
 // @registry-exports price-ids: UNIT_PRICE_IDS
 import type { UnitCreditId } from "../kit"
+import { creditId as unit_long_image } from "../long-image/price-id" // unit:long-image
 import { creditId as unit_split_into_layers } from "../split-into-layers/price-id" // unit:split-into-layers
 
 export const UNIT_PRICE_IDS: Readonly<Record<string, UnitCreditId>> = Object.assign(Object.create(null), {
+  "long-image": unit_long_image, // unit:long-image
   "split-into-layers": unit_split_into_layers, // unit:split-into-layers
 })

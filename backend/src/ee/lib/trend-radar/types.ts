@@ -21,10 +21,11 @@ export type TrendCandidateLabel = (typeof TREND_CANDIDATE_LABELS)[number]
 export const TREND_RADAR_SOURCE_KINDS = ["sitemap", "social", "suggest"] as const
 export type TrendRadarSourceKind = (typeof TREND_RADAR_SOURCE_KINDS)[number]
 
-export const TREND_CANDIDATE_SORTS = ["creators", "dayChange", "firstSeen"] as const
+export const TREND_CANDIDATE_SORTS = ["creators", "dayChange", "firstSeen", "plays"] as const
 export type TrendCandidateSort = (typeof TREND_CANDIDATE_SORTS)[number]
 
-export type TrendCandidatePlatform = "tiktok" | "instagram" | "youtube"
+export const TREND_CANDIDATE_PLATFORMS = ["tiktok", "instagram", "youtube"] as const
+export type TrendCandidatePlatform = (typeof TREND_CANDIDATE_PLATFORMS)[number]
 
 export interface TrendCandidateSource {
   kind: "template-site" | "social"
@@ -42,7 +43,7 @@ export interface TrendCandidatePost {
   plays: number | null
   likes: number | null
   soundName: string | null
-  /** The platform's own still, when it gave one (a short-lived link). */
+  /** A small copy of the post's still kept on this deployment's storage (`stills.ts`); else the platform's own, a link that stops answering within hours. */
   stillUrl: string | null
   /** The platform's own player for the post, when it has one. */
   embedUrl: string | null
@@ -56,7 +57,25 @@ export interface TrendCandidateReading {
   creators: number
   plays: number
   posts: number
+  /**
+   * Plays growth per day, percent, over the posts this reading and the
+   * previous one both saw; `null` on the first reading, when no post was seen
+   * twice, or on a reading from before it was measured.
+   */
+  growthPct: number | null
 }
+
+/** One platform's share of a candidate's last reading. */
+export interface TrendCandidatePlatformStats {
+  posts: number
+  creators: number
+  plays: number
+  /** The search returned as many posts as it may: more creators likely posted it than were counted. */
+  capped: boolean
+  top: TrendCandidatePost | null
+}
+
+export type TrendCandidatePlatforms = Partial<Record<TrendCandidatePlatform, TrendCandidatePlatformStats>>
 
 export interface TrendCandidateCard {
   id: string
@@ -67,10 +86,17 @@ export interface TrendCandidateCard {
   soundName: string | null
   durationSec: number | null
   creators: number
+  /** A platform's search returned its most posts: the true count is likely higher. */
+  creatorsCapped: boolean
   plays: number
+  /** Growth per day of the latest reading (its `growthPct`, else the summed-plays change). */
   dayChangePct: number | null
   firstSeen: TrendCandidateSource
   topPost: TrendCandidatePost | null
+  platforms: TrendCandidatePlatforms
+  /** The earliest post date the readings saw. */
+  firstPostedAt: string | null
+  lastReadAt: string | null
   passedAt: string | null
   trendId: string | null
   createdAt: string
@@ -147,6 +173,8 @@ export interface TrendRadarLastRun {
   sourcesRead: number
   namesSeen: number
   searchesUsed: number
+  /** Why the run stopped before every candidate it could afford was read (the search account ran out of credits); absent when it did not. */
+  stoppedEarly?: string | null
 }
 
 export interface TrendRadarSettings {
@@ -158,12 +186,33 @@ export interface TrendRadarSettings {
   runAt: string
 }
 
+/** What a day's reading costs, so the budget can be set in candidates and credits rather than searches. */
+export interface TrendRadarReadingCost {
+  /** Searches one candidate's reading takes: one per platform. */
+  searchesPerRead: number
+  /** Credits one candidate's reading is charged to the account the run searches as; null when the price could not be read. */
+  creditsPerRead: number | null
+  /** Credits that account holds now; null when there is no runner yet or the balance could not be read. */
+  runnerCredits: number | null
+  /** The highest daily search budget the settings take. */
+  maxSearchesPerDay: number
+  /** Extra searches at most one candidate's deeper count makes (a platform whose search came back full, searched again in other orders); they come out of the same daily budget. */
+  deepSearchesMax: number
+  /** Credits one of those extra searches is charged; null when the price could not be read. */
+  creditsPerDeepSearch: number | null
+}
+
 export interface TrendRadarSummary {
   lastRun: TrendRadarLastRun | null
   counts: { candidates: number; watching: number; slowing: number }
   searchesToday: number
   dailySearchBudget: number
+  /** What reading costs; absent from a server older than this field. */
+  reading?: TrendRadarReadingCost
 }
+
+/** The highest daily search budget the settings take. */
+export const DAILY_SEARCH_BUDGET_MAX = 5000
 
 export const DEFAULT_THRESHOLDS: TrendRadarThresholds = {
   minCreators: 5,
@@ -171,7 +220,7 @@ export const DEFAULT_THRESHOLDS: TrendRadarThresholds = {
   risingPct: 15,
   slowingPct: 1,
   maxClipSec: 30,
-  dailySearchBudget: 60,
+  dailySearchBudget: 900,
 }
 
 export const DEFAULT_ALERTS: TrendRadarAlerts = {

@@ -32,7 +32,7 @@
  */
 
 import { fourKSpellingPreHandler } from "../lib/four-k-spelling.js"
-import type { FastifyInstance, FastifyRequest } from "fastify"
+import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify"
 import { z } from "zod"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { insertJob } from "../lib/insert-job.js"
@@ -41,7 +41,7 @@ import { supabase } from "../lib/supabase.js"
 import { kieTaskOwnedByAnother } from "../lib/kie-task-ownership.js"
 import { videoQueue } from "../lib/queue.js"
 import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
-import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
+import { creditGuard, reserveCreditsForJob, type RoutePricing } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
@@ -411,88 +411,89 @@ export async function checkExtendSource(
 
 const readExtendFourKSpelling = fourKSpellingPreHandler((b) => (typeof b.provider === "string" ? b.provider : undefined))
 
-export async function extendVideoRoutes(app: FastifyInstance) {
-  // LTX 2.3 Pro extend is priced per second added, so its guard carries the
-  // seconds (the reservation below then reserves exactly that amount); every
-  // other provider keeps its row-priced guard, unchanged.
-  const ltxExtendGuard = creditGuard(() => LTX_EXTEND_PER_SECOND_CREDIT_ID, {
-    computeCredits: (body) => ltxExtendBaseCredits((body as Record<string, unknown> | undefined)?.duration),
-  })
-  // Seedance 2.5 is charged per second sent and added: its two-second row times
-  // the run's units, on the source the preHandler measured (the whole 10 s
-  // window when it could not). Every other provider (computeCredits answers
-  // undefined) keeps its row-priced guard.
-  const rowPricedGuard = creditGuard((req) => resolveExtendVideoIdentifier(req.body as Record<string, unknown> | undefined, grokSourceResolutionOf(req)), {
-    computeCredits: extendVideoComputeCredits,
-  })
+async function prepareExtendPrice(req: FastifyRequest, reply: FastifyReply): Promise<unknown> {
+  // A 4K spelling (`2160p`, `UHD`) on Seedance 2.5 Extend is read as `4k`
+  // first, so the 4K source rule and the price follow it.
+  await readExtendFourKSpelling(req)
+  const parsed = extendVideoBody.safeParse(req.body)
+  if (!parsed.success) {
+    return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
+  }
+  // The snapped length replaces the body's, so the guard, the
+  // reservation, the job and the queue all read the seconds that run.
+  const data = retiredLengthInWindow(parsed.data, req.retiredVideoProvider)
+  if (data !== parsed.data) req.body = { ...(req.body as Record<string, unknown>), duration: data.duration }
+  const problem = extendRequestProblem(data)
+  if (problem) {
+    return reply.status(400).send({ error: { code: "validation_error", message: problem } })
+  }
+  const { provider, videoUrl, duration } = data
+  // Grok extends only its own clips: the source the task names is checked
+  // here — before any balance check, probe of ours or reservation — and
+  // its resolution is what the run is priced at, never the body's. A
+  // request naming no task has no Grok clip to extend.
+  if (isGrokExtendProvider(provider)) {
+    const taskId = (data.taskId ?? data.kieTaskId)?.trim()
+    if (!taskId) return reply.status(400).send({ error: { code: GROK_EXTEND_SOURCE_CODE, message: GROK_EXTEND_SOURCE_MESSAGE } })
+    if (req.userId) {
+      const grokSource = await resolveGrokExtendSource({ taskId, userId: req.userId, probeTimeoutMs: GROK_SOURCE_PROBE_TIMEOUT_MS })
+      if (!grokSource.ok) return reply.status(400).send({ error: { code: grokSource.code, message: grokSource.message } })
+      grokExtendSources.set(req, grokSource)
+    }
+  }
+  const resolution = isGrokExtendProvider(provider) ? grokSourceResolutionOf(req) : data.resolution
+  // Gemini Omni Flash 1.2 runs on fal: an install with no fal key is
+  // refused here, before anything is probed or held (the worker refuses it
+  // again as the backstop).
+  if (isGeminiOmniExtendProvider(provider) && !falEnabled()) {
+    return reply.status(503).send({ error: { code: "provider_unavailable", message: new MissingProviderKeyError("FAL_KEY", undefined, GEMINI_OMNI_EXTEND_KEY_COVERAGE).message } })
+  }
+  if (isTailRecipeProvider(provider) && videoUrl && req.userId) {
+    const source = await checkExtendSource(provider, videoUrl, (err) => {
+      req.log.warn({ err, provider }, "extend-video: source ffprobe failed; the worker measures it again")
+    }, data.resolution)
+    if (!source.ok) return reply.status(400).send({ error: { code: source.code, message: source.message } })
+    if (source.pictureSec !== undefined) measuredSourcePictureSec.set(req, source.pictureSec)
+    // Gemini Omni Flash 1.2: a tier above the source's runs, and is
+    // charged, at the source's (the delivered clip keeps its size). The
+    // capped tier replaces the body's, so the guard, the reservation, the
+    // job and the queue all read the tier that runs.
+    if (isGeminiOmniExtendProvider(provider) && source.size) {
+      const tier = geminiOmniExtendResolution(data.resolution, source.size)
+      if (tier !== geminiOmniExtendResolution(data.resolution)) req.body = { ...(req.body as Record<string, unknown>), resolution: tier }
+    }
+  }
+  // The free-credit video limits judge the provider the request RUNS, as
+  // an extension (no extension on free credits). Left to themselves they
+  // read the price row's name, and a row can be named for no catalog
+  // model — LTX 2.3 Pro (`ltx-2.3-pro-extend:per-second`) extends under
+  // its generation model's id — so an account that never paid would get
+  // through. Every provider is marked alike.
+  req.freeVideoRequest = { provider, duration: duration ?? null, resolution: resolution ?? null, videoSize: null, extend: true }
+}
 
-  app.post("/v1/extend-video", {
-    // Everything that refuses a request is answered here, BEFORE the credit
-    // guard: the schema and each provider's own rules, then (a tail recipe)
-    // whether the source is long enough for the model to continue — so
-    // nothing is checked against a balance, probed or reserved for a request
-    // that cannot run. The source is probed only once its URL passed the schema.
-    preHandler: async (req, reply) => {
-      // A 4K spelling (`2160p`, `UHD`) on Seedance 2.5 Extend is read as `4k`
-      // first (decided 2026-11-27), so the 4K source rule and the price follow it.
-      await readExtendFourKSpelling(req)
-      const parsed = extendVideoBody.safeParse(req.body)
-      if (!parsed.success) {
-        return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
-      }
-      // The snapped length replaces the body's, so the guard, the
-      // reservation, the job and the queue all read the seconds that run.
-      const data = retiredLengthInWindow(parsed.data, req.retiredVideoProvider)
-      if (data !== parsed.data) req.body = { ...(req.body as Record<string, unknown>), duration: data.duration }
-      const problem = extendRequestProblem(data)
-      if (problem) {
-        return reply.status(400).send({ error: { code: "validation_error", message: problem } })
-      }
-      const { provider, videoUrl, duration } = data
-      // Grok extends only its own clips: the source the task names is checked
-      // here — before any balance check, probe of ours or reservation — and
-      // its resolution is what the run is priced at, never the body's. A
-      // request naming no task has no Grok clip to extend.
-      if (isGrokExtendProvider(provider)) {
-        const taskId = (data.taskId ?? data.kieTaskId)?.trim()
-        if (!taskId) return reply.status(400).send({ error: { code: GROK_EXTEND_SOURCE_CODE, message: GROK_EXTEND_SOURCE_MESSAGE } })
-        if (req.userId) {
-          const grokSource = await resolveGrokExtendSource({ taskId, userId: req.userId, probeTimeoutMs: GROK_SOURCE_PROBE_TIMEOUT_MS })
-          if (!grokSource.ok) return reply.status(400).send({ error: { code: grokSource.code, message: grokSource.message } })
-          grokExtendSources.set(req, grokSource)
-        }
-      }
-      const resolution = isGrokExtendProvider(provider) ? grokSourceResolutionOf(req) : data.resolution
-      // Gemini Omni Flash 1.2 runs on fal: an install with no fal key is
-      // refused here, before anything is probed or held (the worker refuses it
-      // again as the backstop).
-      if (isGeminiOmniExtendProvider(provider) && !falEnabled()) {
-        return reply.status(503).send({ error: { code: "provider_unavailable", message: new MissingProviderKeyError("FAL_KEY", undefined, GEMINI_OMNI_EXTEND_KEY_COVERAGE).message } })
-      }
-      if (isTailRecipeProvider(provider) && videoUrl && req.userId) {
-        const source = await checkExtendSource(provider, videoUrl, (err) => {
-          req.log.warn({ err, provider }, "extend-video: source ffprobe failed; the worker measures it again")
-        }, data.resolution)
-        if (!source.ok) return reply.status(400).send({ error: { code: source.code, message: source.message } })
-        if (source.pictureSec !== undefined) measuredSourcePictureSec.set(req, source.pictureSec)
-        // Gemini Omni Flash 1.2: a tier above the source's runs, and is
-        // charged, at the source's (the delivered clip keeps its size). The
-        // capped tier replaces the body's, so the guard, the reservation, the
-        // job and the queue all read the tier that runs.
-        if (isGeminiOmniExtendProvider(provider) && source.size) {
-          const tier = geminiOmniExtendResolution(data.resolution, source.size)
-          if (tier !== geminiOmniExtendResolution(data.resolution)) req.body = { ...(req.body as Record<string, unknown>), resolution: tier }
-        }
-      }
-      // The free-credit video limits judge the provider the request RUNS, as
-      // an extension (no extension on free credits). Left to themselves they
-      // read the price row's name, and a row can be named for no catalog
-      // model — LTX 2.3 Pro (`ltx-2.3-pro-extend:per-second`) extends under
-      // its generation model's id — so an account that never paid would get
-      // through. Every provider is marked alike.
-      req.freeVideoRequest = { provider, duration: duration ?? null, resolution: resolution ?? null, videoSize: null, extend: true }
-      await (provider === "ltx-2.3-pro" ? ltxExtendGuard : rowPricedGuard)(req, reply)
+export const extendVideoPricing: RoutePricing = {
+  prechecks: [prepareExtendPrice],
+  modelResolver: (req) => resolveExtendVideoIdentifier(req.body as Record<string, unknown> | undefined, grokSourceResolutionOf(req)),
+  opts: {
+    runModel: (req) => {
+      const provider = (req.body as { provider?: unknown } | undefined)?.provider
+      return typeof provider === "string" ? provider : undefined
     },
+    routedVideoInput: (body, req) => {
+      const parsed = extendVideoBody.safeParse(body)
+      return parsed.success ? { input: parsed.data, jobType: "extend-video" } : null
+    },
+    computeCredits: (body, req) => {
+      const input = body as Record<string, unknown> | undefined
+      return input?.provider === "ltx-2.3-pro" ? ltxExtendBaseCredits(input.duration) : extendVideoComputeCredits(body, req)
+    },
+  },
+}
+
+export async function extendVideoRoutes(app: FastifyInstance) {
+  app.post("/v1/extend-video", {
+    preHandler: [...extendVideoPricing.prechecks, creditGuard(extendVideoPricing.modelResolver, extendVideoPricing.opts)],
   }, async (req, reply) => {
     // Validated in the preHandler; parsed again for its types.
     const parsed = extendVideoBody.safeParse(req.body)

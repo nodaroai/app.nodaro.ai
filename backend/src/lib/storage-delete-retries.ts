@@ -24,8 +24,10 @@
  * (`urlsLinkedByJobsSince`, the same "links" the blanking would clear). Those
  * paths are the user's own deletes (`GUARDED_BY_NEWER_JOB_LINKS`): `source`
  * "asset" — the library delete, and the media delete of a file with a library
- * row (through the same asset delete) — and "media" — the media delete's
- * row-less branch and media-process. Their first-try rules differ: the
+ * row (through the same asset delete) — "media" — the media delete's
+ * row-less branch and media-process — and "job-delete" — the recorded files
+ * a job deleted for good leaves (`lib/deleted-job-files.ts`), which asked
+ * every job's output first. Their first-try rules differ: the
  * library delete and media-process held a file one of the user's jobs linked,
  * the media delete did not (the job being wiped still names the url). One
  * rule for all of them on the retry: only a job made since the failure counts
@@ -90,7 +92,7 @@ import { STORAGE_DELETES_OFF, storageDeletesSkipped } from "./storage-deletes-se
  * The sources whose failed delete a job made after the failure keeps: the
  * user's own deletes that checked job links on their first try.
  */
-const GUARDED_BY_NEWER_JOB_LINKS: ReadonlySet<string> = new Set<DeleteSource>(["asset", "media"])
+const GUARDED_BY_NEWER_JOB_LINKS: ReadonlySet<string> = new Set<DeleteSource>(["asset", "media", "job-delete"])
 
 /** Retries per file before the pass logs it and gives up. */
 export const MAX_DELETE_RETRIES = 5

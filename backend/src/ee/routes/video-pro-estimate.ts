@@ -4,6 +4,9 @@ import { openApiRegistry } from "../../lib/openapi-registry.js"
 import { getAppSettings } from "../../lib/app-settings.js"
 import { formatZodError } from "../../lib/zod-error.js"
 import { computeGenerateVideoProPricing } from "../billing/generate-video-pro-credits.js"
+import { routedGenerateVideoProPricing } from "../billing/video-route-planned.js"
+import { isRoutableVideoModel } from "../../lib/video-route-policy.js"
+import { handlePriceNotConfigured } from "../lib/credit-guard-impl.js"
 import { applyServiceMarkup } from "../billing/service-margin.js"
 
 const estimateBody=z.object({
@@ -17,7 +20,7 @@ const estimateBody=z.object({
   anchorMode:z.enum(["upfront","progressive","none"]).optional(),
   contextTailSec:z.number().min(2).max(15).optional(),planOnly:z.boolean().optional(),
   // The run's audio: priced where the model's price follows it (PixVerse V6 Max).
-  generateAudio:z.boolean().optional(),
+  generateAudio:z.boolean().optional(), hasOpeningVideo:z.boolean().optional(),
 })
 
 /** Read-only estimate through the same pricing and markup as reservation. */
@@ -42,9 +45,11 @@ export function registerVideoProEstimate(app:FastifyInstance):void {
         renderMethod:p.renderMethod,tailSec:p.contextTailSec,anchorsSeeded:p.anchorMode==="none"?true:undefined,
         generateAudio:p.generateAudio,
       })
-      const credits=applyServiceMarkup(p.planOnly?Math.max(2,price.feeBase):price.reserveBase,await getAppSettings(),"generate-video-pro")
+      const route = !p.planOnly && isRoutableVideoModel(p.provider) ? await routedGenerateVideoProPricing(price, p) : undefined
+      const credits=route?.reserveChargedCredits ?? applyServiceMarkup(p.planOnly?Math.max(2,price.feeBase):price.reserveBase,await getAppSettings(),"generate-video-pro")
       return {data:{credits,upperBound:!p.planOnly&&!!price.segmentPlanning}}
     } catch(error) {
+      if (handlePriceNotConfigured(error, reply, "/v1/credits/video-pro-estimate")) return reply
       // Pricing validation is public configuration feedback, never a job failure.
       return reply.code(400).send({error:error instanceof Error?error.message:"Unable to estimate this video configuration"})
     }

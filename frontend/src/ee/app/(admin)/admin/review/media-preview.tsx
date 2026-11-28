@@ -82,6 +82,7 @@ export function MediaPreview({
     <a
       data-testid="review-media"
       href={src}
+      // download-site: an admin's copy of a held file of unknown kind (a held job has no original yet)
       download
       className="flex h-40 items-center justify-center rounded-md border text-sm underline"
     >

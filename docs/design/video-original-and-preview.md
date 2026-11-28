@@ -32,7 +32,7 @@ The original keeps its own container and content type (`.mp4`, `.mov`,
 `.webm`, `.mkv`). It is stored at `videos/<id>-master.<ext>`, next to the
 preview at `videos/<id>.mp4`, so it is part of the same job. Retention, an
 app's expunge and the result review find it the same way they find the
-preview (deleting a job for good is the exception: see Storage quota). An
+preview (deleting a job for good finds it differently: see Storage quota). An
 original is kept only for a store with a job of its
 own: a store id that names no job, or names another job than the one the
 worker is running (a plugin passing some other id), keeps none.
@@ -100,17 +100,42 @@ pass):
   its object deleted;
 - an app's expunge, which claims before it clears the job's record, and stops
   before clearing anything when a claim does not run;
-- not yet: deleting a job for good (below) leaves its original, as it leaves
-  its preview;
+- deleting a job for good (below), which cannot claim: the delete itself
+  reads the record, and the original goes unless something still uses it;
 - a result-gate block that deletes the job's files;
 - a job that failed or was cancelled (below).
 
 The retention sweep and an app's expunge give back only recorded bytes: a
 file with no record gives nothing back.
 
-Deleting a job for good (the Trash's "delete forever", the 30-day purge)
-deletes neither its preview nor its original, as a job delete never deleted
-its stored files; both stay charged.
+Deleting a job for good (the Trash's "delete forever", the 30-day purge, a
+workflow or project delete that takes its jobs with it) destroys its record,
+so the delete itself reads it, under the row's lock and in the same
+transaction, and answers both the bytes each owner was charged for it and the
+keys it held. The bytes are given back once, as the delete answered them. Each
+recorded file (a kept original, a watermarked Extend's raw clip) is then
+deleted, giving nothing back a second time, unless something still uses it:
+
+- a library row names it; or, for an original, a library row names the job's
+  preview or another of its files (the original goes with that item, when the
+  item is deleted). A raw clip is not kept for a library item: nothing in the
+  library reads it;
+- the job delivered it as its result (it completed on its original);
+- another job's output names it, under the public host or the fallback host;
+- a job still in flight names the deleted job, or one of its files, in its
+  input (asked before the other jobs' outputs, so a job that completes
+  between the two questions is still seen);
+- it is held as evidence, it was made by the relay target, or the deployment
+  deletes nothing.
+
+A lookup that fails keeps the file. A delete storage does not confirm goes to
+the storage-delete retry pass, which checks less before it tries again: a
+library row naming that very file, and a job made since the failure linking
+its public url. A delete the database refuses deletes nothing, and the answer
+covers only the jobs the delete really took: a job whose workflow or parent
+moved away while the delete ran keeps its files and its charge. The job's preview
+and its other result files stay: a workflow, a copy of one and other places
+can still show their address.
 
 A job that ends while its result is stored never keeps the original:
 
@@ -200,16 +225,137 @@ gallery and the library players do not show the message yet.
 
 ## Download
 
-Download should give the original when there is one. The API and MCP expose
-it now. Moving the editor's Download buttons onto it is a follow-up (see
-below).
+**Download gives the original** wherever the app offers it for a video
+result, and the app keeps playing the preview. Every surface
+holds only the address it plays, so the server finds the original from it:
+`GET /v1/download?url=<address>&original=1` serves the original that the
+job named by the address's key records beside that very preview. The job
+must be completed and not in the Trash. Its output's `videoUrl` must name
+the preview asked for, and its `originalVideoUrl` a kept original beside it
+(`videos/<id>-master.<ext>`). The original is saved as
+`<id>-original.<ext>` (the storage key keeps `-master`), with its own
+extension and content type. If storage cannot give it (a 404 or a server
+error, or a fetch that fails before any answer), the preview asked for is
+served instead. Anything else is the file itself, as before:
+an H.264 8-bit result, a watermarked run, an upload, a plugin output, a job
+in the Trash or one that cannot be read. For a preview the job's record is the proof,
+never what storage happens to hold: an original no completed output names
+beside that preview is never given in its place. An address that is itself
+a kept original's key is served as it is, with no job read, as the plain
+route always served it. The original passes the same two checks as the address
+asked for (the storage allowlist and the content restrictions). Its fetch
+may run for up to 15 minutes, against the usual 2.
 
-## Editing nodes
+Each surface keeps its own way of downloading (one helper in the app,
+`frontend/src/lib/video-result-download.ts`, carries all of them):
 
-Editing nodes (Combine, Trim, Loop, Add Captions, renders) still read
-`videoUrl` and write 8-bit H.264 as before. Because the preview of an HDR
-original is already tone-mapped, they now get SDR input with correct colour
-instead of HLG or PQ squeezed into 8 bits.
+- The canvas nodes, their result overlay, the unplayable notice, Pro clip
+  parts and the public gallery already saved through the app's own route.
+  They still do, now asking for the original.
+- The editor's Library browser, job history, the results gallery, app
+  result cards, the agent widgets, the chat view, split parts and a loop's
+  video cells opened the file itself. They now open the route in a new tab
+  with `open=1`. An original is saved (the browser closes the tab). With no
+  original the route redirects the tab to the file itself, so the file
+  still comes straight from storage. An address that is not an https
+  address of a stored video keeps that surface's own download.
+- Iteration results ("Download all" too) fetch the original's bytes when
+  there is one and save them under its own extension; otherwise they fetch
+  the file itself as before.
+
+A Library item (the editor's Library browser; the Library page has no
+Download) gives the original by the same rule: its file's key names
+the job that made it. An item saved from a node's result names the same
+file, so it finds the original too. An item that is the original itself (a
+job that completed on its original) downloads itself. An item whose job was
+deleted for good, or is in the Trash, downloads its preview.
+
+`frontend/src/lib/__tests__/video-download-sites.test.ts` fails any download
+site that neither goes through the helper nor states (`download-site: <why>`)
+that it is not a video result's.
+
+Files are named by the server (`Content-Disposition`), which browsers
+prefer over a link's own `download` name: `<id>.mp4` for a preview,
+`<id>-original.mov` (or `.mp4`, `.webm`, `.mkv`) for an original. No answer
+to `original=1` is cached, a `HEAD` reads only the file's headers, the fetch
+stops when the caller goes away, and the route takes at most 120 requests
+with `original=1` a minute from one caller (a request without it is not
+counted, as before). The app sends a video address to the route only when
+it is on the deployment's published storage origin (`R2_PUBLIC_URL`'s, which
+`/config.js` names as `storageOrigins`; the fallback host is not published)
+and its path is a stored video's, headed by a job id; any other video keeps
+its surface's own download.
+
+## Steps that read the original
+
+A node is handed the preview, the url its job's output names. Since
+2026-11-22 a step of ours that reads the picture itself reads the original
+instead, when the run may read it (`backend/src/lib/video-source.ts`). The
+original is found only through the live job row the preview's key names: it
+must be completed and not in the Trash, its `videoUrl` must name that very
+object, and its `originalVideoUrl` must be the preview's own original key
+(`videos/<id>-master.<ext>`). The run's owner must be able to read that job
+by today's rule: their own, or a public completed one. A copied
+`originalVideoUrl` (a saved node, a run's node states, an app's snapshot)
+proves nothing, so a node run again after its source job was deleted for good
+reads the preview, as before. A run's `input_data` is never rewritten.
+
+The new path only ever upgrades: any failure along it (the original gone or
+over the step's download limit, a probe, an encode that fails or runs out of
+time) reads the preview, as before, and is logged. The price never depends on
+which file was read.
+
+- **Editing nodes** (Combine, Trim, Loop, Add Captions, Apply EDL, Video
+  Overlay, the renders and the rest) read the original and make from it the
+  step's source (`backend/src/providers/video/editing-source.ts`): the
+  preview's own chain (the same frames, timing and sound, an HDR picture
+  tone-mapped by the preview's own tone map) at the working copy's
+  near-lossless quality instead of the preview's CRF 23. So the step runs
+  exactly as it did on the preview (the source is the preview's own class:
+  H.264 4:2:0, its size, rate, colour tags and AAC 128k sound) and still
+  writes 8-bit H.264 at its own settings, one generation of loss fewer, and
+  its result looks like the preview. An HDR
+  file given as it is (an HDR upload, a kept original whose preview could
+  not be made) is tone-mapped the same way, keyed on its probed transfer
+  (HLG or PQ). A tone-mapped source is said in the job's output:
+  `warningCode: "hdr_tone_mapped"` with an English `warningMessage`. The
+  conform's memory and time are the preview's (the canvas model at the
+  picture's size, its time model), a conform the box's ffmpeg memory cannot
+  hold is not attempted, and all of a job's conforms together are held to 15
+  minutes: each takes its allowance before it starts (parallel conforms
+  included) and runs at most that long once admitted; one that does not fit
+  reads the preview.
+- **Merge Video & Audio** reads the original and copies its picture untouched
+  (only the sound is encoded), so a 10-bit or HDR picture stays so; the
+  result is stored through the store function above, so it keeps its own
+  original beside a preview. Any other input is merged as before.
+- **Generate Video's audio track, driving clip and voiced lines, and Lip
+  Sync's voice line** copy the provider's picture as it was delivered,
+  whatever it is, so the merged result keeps its original.
+- **Extend** reads the preview as before for the tail it sends the model, its
+  checks and every 8-bit join. Only when both the source's original and the
+  new footage are 10-bit pictures of one dynamic range (both SDR, or both HDR
+  on the same transfer) on an unwatermarked run is the join made onto the
+  original, in 10-bit HEVC at the source's colour, kept as the original
+  beside its preview.
+- **A step that stream-copies the picture it was given** (Loop Video's plain
+  repeat, Trim's keyframe cut, a lossless loop cut, Adjust Volume's and Pitch
+  & Tempo's video lanes, the scene-graph fast path) reads its input as given:
+  a copy of the conformed source would hand a user the working copy. Every
+  step that reads the conformed source re-encodes it at the very settings it
+  used on the preview: the encode settings are unchanged.
+
+Only the jobs of those nodes read originals
+(`VIDEO_SOURCE_JOB_NAMES` in `backend/src/lib/video-source-context.ts`, and
+every node render in the render worker): a plugin's, a pipeline's or a
+generation's own call of the same provider functions downloads its input
+exactly as before. Sound-only steps (extract audio, transcription, silence
+detection, the audio mixes), steps that hand a video on to a provider model
+as it is, analyses (shot cuts), masks and mattes, and the products' own flows
+read the url as given. A preview read through the fallback host or a
+transform is not matched and reads as given. `backend/src/providers/video/__tests__/editing-source-census.test.ts`
+lists every download of an input with why it reads as given, and fails a new
+one until it is decided.
 
 ## Watermarked runs
 
@@ -231,17 +377,9 @@ owner.
 
 ## Not covered yet
 
-- Editor Download buttons that give the original, and a guard that keeps new
-  buttons on the same helper.
-- Reading the original when editing: an Extend join writing 10-bit HEVC, and
-  editing nodes reading the original and tone-mapping HDR input themselves.
-  Today the shared audio merge (Merge Video & Audio, Generate Video's audio
-  track, Lip Sync's voice line) re-encodes any picture that is not H.264
-  `yuv420p`, so its result is 8-bit H.264 and keeps no original. It does not
-  tone-map: an HDR source that goes through it is re-encoded with no tone
-  map, and comes out as HDR pictures did before this change. A step that
-  copies the picture untouched (Face Swap laying the source's sound back)
-  passes a 10-bit file on, and that result does keep its original.
+- Steps that hand a video on to a provider model (video-to-video, upscale,
+  Face Swap, Video Mask and the rest) still send the preview. Whether a
+  provider should get the original is not decided.
 - Plugin outputs. A plugin keeps an original only if it calls the toolkit's
   new `media.storeVideoResult`. The older `uploadVideoMaybeWatermark` returns
   a single URL, so it keeps no original.

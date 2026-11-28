@@ -64,7 +64,6 @@ const IMAGE_OVERLAY_TOOL_BYTES = 7_788 // measured: 345_426 total − 337_638 ba
 //
 // RAISED 2026-09-09 by the two arguments the in-app studio assistant needs and
 // nothing else: the preview flag on `edit_studio_production` and the landing
-// flag on `get_studio_production`. MEASURED by this suite — 345_785 total
 // − 345_426 base = 359 B, the two `describe` strings plus their schema
 // entries. Neither tool moves near the per-tool budget (the largest definition
 // in the list is `animate_image` at 8_122 B, and neither of these is in the top
@@ -72,7 +71,6 @@ const IMAGE_OVERLAY_TOOL_BYTES = 7_788 // measured: 345_426 total − 337_638 ba
 const STUDIO_PREVIEW_ARGS_BYTES = 359
 //
 // RAISED 2026-09-09 by `suggest_overlay_placement` and nothing else — the
-// vision-model half of the overlay node, which had a route but no tool. MEASURED
 // by this suite: 347_305 total − 345_785 = 1_520 B, well under the per-tool
 // budget (the definition is one paragraph plus five arguments; the placement
 // vocabulary it answers in is already documented on `image_overlay`).
@@ -87,7 +85,6 @@ const SUGGEST_PLACEMENT_TOOL_BYTES = 1_520
 // job tools are not it. A user polling `wait_for_job` to `completed` therefore
 // saw an empty film. All six now name the read and say that `get_job` /
 // `wait_for_job` land nothing, and the read itself says out loud that it is
-// also the write. MEASURED by this suite: 347_887 total − 347_305 = 582 B for
 // seven descriptions. No tool was added, so the fixture does not move, and
 // none of the seven is near the per-tool budget (the largest in the list is
 // `animate_image` at 8_122 B).
@@ -96,7 +93,6 @@ const LANDING_CONTRACT_BYTES = 582
 // RAISED 2026-09-10 by the four GPT Image 2.5 models (Flare + Sunburst, each
 // t2i and i2i) and nothing else — they widen the model enums and capability
 // text that `generate_image` / `modify_image` already carry; no tool was added,
-// so the fixture does NOT move. MEASURED by this suite, on top of the
 // landing-contract raise above: 348_038 total − 347_887 = 151 B. Neither tool moves near the per-tool budget (`generate_image`
 // is 8_095 B against the 8_192 B cap — the tightest in the list, and the reason
 // the 2.5 descriptions are kept to one clause each rather than a paragraph).
@@ -565,7 +561,6 @@ const ELEVENLABS_V4_DEFAULT_WORDING_BYTES = 70
 // the same through every job reader (decided 2026-10-06). No tool was added.
 // measured by this suite: 386_849 total − 386_820 before the field = 29 B.
 const GET_ASSET_PREVIEW_FLAG_BYTES = 29
-// RE-MEASURED on dev b3bda1615 (2026-10-06, PR #1879 found dev red): this suite totals 392_455 B
 // against a 392_441 B budget — the 29 B above were measured on an older tree, and the live
 // delta of the `preview` field is 43 B. Carried as its own line so the correction stays visible.
 const GET_ASSET_PREVIEW_FLAG_CORRECTION_BYTES = 14
@@ -2033,6 +2028,12 @@ const REMAKE_PORTION_BYTES = 417
 const REMAKE_SIZES_HERE_PER_TOOL_BYTES = 14
 // The list: 571_715 B, then 571_745 B, 30 B more (`video_remake` 14 B, `modify_video` 16 B), with no headroom before it.
 const REMAKE_SIZES_HERE_BYTES = 30
+// RAISED by Video Remake's Quality choice (2026-11-27): `video_remake`'s `quality` argument now lists "full" and
+// "economy" beside the older "draft" and says what each is. No tool was added, so the membership fixtures do NOT
+// move (tool-list-wire.json does). `video_remake` 12_483 B, then 12_661 B, 178 B more, with no headroom left before
+// it; the list's total is raised by the same.
+const REMAKE_QUALITY_PER_TOOL_BYTES = 178
+const REMAKE_QUALITY_BYTES = 178
 // RAISED by MAGI-2 (decided 2026-11-26): the id joins the video tools' model lists, and the reference
 // descriptions of `generate_video` and `animate_image` name its 10 / 5 / 5 caps. No tool was added, so
 // the membership fixtures do NOT move (tool-list-wire.json does). Measured by this suite on the same
@@ -2040,8 +2041,24 @@ const REMAKE_SIZES_HERE_BYTES = 30
 // no headroom, so it is raised by exactly what it measures.
 const MAGI_2_BYTES = 95
 
+// RAISED by Video Remake's long clips (decided 2026-11-27): `video_remake`'s description says where a whole clip over
+// 30 s runs in parts and that its job may complete with only the first ones (`outputData.partial`), and its `video_url`
+// note names the longer whole clip. No tool was added, so the membership fixtures do NOT move (tool-list-wire.json
+// does). Measured by this suite on the same tree before and after: `video_remake` 12_483 B, then 12_645 B, 162 B more;
+// the list 571_745 B, then 571_907 B, 162 B more. Neither budget had headroom, so each is raised by what it measures.
+const REMAKE_LONG_CLIPS_PER_TOOL_BYTES = 162
+const REMAKE_LONG_CLIPS_BYTES = 162
+
+// RAISED by trend runs read by the size delivered (decided 2026-11-27): `estimate_trend`'s and `run_trend`'s
+// `resolution` takes "4k" and says it is the size delivered where get_trend says `deliveredResolution`, their `draft`
+// says a draft is the 480p take whatever the resolutions list, and `get_trend`'s description names the field. No tool
+// was added, so the membership fixtures do NOT move. Measured by this suite on the same tree before and after: the
+// list 572_002 B, then 572_235 B, 233 B more (`estimate_trend` and `run_trend` 93 B each, `get_trend` 47 B), with no
+// headroom before it. No tool reaches the per-tool budget.
+const TREND_DELIVERED_SIZES_BYTES = 233
+
 export const TOOL_WIRE_BUDGET = {
-  perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES + GPT_IMAGE_2_6_PER_TOOL_BYTES + GPT_IMAGE_2_6_FORMAT_PER_TOOL_BYTES + MINIMAX_H3_IMAGE_PER_TOOL_BYTES + SEEDREAM_5_5_PER_TOOL_BYTES + FLUX_3_KLEIN_PER_TOOL_BYTES + SEEDANCE_2_5_FLASH_PER_TOOL_BYTES + SEEDANCE_2_5_FLASH_REFERENCE_LIMIT_PER_TOOL_BYTES + OMNI_FLASH_1_2_CHARACTERS_BYTES + VIDEO_REMAKE_PREVIZ_PER_TOOL_BYTES + ROLE_FACE_PER_TOOL_BYTES + FLASH_CHOICES_PER_TOOL_BYTES + REMAKE_INTENT_CHECK_PER_TOOL_BYTES + REMAKE_UPSCALE_CHOICE_PER_TOOL_BYTES + REMAKE_UPSCALE_4K_PER_TOOL_BYTES + REMAKE_PORTION_PER_TOOL_BYTES + REMAKE_SIZES_HERE_PER_TOOL_BYTES,
+  perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES + GPT_IMAGE_2_6_PER_TOOL_BYTES + GPT_IMAGE_2_6_FORMAT_PER_TOOL_BYTES + MINIMAX_H3_IMAGE_PER_TOOL_BYTES + SEEDREAM_5_5_PER_TOOL_BYTES + FLUX_3_KLEIN_PER_TOOL_BYTES + SEEDANCE_2_5_FLASH_PER_TOOL_BYTES + SEEDANCE_2_5_FLASH_REFERENCE_LIMIT_PER_TOOL_BYTES + OMNI_FLASH_1_2_CHARACTERS_BYTES + VIDEO_REMAKE_PREVIZ_PER_TOOL_BYTES + ROLE_FACE_PER_TOOL_BYTES + FLASH_CHOICES_PER_TOOL_BYTES + REMAKE_INTENT_CHECK_PER_TOOL_BYTES + REMAKE_UPSCALE_CHOICE_PER_TOOL_BYTES + REMAKE_UPSCALE_4K_PER_TOOL_BYTES + REMAKE_PORTION_PER_TOOL_BYTES + REMAKE_SIZES_HERE_PER_TOOL_BYTES + REMAKE_QUALITY_PER_TOOL_BYTES + REMAKE_LONG_CLIPS_PER_TOOL_BYTES,
   totalBytes:
     337_638 +
     SUNO_ADD_TRACK_DIRECTION_BYTES +
@@ -2296,7 +2313,10 @@ export const TOOL_WIRE_BUDGET = {
     SEEDANCE_2_5_4K_BYTES +
     REMAKE_PORTION_BYTES +
     REMAKE_SIZES_HERE_BYTES +
-    MAGI_2_BYTES,
+    REMAKE_QUALITY_BYTES +
+    MAGI_2_BYTES +
+    REMAKE_LONG_CLIPS_BYTES +
+    TREND_DELIVERED_SIZES_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

@@ -193,6 +193,9 @@ async function download(url: string): Promise<Buffer> {
   return bytes
 }
 
+/** The longest side a WebP can hold, in pixels (the format's own limit). */
+export const WEBP_MAX_SIDE = 16383
+
 /**
  * A file the provider delivered over the stored-image cap, made to fit it as
  * the PNG path does (`recompressOversizedImage`, workers/shared.ts): a PNG,
@@ -201,6 +204,13 @@ async function download(url: string): Promise<Buffer> {
  * over the cap. A GIF over the cap fails as before (`upload-size-exceeded`);
  * an SVG never reaches here (`prepareBytes` holds it to the cap itself). A
  * file under the cap is kept byte for byte.
+ *
+ * A picture with a side past what a WebP can hold ({@link WEBP_MAX_SIDE}: a
+ * whole page in one tall picture) cannot be re-encoded so: an opaque one (no
+ * alpha channel, or one that is opaque everywhere) is re-encoded to JPEG
+ * (quality 92, every pixel kept), and one whose alpha is used is scaled, its
+ * shape kept, until its longest side fits a WebP, then re-encoded as above. No picture any model returned before reaches this
+ * branch (the largest, Kling Image 4.0's 8K, is 10880 pixels wide).
  */
 async function fitToCap(image: PreparedImage): Promise<PreparedImage> {
   const cap = getSizeLimit("image")
@@ -208,9 +218,23 @@ async function fitToCap(image: PreparedImage): Promise<PreparedImage> {
   if (image.format !== "png" && image.format !== "jpeg" && image.format !== "webp") {
     throw new Error(`upload-size-exceeded: ${image.bytes.length} > cap ${cap}`)
   }
-  const webp = await sharp(image.bytes).webp({ quality: 92 }).toBuffer()
+  const meta = await sharp(image.bytes).metadata()
+  const longest = Math.max(meta.width ?? 0, meta.height ?? 0)
+  // Whether the picture USES its alpha: an alpha channel that is opaque everywhere loses nothing as a JPEG.
+  const seeThrough = longest > WEBP_MAX_SIDE && meta.hasAlpha === true && !(await sharp(image.bytes).stats()).isOpaque
+  if (longest > WEBP_MAX_SIDE && !seeThrough) {
+    const jpeg = await sharp(image.bytes).jpeg({ quality: 92 }).toBuffer()
+    if (jpeg.length > cap) throw new Error(`upload-size-exceeded: recompressed JPEG ${jpeg.length} > cap ${cap}`)
+    console.log(`[image-output-store] recompressed an oversized ${image.format} too tall for WebP (${meta.width}x${meta.height}): ${image.bytes.length} -> ${jpeg.length} bytes (jpeg q92)`)
+    return { format: "jpeg", bytes: jpeg }
+  }
+  const pipeline = longest > WEBP_MAX_SIDE
+    ? sharp(image.bytes).resize(WEBP_MAX_SIDE, WEBP_MAX_SIDE, { fit: "inside", withoutEnlargement: true })
+    : sharp(image.bytes)
+  const webp = await pipeline.webp({ quality: 92 }).toBuffer()
   if (webp.length > cap) throw new Error(`upload-size-exceeded: recompressed WebP ${webp.length} > cap ${cap}`)
-  console.log(`[image-output-store] recompressed an oversized ${image.format}: ${image.bytes.length} -> ${webp.length} bytes (webp q92)`)
+  const scaled = longest > WEBP_MAX_SIDE ? `, scaled from ${meta.width}x${meta.height} to fit ${WEBP_MAX_SIDE} a side` : ""
+  console.log(`[image-output-store] recompressed an oversized ${image.format}: ${image.bytes.length} -> ${webp.length} bytes (webp q92${scaled})`)
   return { format: "webp", bytes: webp }
 }
 

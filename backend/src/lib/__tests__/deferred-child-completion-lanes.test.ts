@@ -69,7 +69,8 @@ describe("every completion lane of an image-to-video job writes the deferral rec
 
   it("the route never defers a voiced video", () => {
     const text = readFileSync(join(SRC, "routes/generate-video.ts"), "utf8")
-    expect(text).toMatch(/deferSettlementRequested && !dispatchesVoicedVideo\(parsed\.data\)/)
+    expect(text).toMatch(/const isVoiced = dispatchesVoicedVideo\(parsed\.data\)/)
+    expect(text).toMatch(/deferSettlementRequested && !isVoiced && await deferSettlementHonoured\(req\)/)
   })
 })
 

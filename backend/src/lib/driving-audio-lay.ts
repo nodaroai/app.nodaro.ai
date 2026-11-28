@@ -70,6 +70,8 @@ export async function layDrivingAudioIfSilent(args: {
       ...draftAudioMuxMergeArgs(args.videoUrl, voiceTrackMuxRecipe(args.audioUrl)),
       ...(args.videoPath ? { videoPath: args.videoPath } : {}),
       fitAudioToVideo: true,
+      // The render's picture as it is, kept as the original beside its preview (decided 2026-11-22).
+      keepPicture: true,
     })
     // Through the video result funnel (lib/video-result-store.ts): the stored
     // file and, where it keeps one, the original beside it.

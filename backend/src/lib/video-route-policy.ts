@@ -39,6 +39,19 @@ export function isRoutableVideoModel(model: unknown): model is string {
   return typeof model === "string" && SEEDANCE_2_PROVIDERS.has(model)
 }
 
+/**
+ * Whether a usage log's price id may be a routed job's (pure, no read): every
+ * id a route prices names a Seedance 2.x model first (`seedance-2…`). Any
+ * other id is settled as always, with nothing read about routing.
+ */
+export function routedRunFee(action: string | null | undefined): boolean {
+  return action === "generate-video-pro" || action === "edit-video-pro" || action === "ugc-clip"
+}
+
+export function routedSettleCandidate(action: string | null | undefined): boolean {
+  return routedRunFee(action) || (typeof action === "string" && action.startsWith("seedance-2"))
+}
+
 export type VideoRouteChoice = "default" | "alternate"
 
 const choiceSchema = z.enum(["default", "alternate"])
@@ -50,6 +63,14 @@ const modelSettingSchema = z.strictObject({
 })
 
 export type VideoRouteModelSetting = z.infer<typeof modelSettingSchema>
+
+/**
+ * How many times its quote a routed run's verified bill may reach and still be
+ * charged with no one looking. Above it the settlement is held for an admin to
+ * confirm or reject (the clip is delivered either way). The default of the
+ * policy's `billAnomalyMultiple`; an admin sets their own in Admin → Video route.
+ */
+export const ROUTE_BILL_ANOMALY_MULTIPLE_DEFAULT = 5
 
 /** Defaults of the policy's thresholds. */
 export const VIDEO_ROUTE_POLICY_DEFAULTS = {
@@ -70,6 +91,23 @@ export const videoRoutePolicySchema = z.strictObject({
     failures: z.number().int().min(1).max(1000),
     windowMinutes: z.number().int().min(1).max(24 * 60),
   }),
+  /** A verified bill above this many times the run's quote is held for an admin instead of charged. */
+  billAnomalyMultiple: z.number().min(1).max(1000).default(ROUTE_BILL_ANOMALY_MULTIPLE_DEFAULT),
+  /**
+   * Whether an unpaid part of a routed charge is ENFORCED: new paid runs are
+   * blocked until it is paid, later funding repays it first, and an external
+   * wallet is asked for its routed-debt contract. Off (the default): it is
+   * recorded and alerted, and nothing else changes.
+   */
+  enforceUnpaidCharges: z.boolean().default(false),
+  /**
+   * What the route's shared account is known to spend per UTC day on work this
+   * platform never records (another user of the same account), in USD. The
+   * daily account check takes it off the account's spend before it alerts that
+   * the account spent more than everything recorded. 0 (the default): nothing
+   * is allowed for. An allowance the owner sets from what they know; never guessed.
+   */
+  accountOtherSpendUsdPerDay: z.number().nonnegative().max(1_000_000).default(0),
 })
 
 export type VideoRoutePolicy = z.infer<typeof videoRoutePolicySchema>
@@ -82,7 +120,32 @@ export function defaultVideoRoutePolicy(): VideoRoutePolicy {
     defaultProviderBalanceAlertCredits: null,
     spendDriftAlertPercent: VIDEO_ROUTE_POLICY_DEFAULTS.spendDriftAlertPercent,
     failureAlert: { ...VIDEO_ROUTE_POLICY_DEFAULTS.failureAlert },
+    billAnomalyMultiple: ROUTE_BILL_ANOMALY_MULTIPLE_DEFAULT,
+    enforceUnpaidCharges: false,
+    accountOtherSpendUsdPerDay: 0,
   }
+}
+
+/** The multiple a bill is held above, from the stored policy (the default when none is saved). */
+export function billAnomalyMultipleOf(policy: Pick<VideoRoutePolicy, "billAnomalyMultiple"> | null | undefined): number {
+  const m = policy?.billAnomalyMultiple
+  return typeof m === "number" && Number.isFinite(m) && m >= 1 ? m : ROUTE_BILL_ANOMALY_MULTIPLE_DEFAULT
+}
+
+/**
+ * Whether a verified bill is far enough above its quote to be held: more than
+ * `multiple` times the quote the run was held at (already scaled by its price
+ * factor). A run with no positive quote to compare against is held too.
+ */
+export function routeBillAnomalous(billedUsd: number, quotedUsd: number | null | undefined, multiple: number): boolean {
+  if (!(typeof quotedUsd === "number" && Number.isFinite(quotedUsd) && quotedUsd > 0)) return billedUsd > 0
+  // (A hair of tolerance: a bill of exactly the multiple is not an anomaly, whatever the floats say.)
+  return billedUsd > quotedUsd * multiple * (1 + 1e-9)
+}
+
+/** Whether unpaid routed charges are enforced (off unless an admin turned it on). */
+export function unpaidChargesEnforced(policy: Pick<VideoRoutePolicy, "enforceUnpaidCharges"> | null | undefined): boolean {
+  return policy?.enforceUnpaidCharges === true
 }
 
 /**
@@ -109,6 +172,9 @@ export function parseVideoRoutePolicy(value: unknown): VideoRoutePolicy | null {
   field("defaultProviderBalanceAlertCredits")
   field("spendDriftAlertPercent")
   field("failureAlert")
+  field("billAnomalyMultiple")
+  field("enforceUnpaidCharges")
+  field("accountOtherSpendUsdPerDay")
   return out
 }
 
@@ -124,6 +190,23 @@ export function videoRouteChoiceFor(policy: VideoRoutePolicy | null | undefined,
 export function anyModelRouted(policy: VideoRoutePolicy | null | undefined): boolean {
   if (!policy) return false
   return Object.values(policy.models).some((m) => m.route === "alternate" || Object.values(m.services ?? {}).includes("alternate"))
+}
+
+/**
+ * Whether `after` puts some model, for some service, on the alternate route
+ * where `before` did not: a route added, a service override added, or a
+ * "default" override removed under a model routed as a whole. Compared by the
+ * effective choice ({@link videoRouteChoiceFor}): per model of `after`, its
+ * model-level choice (which every service not named takes) and every service
+ * either policy names for it. Removing a route, or changing only a
+ * threshold, never widens. `before` null: nothing saved, every model on "default".
+ */
+export function routingWidens(before: VideoRoutePolicy | null | undefined, after: VideoRoutePolicy | null | undefined): boolean {
+  if (!after) return false
+  return Object.entries(after.models).some(([model, entry]) => {
+    const services = new Set<string | undefined>([undefined, ...Object.keys(entry.services ?? {}), ...Object.keys(before?.models[model]?.services ?? {})])
+    return [...services].some((service) => videoRouteChoiceFor(after, model, service) === "alternate" && videoRouteChoiceFor(before, model, service) !== "alternate")
+  })
 }
 
 /** The policy with every model back on "default" (thresholds kept): the Admin page's "revert all". */

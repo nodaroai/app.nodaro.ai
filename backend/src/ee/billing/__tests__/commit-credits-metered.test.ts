@@ -121,8 +121,8 @@ describe("a covered step (lib/covered-step.ts) collects nothing over its hold", 
   })
 
   it("a log whose mark cannot be read is left reserved, never collected", async () => {
-    // The managed-settle check reads the log first (managed-job-settlement.ts); the cover read is the
-    // second read of its metadata, and only it fails here.
+    // The managed-settle check reads the log first (managed-job-settlement.ts, with the price id
+    // beside it); the cover read is the plain read of its metadata, and only it fails here.
     let metadataReads = 0
     const failing = () => {
       let cols = ""
@@ -131,7 +131,7 @@ describe("a covered step (lib/covered-step.ts) collects nothing over its hold", 
       obj.select = vi.fn((c: string) => { cols = c; return obj })
       obj.single = vi.fn(async () => ({ data: h.state.usageLogRow, error: null }))
       obj.maybeSingle = vi.fn(async () => {
-        if (cols === "metadata" && ++metadataReads === 2) return { data: null, error: { message: "boom" } }
+        if (cols === "metadata" && ++metadataReads === 1) return { data: null, error: { message: "boom" } }
         return { data: h.state.usageLogRow, error: null }
       })
       return obj

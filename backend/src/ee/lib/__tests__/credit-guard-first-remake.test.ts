@@ -397,6 +397,109 @@ describe("the run's fee reservation", () => {
 })
 
 describe("a step of the covered run", () => {
+  it("preserves the trusted parent's cover and entitlements when rechecking a routed hold", async () => {
+    h.state.profiles.set(MEMBER, freeProfile(40))
+    step.kind = "result"
+    step.parent = "run-1"
+    h.state.rpc.set("first_remake_cover_available", { data: 400, error: null })
+    pricedModel(300)
+    const check = vi.spyOn(CreditsService, "checkCredits")
+    const reserve = vi.spyOn(CreditsService, "reserveCredits").mockResolvedValue({ usageLogId: "routed-log", creditsReserved: 300, watermark: true })
+    try {
+      const { sent, reply } = makeReply()
+      const req = runReq({ duration: 8, resolution: "720p" }, "/v1/generate-video", {
+        appAuthorization: { appKind: "community_instance" },
+      })
+      const result = await reserveCreditsForJobImpl(req as never, reply as never, "child-1", "seedance-2-5:8s:720p", { holdCredits: 300 })
+      expect(sent).toEqual([])
+      expect(result?.usageLogId).toBe("routed-log")
+      expect(check).toHaveBeenCalledWith(MEMBER, "seedance-2-5:8s:720p", undefined, 300, expect.objectContaining({
+        freeVideoLimitsLifted: true, communityInstance: true, firstRemakeCover: 400,
+      }))
+      expect(h.state.rpcArgs).toContainEqual({ name: "first_remake_cover_available", args: { p_user_id: MEMBER, p_job_id: "run-1" } })
+    } finally {
+      check.mockRestore()
+      reserve.mockRestore()
+    }
+  })
+
+  it("a hold that is not a video's (a metered LLM call) is checked as it always was: no Remake-step read, no video inputs", async () => {
+    h.state.profiles.set(MEMBER, freeProfile(40))
+    step.kind = "result"
+    step.parent = "run-1"
+    pricedModel(30)
+    const check = vi.spyOn(CreditsService, "checkCredits")
+    const reserve = vi.spyOn(CreditsService, "reserveCredits").mockResolvedValue({ usageLogId: "llm-log", creditsReserved: 30, watermark: false })
+    try {
+      const { sent, reply } = makeReply()
+      const req = runReq({ duration: 8, resolution: "720p" }, "/v1/llm-chat", { appAuthorization: { appKind: "community_instance" } })
+      await reserveCreditsForJobImpl(req as never, reply as never, "llm-job", "claude-opus-5.5", { holdCredits: 30 })
+      expect(sent).toEqual([])
+      const opts = check.mock.calls.at(-1)![4] as Record<string, unknown>
+      expect(opts).not.toHaveProperty("communityInstance")
+      expect(opts).not.toHaveProperty("video")
+      expect(opts).not.toHaveProperty("freeVideoLimitsLifted")
+      // The Remake parent is never consulted for it: the cover is asked for its own job.
+      expect(h.state.rpcArgs).toContainEqual({ name: "first_remake_cover_available", args: { p_user_id: MEMBER, p_job_id: "llm-job" } })
+    } finally {
+      check.mockRestore()
+      reserve.mockRestore()
+    }
+  })
+
+  describe("a once-per-job hold whose balance check fails", () => {
+    const refused = { allowed: false, code: "insufficient_credits", error: "Not enough credits", required: 300, available: 0 }
+    it("keeps the job (its reservation is replayed by the same job id) and refuses with the usual 402", async () => {
+      h.state.profiles.set(MEMBER, freeProfile(0))
+      const check = vi.spyOn(CreditsService, "checkCredits").mockResolvedValue(refused as never)
+      const reserve = vi.spyOn(CreditsService, "reserveCredits")
+      try {
+        const { sent, reply } = makeReply()
+        h.state.writes.length = 0
+        const result = await reserveCreditsForJobImpl(runReq({}, "/v1/generate-video") as never, reply as never, "job-once", "seedance-2-5:8s:720p", { holdCredits: 300, oncePerJob: true })
+        expect(result).toBeUndefined()
+        expect(sent).toHaveLength(1)
+        expect(h.state.writes).not.toContain("delete:jobs")
+        expect(reserve).not.toHaveBeenCalled()
+      } finally {
+        check.mockRestore()
+        reserve.mockRestore()
+      }
+    })
+
+    it("goes on to the reservation when the job already holds one: the check saw that reservation's own debit", async () => {
+      h.state.profiles.set(MEMBER, freeProfile(0))
+      h.state.tables.set("jobs", { data: { usage_log_id: "held-log" }, error: null })
+      const check = vi.spyOn(CreditsService, "checkCredits").mockResolvedValue(refused as never)
+      const reserve = vi.spyOn(CreditsService, "reserveCredits").mockResolvedValue({ usageLogId: "held-log", creditsReserved: 300, watermark: false })
+      try {
+        const { sent, reply } = makeReply()
+        const result = await reserveCreditsForJobImpl(runReq({}, "/v1/generate-video") as never, reply as never, "job-once", "seedance-2-5:8s:720p", { holdCredits: 300, oncePerJob: true })
+        expect(sent).toEqual([])
+        expect(result?.usageLogId).toBe("held-log")
+        expect(reserve).toHaveBeenCalledTimes(1)
+        expect(reserve.mock.calls[0]!.find((arg) => arg !== null && typeof arg === "object" && "oncePerJob" in arg)).toMatchObject({ oncePerJob: true, creditOverride: 300 })
+      } finally {
+        check.mockRestore()
+        reserve.mockRestore()
+        h.state.tables.delete("jobs")
+      }
+    })
+
+    it("a hold that is not once-per-job still removes its job on a failed check, as before", async () => {
+      h.state.profiles.set(MEMBER, freeProfile(0))
+      const check = vi.spyOn(CreditsService, "checkCredits").mockResolvedValue(refused as never)
+      try {
+        const { reply } = makeReply()
+        h.state.writes.length = 0
+        await reserveCreditsForJobImpl(runReq({}, "/v1/generate-video") as never, reply as never, "job-plain", "seedance-2-5:8s:720p", { holdCredits: 300 })
+        expect(h.state.writes).toContain("delete:jobs")
+      } finally {
+        check.mockRestore()
+      }
+    })
+  })
+
   it("is checked against its own credits plus the run's cover (held apart from the pools)", async () => {
     h.state.profiles.set(MEMBER, freeProfile(40))
     step.kind = "result"

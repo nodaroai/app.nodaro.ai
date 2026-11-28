@@ -76,6 +76,10 @@ vi.mock("@/ee/billing/edit-video-pro-credits.js", () => ({
   computeEditVideoProPricing: mockComputeEvpPricing,
 }))
 
+// The routed pricing (not routed unless a test says so).
+const mockRoutedEvpPricing = vi.fn(async () => undefined as unknown)
+vi.mock("@/ee/billing/video-route-admission.js", () => ({ routedEditVideoProPricing: mockRoutedEvpPricing }))
+
 // ---------------------------------------------------------------------------
 // Import SUT after mocks
 // ---------------------------------------------------------------------------
@@ -269,5 +273,17 @@ describe("computeEditVideoProCreditOverride", () => {
     }
     const result2 = await computeEditVideoProCreditOverride(jobNamePayload)
     expect(result2?.override).toBe(92)
+  })
+
+  it("routed for Edit Video Pro: holds the routed price and stamps the route beside the plan", async () => {
+    mockGetAppSettings.mockResolvedValue({ cost_markup_percent: 20 })
+    mockComputeEvpPricing.mockResolvedValue(basePricing())
+    const route = { quote: "q", segmentChargedCredits: [70], feeChargedCredits: 12, reserveChargedCredits: 82 }
+    mockRoutedEvpPricing.mockResolvedValueOnce(route)
+    const payload: Record<string, unknown> = { type: "edit-video-pro", provider: "seedance-2-5", videoUrl: "https://cdn.example.com/src.mp4", spanStart: 2, spanEnd: 12 }
+    const result = await computeEditVideoProCreditOverride(payload)
+    expect(result?.override).toBe(82)
+    expect(payload.proPricing).toEqual({ ...basePricing(), route })
+    expect(mockRoutedEvpPricing).toHaveBeenCalledWith("seedance-2-5", basePricing(), true)
   })
 })

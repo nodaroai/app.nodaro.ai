@@ -95,9 +95,9 @@ export function registerCloVerbs({ server, session, fastify }: RegisterOpts): vo
         openWorldHint: true,
       },
     _meta: {
-      "ui/resourceUri": "ui://nodaro/widget/v5/job-image",
+      "ui/resourceUri": "ui://nodaro/widget/v6/job-image",
       ui: {
-        resourceUri: "ui://nodaro/widget/v5/job-image",
+        resourceUri: "ui://nodaro/widget/v6/job-image",
         visibility: ["model", "app"],
       },
     },
@@ -246,9 +246,9 @@ export function registerCloVerbs({ server, session, fastify }: RegisterOpts): vo
         openWorldHint: true,
       },
     _meta: {
-      "ui/resourceUri": "ui://nodaro/widget/v5/job-image",
+      "ui/resourceUri": "ui://nodaro/widget/v6/job-image",
       ui: {
-        resourceUri: "ui://nodaro/widget/v5/job-image",
+        resourceUri: "ui://nodaro/widget/v6/job-image",
         visibility: ["model", "app"],
       },
     },
@@ -359,9 +359,9 @@ export function registerCloVerbs({ server, session, fastify }: RegisterOpts): vo
         openWorldHint: true,
       },
     _meta: {
-      "ui/resourceUri": "ui://nodaro/widget/v5/job-image",
+      "ui/resourceUri": "ui://nodaro/widget/v6/job-image",
       ui: {
-        resourceUri: "ui://nodaro/widget/v5/job-image",
+        resourceUri: "ui://nodaro/widget/v6/job-image",
         visibility: ["model", "app"],
       },
     },
@@ -472,9 +472,9 @@ export function registerCloVerbs({ server, session, fastify }: RegisterOpts): vo
         openWorldHint: true,
       },
     _meta: {
-      "ui/resourceUri": "ui://nodaro/widget/v5/job-image",
+      "ui/resourceUri": "ui://nodaro/widget/v6/job-image",
       ui: {
-        resourceUri: "ui://nodaro/widget/v5/job-image",
+        resourceUri: "ui://nodaro/widget/v6/job-image",
         visibility: ["model", "app"],
       },
     },

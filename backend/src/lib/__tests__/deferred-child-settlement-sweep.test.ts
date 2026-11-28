@@ -20,6 +20,7 @@ vi.mock("@/workers/shared.js", () => ({ commitJobCredits: money.commitJobCredits
 vi.mock("@/ee/billing/credits.js", () => ({ CreditsService: { refundCredits: money.refundCredits } }))
 
 import { DEFERRED_CHILD_SWEEP, planCompletedRun, sweepDeferredChildSettlements } from "../deferred-child-settlement-sweep.js"
+import { castSwapJobBudgetMs } from "../../providers/video/cast-swap-budget.js"
 
 const NOW = Date.parse("2026-11-23T12:00:00.000Z")
 const ago = (ms: number) => new Date(NOW - ms).toISOString()
@@ -216,5 +217,12 @@ describe("recovery", () => {
 
   it("the 12-hour bound sits below the First Remake offer's 24-hour auto-end", () => {
     expect(DEFERRED_CHILD_SWEEP.longParentMs).toBeLessThan(24 * 3_600_000)
+  })
+
+  it("the 12-hour bound outlasts the longest Video Remake job, a long clip's included: a live run's held takes are never released for its length", () => {
+    const longClip = { v: 1, sourceSec: 120, videoSec: 120, fps: 24, byFrame: true, parts: [0, 1, 2, 3, 4].map((k) => ({ startFrame: k * 576, frames: 576 })) }
+    const longest = castSwapJobBudgetMs({ faceMasking: { mode: "auto" }, preciseUpscaleWaitMs: 45 * MIN, longClip })!
+    expect(longest).toBe(496 * MIN)
+    expect(DEFERRED_CHILD_SWEEP.longParentMs).toBeGreaterThan(longest)
   })
 })

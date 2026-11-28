@@ -10,7 +10,7 @@ import { PREVIEW_MAX_TIMEOUT_MS, previewChangesFile, previewEncodeArgs, previewT
 import { deliveredPictureFilter, isHdr } from "../extend-stitch-args.js"
 import type { MatchedProbe } from "../matched-encode.js"
 import { DEFAULT_FFMPEG_TIMEOUT_MS } from "../ffmpeg-timeouts.js"
-import { mergeVideoStreamArgs } from "../merge-video-audio.js"
+import { keptPictureContainer, mergeVideoStreamArgs } from "../merge-video-audio.js"
 import { loopCutPictureArgs, loopCutTimeoutMs } from "../smart-loop-cut.js"
 import { STALE_THRESHOLD_MS } from "../../../lib/reconcile/types.js"
 import { BROWSER_SAFE_VIDEO_ARGS } from "../ffmpeg-utils.js"
@@ -82,13 +82,26 @@ describe("a Kling 4.0 4K SDR clip downstream", () => {
 
 describe("HDR kept through Generate Video's post-steps (decided 2026-11-25)", () => {
   it("the audio-track merge copies an HDR picture as it is (HEVC tagged hvc1), only the audio encoded", () => {
-    expect(mergeVideoStreamArgs({ needsReencode: true, keepHdr: true, probe: KLING_HDR_4K })).toEqual(["-c:v", "copy", "-tag:v", "hvc1"])
+    expect(mergeVideoStreamArgs({ needsReencode: true, keep: true, probe: KLING_HDR_4K })).toEqual(["-c:v", "copy", "-tag:v", "hvc1"])
   })
 
-  it("the merge is as before for an SDR picture, and for a caller that keeps no HDR", () => {
-    expect(mergeVideoStreamArgs({ needsReencode: false, keepHdr: true, probe: KLING_SDR_4K })).toEqual(["-c:v", "copy"])
-    expect(mergeVideoStreamArgs({ needsReencode: true, keepHdr: true, probe: { videoCodec: "hevc", pixFmt: "yuv420p10le" } })).toEqual([...BROWSER_SAFE_VIDEO_ARGS])
-    expect(mergeVideoStreamArgs({ needsReencode: true, keepHdr: false, probe: KLING_HDR_4K })).toEqual([...BROWSER_SAFE_VIDEO_ARGS])
+  it("a 10-bit SDR picture is kept too (decided 2026-11-22: the steps that finish a generation keep 10-bit)", () => {
+    expect(mergeVideoStreamArgs({ needsReencode: true, keep: true, probe: { videoCodec: "hevc", pixFmt: "yuv420p10le" } })).toEqual(["-c:v", "copy", "-tag:v", "hvc1"])
+  })
+
+  it("the merge is as before for an SDR 8-bit picture, for a picture no container here holds, and for a caller that keeps nothing", () => {
+    expect(mergeVideoStreamArgs({ needsReencode: false, keep: true, probe: KLING_SDR_4K })).toEqual(["-c:v", "copy"])
+    expect(mergeVideoStreamArgs({ needsReencode: true, keep: true, probe: { videoCodec: "vp8", pixFmt: "yuv420p" } })).toEqual([...BROWSER_SAFE_VIDEO_ARGS])
+    expect(mergeVideoStreamArgs({ needsReencode: true, keep: false, probe: KLING_HDR_4K })).toEqual([...BROWSER_SAFE_VIDEO_ARGS])
+  })
+
+  it("a kept picture goes into the container that holds it: QuickTime stays QuickTime, else MP4", () => {
+    expect(keptPictureContainer(KLING_HDR_4K)).toBe("mp4")
+    expect(keptPictureContainer({ videoCodec: "prores", pixFmt: "yuv422p10le", quickTime: true })).toBe("mov")
+    expect(keptPictureContainer({ videoCodec: "h264", pixFmt: "yuv444p", quickTime: true })).toBe("mov")
+    expect(keptPictureContainer({ videoCodec: "av1", pixFmt: "yuv420p10le" })).toBe("mp4")
+    expect(keptPictureContainer({ videoCodec: "vp8", pixFmt: "yuv420p" })).toBeUndefined()
+    expect(keptPictureContainer({})).toBeUndefined()
   })
 
   it("the precise loop cut re-encodes an HDR source as 10-bit HEVC with its HLG / BT.2020 signalling", () => {

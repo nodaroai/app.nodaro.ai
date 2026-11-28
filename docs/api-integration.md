@@ -1273,7 +1273,7 @@ Removing an item from a session and deleting a job both go to the **Trash**:
   lists and reads by id, status polls, the gallery, session feeds and previews,
   MCP tools and the CLI — and stays restorable for 30 days
   (`POST /v1/jobs/:id/restore` puts it back in every session it was in). After
-  30 days it is deleted for good, as a delete always was (the job and its private media; a copy saved to the Library stays). `DELETE /v1/jobs/:id?forever=true`
+  30 days it is deleted for good, as a delete always was (the job and its private media; a copy saved to the Library stays). A video's kept original (`originalVideoUrl`) is deleted with it unless a Library item of that video, another job or a run still in progress uses it; the preview and the job's other result files stay. `DELETE /v1/jobs/:id?forever=true`
   deletes a job already in the Trash for good now, and answers `409 not_in_trash`
   for a live one. A job that is still running keeps running — cancel it first.
   Nothing is refunded on a delete or when it is deleted for good. OAuth apps need
@@ -1652,8 +1652,37 @@ has a preview tone-mapped to SDR BT.709. Use `originalVideoUrl` to download and
 - `videoPreviewUnavailable: true`: the preview could not be made. The job still
   completed, and `videoUrl` names the original, which some browsers cannot play.
 
+For Generate Video Pro and Edit Video Pro, if both the normal assembly and a
+simple cut fail, the job completes with its first delivered clip in
+`output_data.videoUrl`. Read `output_data.unassembledClips` for every
+delivered clip in order. Each entry contains a `url` and a one-based
+`segment` number. When a background repair succeeds, `videoUrl` becomes the
+assembled file. The ordered clips stay available. A delivery with
+`assemblyRetryFinished: true` has finished retrying with separate clips.
+
 MCP job views (`get_job`, `wait_for_job`) carry it in `outputData.originalVideoUrl`;
 `outputUrl` is the playable file. See the [design note](./design/video-original-and-preview.md).
+
+**Download in the app gives the original.** Every Download the app offers for a
+video result (canvas nodes, the editor's Library browser, job history, app
+results, the agent widgets) saves the original when the job kept one, under
+its own extension and content type, and the file itself otherwise. The app and
+its players keep using `videoUrl`. The route behind it is public:
+
+| Request | Answer |
+|---------|--------|
+| `GET /v1/download?url=<address>` | The file at the address, as an attachment (unchanged). |
+| `GET /v1/download?url=<address>&original=1` | For a video result's address, the original its completed job records beside that file, as an attachment named `<id>-original.<ext>` (`.mp4`, `.mov`, `.webm` or `.mkv`) with its own content type. If storage cannot give the original (it answers 404 or a server error, or the fetch fails before any answer), the file at the address instead. Otherwise the file at the address. An address that is itself a kept original's (`videos/<id>-master.<ext>`) is served as it is, as an original, with no job read, as the plain route always served it. |
+| `GET /v1/download?url=<address>&original=1&open=1` | The original as above when there is one; otherwise a `302` to the address itself. |
+
+The address must be one of the platform's own storage addresses (`403`
+otherwise), and a restricted file answers `451 content_restricted`, the
+original included. A job in the Trash, a watermarked run and a result with no
+`originalVideoUrl` download the file itself. No answer to `original=1` is
+cached (`Cache-Control: private, no-store`). A `HEAD` returns the headers
+without reading the file. Requests with `original=1` are limited to 120 a
+minute from one caller (`429 rate_limit_exceeded` past that, not cached either);
+a request without it is not limited.
 
 ## 4i. A workflow's view link
 
@@ -5423,6 +5452,8 @@ An Apply EDL job's `output_data` says what the render was cut from: `quality` (`
 
 An Apply EDL job recorded before `output_data.quality` was written reads back with the quality it was ordered at filled in on every job read above, plus `GET /v1/jobs/:id` and `GET /v1/jobs/:id/status` (`"proxy"` is a preview, anything else the final). The stored job is unchanged.
 
+A completed Video Remake job whose clip was made in parts and delivered only up to a part carries `output_data.partial` (`{ deliveredSec, sourceSec, parts: { delivered, planned }, reason, message }`), and its `durationSec` is the delivered length: the video is not the whole clip (see [A clip delivered in part](#13f-video-remake-cloud-edition)).
+
 A completed Grok Imagine video job (`grok` or `grok-i2v`) whose request named a resolution also carries it in `output_data.recordedResolution`, exactly as the request recorded it, beside its `providerTaskId`; a Grok Extend of that video is priced by that resolution.
 
 All three require `jobs:read` scope when using an OAuth token; admin tokens may
@@ -5688,7 +5719,7 @@ The response is `{ "data": { "credits": …, "min": …, "exact": true } }`. Wit
 
 `POST /v1/quote` returns what a node run will reserve, before you start it. Send the node type and **exactly the body you would send to its run route**: the server prices it with the run route's own code — the same body validation, the same reference-clip measurement, the same credit id and the same arithmetic — so the quote is what the run reserves. Nothing is started and nothing is charged. Cloud only; requires authentication; rate-limited to 30 requests a minute. SDK: `client.nodes.quote(type, params)`.
 
-Quotable today: `text-to-video`, `generate-video`, `video-to-video`, `video-upscale` (including a Seedance 2.5 draft's 1080p finalize, priced from the draft and the clips it was made with), `edit-image` (every edit model), `ai-avatar` (the duration bucket of the audio it measures, as the run measures it, or of the script's estimated length in text mode; audio it cannot read is the run's own `400`), `cinematic-avatar` (its exact resolution and duration; Auto at the 15-second ceiling), `switchx` (the frame-block tier of the clip's frames, measured as the run measures them; the 240-frame tier when they cannot be read), `lip-sync` (a model priced by its audio's length is quoted on the audio it measures, as the run measures it — `ltx-2.5-fast` on its voice's length rounded up to a whole second; LatentSync's `reserve` is the most the run can cost, marked `settles_to_actual`: it is charged what its run used, never more), `split-into-layers` and, on Nodaro Cloud, `edit-video-pro` (the most the span can cost, marked `settles_to_actual`; a span the run refuses, under 4 seconds, over the maximum or past the end of the video, is refused by the quote too). Any other type is a `400 quote_unsupported` that lists the types this server can quote. A refusal a route gives under a code of its own (Relight & Switch's `MISSING_STYLE_INPUT` and `MISSING_ALPHA`) is the quote's too, under that code. On `video-to-video`, a Video Remake engine as the `provider` (`nodaro-prism`, `nodaro-pulse`) is quoted as Video Remake quotes it (`reserve` its hold, `expected` its expected charge, a `quote_only_provider` warning: the run route answers that quote too and starts nothing; see [Video Remake's engines as providers](nodes/ai-video/video-to-video.md#video-remakes-engines-as-providers-api)). A Seedance edit on `video-to-video` is priced with every reference clip it is sent (`videoUrl` plus `referenceVideoUrls`); see [Video to Video → Seedance 2.5 Edit](nodes/ai-video/video-to-video.md#seedance-25-edit) for the reference lists and their numbering.
+Quotable today: `text-to-video`, `generate-video`, `video-to-video`, `extend-video` (including its source clip and the requested extension), `video-upscale` (including a Seedance 2.5 draft's 1080p finalize, priced from the draft and the clips it was made with), `edit-image` (every edit model), `ai-avatar` (the duration bucket of the audio it measures, as the run measures it, or of the script's estimated length in text mode; audio it cannot read is the run's own `400`), `cinematic-avatar` (its exact resolution and duration; Auto at the 15-second ceiling), `switchx` (the frame-block tier of the clip's frames, measured as the run measures them; the 240-frame tier when they cannot be read), `lip-sync` (a model priced by its audio's length is quoted on the audio it measures, as the run measures it — `ltx-2.5-fast` on its voice's length rounded up to a whole second; LatentSync's `reserve` is the most the run can cost, marked `settles_to_actual`: it is charged what its run used, never more), `split-into-layers`, `long-image` (the price of its mode, page length, size and the pictures it sends; a run is charged what it holds) and, on Nodaro Cloud, `edit-video-pro` (the most the span can cost, marked `settles_to_actual`; a span the run refuses, under 4 seconds, over the maximum or past the end of the video, is refused by the quote too). Any other type is a `400 quote_unsupported` that lists the types this server can quote. A refusal a route gives under a code of its own (Relight & Switch's `MISSING_STYLE_INPUT` and `MISSING_ALPHA`) is the quote's too, under that code. On `video-to-video`, a Video Remake engine as the `provider` (`nodaro-prism`, `nodaro-pulse`) is quoted as Video Remake quotes it (`reserve` its hold, `expected` its expected charge, a `quote_only_provider` warning: the run route answers that quote too and starts nothing; see [Video Remake's engines as providers](nodes/ai-video/video-to-video.md#video-remakes-engines-as-providers-api)). A Seedance edit on `video-to-video` is priced with every reference clip it is sent (`videoUrl` plus `referenceVideoUrls`); see [Video to Video → Seedance 2.5 Edit](nodes/ai-video/video-to-video.md#seedance-25-edit) for the reference lists and their numbering.
 
 ```json
 {"type":"text-to-video","params":{"prompt":"edit {video:1} as follows:
@@ -5921,7 +5952,7 @@ The segmented long-video engine ([Generate Video Pro](./nodes/ai-video/generate-
 
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/v1/generate-video-pro/:jobId/stop` | Graceful stop of a **processing** run: the in-flight segment is abandoned (still billed — the provider keeps rendering it), remaining segments are skipped, everything completed is stitched into the job's final video, and the untouched remainder of the reserve is refunded. Responds `{ jobId, stopping: true }`; keep polling the job — it completes with `output_data.pro.stopped = true` and `stoppedAtSegment`. A **pending** job is cancelled with a full refund instead (the generic cancel response is forwarded). |
+| `POST` | `/v1/generate-video-pro/:jobId/stop` | Graceful stop of a **processing** run: the active segment may finish, subsequent segments stay unstarted, and the job delivers the completed portion. The unused reservation is released. Responds `{ jobId, stopping: true }`; keep polling the job — it completes with `output_data.pro.stopped = true` and `stoppedAtSegment`. A **pending** job is cancelled with a full refund instead (the generic cancel response is forwarded). |
 | `POST` | `/v1/generate-video-pro/continue` | Body `{ fromJobId, fromSegment? }`. Starts a **new job** that reuses the parent run's plan and delivered segments below `fromSegment` (1-based; default = first not-yet-delivered) and regenerates from there, billed only for the regenerated segments plus the flat pro fee. The parent must be terminal (stopped / failed with ≥1 delivered segment / completed — an explicit `fromSegment` on a completed run re-rolls its tail). Responds `{ jobId, continuedFromJobId, fromSegment, segmentCount }`. Honors the `Idempotency-Key` header. |
 
 Both enforce ownership (404 on a foreign job) and 400 on non-pro jobs. Pricing details and worked examples: the node page's [Stopping and continuing a run](./nodes/ai-video/generate-video-pro.md#stopping-and-continuing-a-run).
@@ -6188,9 +6219,9 @@ length, with its own cast and new music, and can change the motion itself.
 
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/v1/video-remake/estimate` | Quote a run in credits before starting it. Free: nothing is created or reserved. Returns `{ engine, totalCredits, expectedCredits, breakdown, privacyCredits?, settlesLower, firstRemakeOffer?, resolution? }`: `totalCredits` is held when the run starts, `expectedCredits` is what it is expected to be charged (`firstRemakeOffer`: see [First Remake on us](#first-remake-on-us); `resolution`, the size the run delivers: see The size delivered below). |
+| `POST` | `/v1/video-remake/estimate` | Quote a run in credits before starting it. Free: nothing is created or reserved. Returns `{ engine, totalCredits, expectedCredits, breakdown, privacyCredits?, settlesLower, firstRemakeOffer?, resolution? }`: `totalCredits` is held when the run starts, `expectedCredits` is what it is expected to be charged (`firstRemakeOffer`: see [First Remake on us](#first-remake-on-us); `resolution`, the size the run delivers: see The size delivered below; a request that names `quality` is also answered `quality`, `qualityOffered` and `engineResolution?`: see Quality below). |
 | `POST` | `/v1/video-remake` | Start the run. Returns `202 { jobId }`; follow the job like any other (`GET /v1/jobs/:id`). Takes an `Idempotency-Key` (see below). |
-| `GET` | `/v1/video-remake/style-choice` | Whether you choose a run's `style`, per engine, or it is fixed as Motion (`"precise"` sets only what Nodaro's own apps run), whether the engine takes a style-only run, whether a Precise run takes an art style (see Style below), whether a run may state a 3D previz clip (`previz`, see A 3D previz clip below), whether such a clip's roles can be planned (`planRolesPreviz`, see Roles planned from the prompt below), whether a person role may keep its own face (`roleFace`, see The Face chip below), whether each engine's Flash choice is offered (`flash`, see Flash choices below), and the sizes each engine choice delivers here (`resolutions`, see The size delivered below), whether a run takes a part of the clip (`portion`) and whether a clip of 2 s or more is accepted (`shortClips`; both under A part of the clip, and short clips below). Public: no sign-in needed. |
+| `GET` | `/v1/video-remake/style-choice` | Whether you choose a run's `style`, per engine, or it is fixed as Motion (`"precise"` sets only what Nodaro's own apps run), whether the engine takes a style-only run, whether a Precise run takes an art style (see Style below), whether a run may state a 3D previz clip (`previz`, see A 3D previz clip below), whether such a clip's roles can be planned (`planRolesPreviz`, see Roles planned from the prompt below), whether a person role may keep its own face (`roleFace`, see The Face chip below), whether each engine's Flash choice is offered (`flash`, see Flash choices below), and the sizes each engine choice delivers here (`resolutions`, see The size delivered below), the sizes where a run has a Quality choice (`quality`, see Quality below), whether a run takes a part of the clip (`portion`), whether a clip of 2 s or more is accepted (`shortClips`) and whether a whole clip longer than 30 s runs in parts (`longClips`; all three under A part of the clip, short clips and long clips below). Public: no sign-in needed. |
 | `GET` | `/v1/video-remake/advanced` | Whether the Video Remake page shows its Advanced options (see below). Public: no sign-in needed. |
 | `POST` | `/v1/video-remake/describe-style` | Put an image's visual style into words, for a run's custom style (see A custom style below). Body `{ imageUrl, note? }`; returns `{ text, medium?, tones? }`. Free: no job, nothing charged. Signed in; 10 calls a minute per account. |
 | `POST` | `/v1/video-remake/plan-roles` | Plan a run's roles from a request in the person's own words and loose reference images (see Roles planned from the prompt below). Body `{ videoUrl, prompt, images, engine?, roles?, references?, preview?, previewStart?, portionStart?, portionSec?, clipKind?, previz? }`; returns `{ prompt, roles, references, postPrompt, removed, unresolved }`. Free: no job, nothing charged. Signed in; 6 calls a minute and 60 a day per account. |
@@ -6226,7 +6257,7 @@ and optionally `references` (see below), `prePrompt` (your own
 words placed at the start of the prompt, before the role instructions; it
 mentions roles as `{role:N}`, like `postPrompt`), `postPrompt`, `preview`,
 `previewStart`, `portionStart` and `portionSec` (a part of the clip, where the
-deployment offers it: see A part of the clip, and short clips below), `engine` (see below), `style` (see below), `direction` (an art
+deployment offers it: see A part of the clip, short clips and long clips below), `engine` (see below), `style` (see below), `direction` (an art
 style from the catalog, or a custom style in your own words, see below), `resolution` (the size the video is delivered at: `"720p"` — the default —
 `"1080p"` or `"4k"`; on a Flash choice `"720p"` — the default — or `"1080p"`;
 see The size delivered below), `draft` (off by default; `true` makes a
@@ -6301,10 +6332,59 @@ makes: Nodaro Prism `"480p"` (the default), `"720p"` or `"1080p"`, Nodaro
 Pulse `"720p"` (the default) or `"1080p"`, Nodaro Prism Flash `"480p"` (the
 default) or `"720p"`, Nodaro Pulse Flash `"720p"`.
 
-**A part of the clip, and short clips.** Two choices a deployment may turn on
-for its engine. Each is off unless `GET /v1/video-remake/style-choice` answers
-it `true`; read every other answer, a missing one included, as off: the clip is
-then 4–30 s, whole, as above.
+**Quality.** `quality` on a run and its estimate says how the size delivered
+is made:
+
+- `"economy"` (the default): the video is rendered one size below, then
+  upscaled to `resolution`. Faces and motion can look processed.
+- `"full"`: the video is rendered at `resolution` itself, with no upscale
+  step. It costs more.
+
+The choice exists where `GET /v1/video-remake/style-choice` lists the size
+under `quality`, per engine choice:
+
+```json
+{ "quality": { "nodaro-prism": ["720p", "1080p"], "nodaro-pulse": ["1080p"] } }
+```
+
+Show a Quality control for exactly those sizes; `{}` (a server from before it
+leaves it out: read that as `{}`) means there is none. Anywhere else a size is
+made one way only and the request is made that way: `quality` is never
+refused for it. It is not read on a draft or a trend run. At 480p, and at a
+size the engine makes itself with no upscale step, the two ways are the same
+run, so no size like that is listed.
+
+4K is listed only for an engine choice that renders 4K itself, where the
+deployment has turned that on. Where `resolutions` offers 4K and `quality`
+does not list it, a 4K video is rendered at 1080p and upscaled, whatever
+`quality` says: tell the person that Full is not available at 4K for that
+engine choice.
+
+To price the two, call the estimate once per value. Only an estimate whose
+request names `quality` answers how its quote is made:
+
+| Field | Meaning |
+|-------|---------|
+| `quality` | `"economy"` or `"full"`: how this quote is made. Where the size can be made one way only, it says that way, whatever was asked. |
+| `qualityOffered` | `true` only when both ways exist for this request. Read it on the `"economy"` estimate; when it is `false`, only the way `quality` names can be had for this request (say so beside the control). |
+| `engineResolution` | Only with `"economy"`: the size the video is rendered at before the upscale (`"480p"`, `"720p"` or `"1080p"`). |
+
+A run whose request named `quality` records it in `input_data.quality`, and
+its completed `output_data` says `quality` as it was made. On its owner's own
+reads of the job (`GET /v1/jobs/:id`, `GET /v1/jobs`, the status polls, the
+job's webhook events, and the MCP `get_job`, `wait_for_job`, `list_jobs` and
+task results), an Economy run whose upscale step was applied also carries the
+video before that step: `engineVideoUrl`, `engineWidth`, `engineHeight` and
+`engineResolution` (show it beside `videoUrl`, as "Before upscale"). Nobody
+else reads them, not even on a public job. The version before upscaling is
+kept with the result and counts toward your storage; permanently deleting
+the result from your Library deletes it too and gives that storage back. A request that names no `quality`
+is run, quoted and answered exactly as before, with none of these fields.
+
+**A part of the clip, short clips and long clips.** Three choices a deployment
+may turn on for its engine. Each is off unless `GET /v1/video-remake/style-choice`
+answers it (`true`, or for `longClips` a length); read every other answer, a
+missing one included, as off: the clip is then 4–30 s, whole, as above.
 
 - **A part of the clip** (where `style-choice` answers `portion: true`; one
   boolean, not per engine; a server from before it leaves it out, read that as
@@ -6329,6 +6409,51 @@ then 4–30 s, whole, as above.
   it). A 4 s preview of a clip shorter than 4 s is still refused
   `preview_out_of_range`. The estimate is the authority on the length a clip
   may have: a clip outside it answers `clip_out_of_range`.
+- **Long clips** (where `style-choice` answers `longClips: { maxSourceSec }`;
+  one answer for the deployment, `null` elsewhere; a server from before it
+  leaves it out, read that as `null`). A whole run, with no `preview`, no
+  part of the clip and not a trend run, on one engine (`"nodaro-prism"`, not
+  its Flash choice) with the Precise style takes a source longer than 30 s, up
+  to `maxSourceSec` seconds. It needs
+  no field of its own: the run is made in parts, which are joined into one
+  result of the source's length, and the estimate prices the run that will be
+  made. A whole clip over `maxSourceSec` is refused `400 long_clip_too_long`
+  before anything is held (and so is planning its roles); any other engine,
+  style or run keeps the 30 s limit (`clip_out_of_range`). Full Quality is
+  not offered for such a run: `409 long_clip_no_full_quality`. Such a job may
+  take longer than a run of 30 s or less, and may complete with only its first
+  parts: see A clip delivered in part below.
+
+**A clip delivered in part.** When a later part of a long clip fails after its
+retries (or its take cannot be joined whole), the job still completes, with
+the clip from its start up to that part (never with a gap), and its
+`output_data` carries `partial` beside `videoUrl`:
+
+```json
+{
+  "videoUrl": "https://…/remake.mp4",
+  "durationSec": 48.25,
+  "partial": {
+    "deliveredSec": 48.25,
+    "sourceSec": 120,
+    "parts": { "delivered": 2, "planned": 5 },
+    "reason": "part_failed",
+    "message": "We remade the first 0:48 of 2:00. The rest could not be made, and its video was not charged."
+  }
+}
+```
+
+`durationSec` is then the delivered length (`partial.deliveredSec`), not the
+source's; `reason` is `"part_failed"` (a part failed after its retries),
+`"short_take"` (a part's take came out too short for its window) or
+`"joined_length"` (the joined take did not have its parts' length), and may
+grow; `message` is one English sentence to show the person. The undelivered
+parts' renders are released, not charged; the run's own fee is the one its
+quote stated. Nothing retries the rest on its own. If the first part fails,
+the job fails as any run does, with nothing delivered. A whole result has no
+`partial`. The record reaches every read of the job (`GET /v1/jobs/:id`, the
+job lists, the status routes, webhooks) and the MCP job tools, which also say
+it in words.
 
 **Flash choices.** Where Nodaro offers it, each engine also has a Flash
 choice beside it: `"nodaro-prism-flash"` (Nodaro Prism Flash) and
@@ -6598,6 +6723,9 @@ plan_roles_not_available` (not offered here: set the roles yourself),
 `400 preview_out_of_range`, a run's own refusals of a part of the clip
 (`400 portion_unavailable`, `portion_incomplete`, `portion_with_preview`,
 `portion_out_of_range`, `source_too_long`, `long_source_unpriceable`),
+`400 long_clip_too_long` (a whole clip on Nodaro Prism over `longClips.maxSourceSec`,
+where `style-choice` answers one; a whole Nodaro Prism clip up to that length is
+planned, as its run may be made in parts),
 `400 image_unreadable` (an image could not be fetched, is too large or is not
 a picture; `error.details.index` is its position in `images`, from 0) and
 `502 plan_roles_failed` (try again, or set the roles yourself).
@@ -6906,7 +7034,8 @@ Refusals, all before anything is charged (bodies are
 | `400` | `invalid_role_mention` | `prePrompt` or `postPrompt` mentions `{role:N}` with N outside 1..`roles.length`. N counts every role in `roles`, empty ones included (`{role:1}` is `roles[0]`). Also any `{role:N}` in a reference's `line`: a line describes the thing itself. |
 | `400` | `unsafe_url` | `videoUrl`, a role image or a reference image is not a public http(s) address. |
 | `400` | `video_unreadable` | The clip's length could not be read (not a playable video). |
-| `400` | `clip_out_of_range` | The clip is shorter than 4 s or longer than 30 s (where `style-choice` answers `shortClips: true`, shorter than 2 s; with a part of the clip or a preview where it answers `portion: true`, a source over 30 s is judged by the part or the preview instead, up to `source_too_long`). |
+| `400` | `clip_out_of_range` | The clip is shorter than 4 s or longer than 30 s (where `style-choice` answers `shortClips: true`, shorter than 2 s; with a part of the clip or a preview where it answers `portion: true`, a source over 30 s is judged by the part or the preview instead, up to `source_too_long`; where it answers `longClips`, a whole run on Nodaro Prism with the Precise style takes a source up to `longClips.maxSourceSec`, see Long clips above). |
+| `400` | `long_clip_too_long` | A whole run that would be made in parts (Nodaro Prism, the Precise style, where `style-choice` answers `longClips`) whose source is longer than `longClips.maxSourceSec`. |
 | `400` | `portion_unavailable` | `portionStart` or `portionSec` where this deployment does not run a part of the clip (`style-choice` answers `portion` false or leaves it out). |
 | `400` | `portion_incomplete` | One of `portionStart` and `portionSec` without the other. |
 | `400` | `portion_with_preview` | A part of the clip with `preview: true`: a part is an ordinary run, not a preview. |
@@ -6947,14 +7076,18 @@ run and a [trend run](#13g-trends-cloud-edition) are both Video Remake runs.
   720p, on Nodaro Prism or on Nodaro Pulse (`resolution: "720p"`, or left out).
   A Nodaro Prism draft preview (`draft: true`, 480p) is covered too. Where the
   deployment's engine does not deliver resolutions yet (an empty `resolutions`
-  in the style choice), or a request still sends `upscale`, `resolution` is the
-  engine's size and the covered runs are Nodaro Prism at 480p and Nodaro Pulse
-  at 720p. Everything else in the run is allowed: its roles, pictures, style,
+  in the style choice), and on a trend whose page does not say
+  `deliveredResolution`, `resolution` is the engine's size and the covered runs
+  are Nodaro Prism at 480p and Nodaro Pulse at 720p. Everything else in the run is allowed: its roles, pictures, style,
   art style and every extra step, whatever they cost.
 - **It is your first run, needed or not.** Your first Video Remake run that
   finishes uses the offer, also when your credits paid all of it (the offer
   then covered nothing). A first run your credits can pay is paid with them,
   as any run.
+- **A Full run on Nodaro Prism at 720p is not covered.** The offer covers the
+  Economy run (`quality` left out, or `"economy"`): a request that names
+  `quality: "full"` there is answered as any other run the offer does not
+  cover (`402 first_remake_option_locked`).
 - **The offer's credits are held for that run alone.** They are not added to
   your balance: only the run's own steps draw on them, and only for what your
   own credits cannot pay (your credits are used first).
@@ -7067,6 +7200,7 @@ Refusals, all before anything is charged (bodies are
 | `409` | `not_a_draft` | The run is not a Nodaro Prism draft: a plain run (480p made without `draft: true` included; make a draft with `draft: true`), or any Nodaro Pulse run (Pulse makes no drafts: run it again at 1080p). |
 | `409` | `full_quality_pending` | **Not final — try again later** (`retryable: true`): an earlier try's 1080p render of this draft is being reviewed (try again once the review ends), or has not started yet. |
 | `409` | `full_quality_unavailable` | **Final:** the run cannot be finished at Full Quality — nothing kept to re-render, no readable completion time, or the 1080p finalize refuses this draft. On the start only, also when every try failed ("failed too many times") or no try can be started for this run. |
+| `409` | `long_clip_no_full_quality` | The run was a clip longer than 30 s made in parts (see Long clips above): it has no Full Quality yet. Run it again at the resolution you want. |
 | `410` | `draft_expired` | More than 7 days after the draft completed, or the draft can no longer be finished at Full Quality. |
 | `422` | `job_blocked` | The request was blocked by the job policy (start only). |
 | `503` | `job_read_failed` | The draft could not be read just now (`retryable: true`); try again. |
@@ -7156,7 +7290,7 @@ answered as a guest. Every other route below needs a signed-in caller.
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/v1/trends` | The catalog, in the catalog's own order: `{ data: TrendCard[], next }`. Each card is `{ id, slug, name, description?, tags, badges, cover, original?, examples, needs, durationSec, isFavorite }`: `cover` is the first example, else the original; `original` is the original's display copy `{ videoUrl, posterUrl?, width, height }` (the same address as the page's `original`, absent on a version without one); `examples` is every example's video in order, `{ videoUrl, posterUrl?, width, height }` each, without the pictures its slots used (those are on the page; `[]` on a trend with only its original). Every video (`cover`, `original`, each of `examples`, and the page's `original` and `examples`) may also carry `webUrl` and `webSizeBytes`: a light copy the platform made for playback (H.264 ~2.5 Mbit/s, AAC 160 kbit/s), to play as it is with no CDN transform, and its size in bytes; both are absent until it is made (a version published before it), and `videoUrl` is then the one to play. A trend can hide its original clip: its `original` is then its first example, and `examples` starts from its second example, so the original clip is never sent. Query: `q` (search), `tag`, `favorites=1` (only yours), `locale`, `cursor`, `limit` (1–60, default 30). |
-| `GET` | `/v1/trends/:slug` | A trend's page: `{ data: TrendDetail }` (its original, slots, examples, preview length, `engine` and `resolutions`). `original` is the clip every run starts from, as you may show it: `{ videoUrl, posterUrl?, width, height, durationSec, previewStartSec? }`, a browser-safe (H.264 MP4) copy, with where the 4 s preview starts when the trend has one (`0` included). `examples` may be empty (a trend with only its original); the card's `cover` is then the original. On a trend that hides its original clip, `original` is its first example (that example's video, poster, size and length, with the trend's own `previewStartSec`) and `examples` starts from its second example; the original clip is never sent. `engine` is the engine every run of the trend uses (`"nodaro-prism"` or `"nodaro-pulse"`, with its name in `engineName`: "Nodaro Prism" or "Nodaro Pulse"; the trend chooses it, never the person running it), and `resolutions` the resolutions a run may ask for, its default first: `["480p", "720p", "1080p"]` on Nodaro Prism (480p is plain; a run makes a draft only with `draft: true`), `["720p", "1080p"]` on Nodaro Pulse (no draft). Each slot is `{ key, label, kind, required, hint?, hintImageUrl?, defaultImages?, emptyFill?, chips, defaults? }` (`hintImageUrl`: a picture of who or what the slot is in the original; `defaultImages`: an optional slot's original look, 1–3 https pictures of that role as it is in the original, the ones a run sends for it when you leave it empty; on a trend that hides its original, the pictures of the example shown as its `original` for that slot (the slot's own are never shown there); absent on a required slot; `emptyFill`, on an optional slot only: what a run takes when you leave it empty, `"default"` its original look, `"example"` the chosen example's pictures for it (none when that example has none: then it stays as in the original), or `"original"` no pictures, the role as in the original): `chips` lists the chips you may set on it, in the kind's order (`[]` = none, so show no chips row), and `defaults` the starting value of those. Query: `locale`. |
+| `GET` | `/v1/trends/:slug` | A trend's page: `{ data: TrendDetail }` (its original, slots, examples, preview length, `engine` and `resolutions`). `original` is the clip every run starts from, as you may show it: `{ videoUrl, posterUrl?, width, height, durationSec, previewStartSec? }`, a browser-safe (H.264 MP4) copy, with where the 4 s preview starts when the trend has one (`0` included). `examples` may be empty (a trend with only its original); the card's `cover` is then the original. On a trend that hides its original clip, `original` is its first example (that example's video, poster, size and length, with the trend's own `previewStartSec`) and `examples` starts from its second example; the original clip is never sent. `engine` is the engine every run of the trend uses (`"nodaro-prism"` or `"nodaro-pulse"`, with its name in `engineName`: "Nodaro Prism" or "Nodaro Pulse"; the trend chooses it, never the person running it), and `resolutions` the resolutions a run may ask for, its default first: `["480p", "720p", "1080p"]` on Nodaro Prism (480p is plain; a run makes a draft only with `draft: true`), `["720p", "1080p"]` on Nodaro Pulse (no draft). Where the page says `deliveredResolution: true`, `resolutions` are instead the sizes a run is delivered at for the trend's engine choice on this deployment, exactly as [`GET /v1/video-remake/style-choice`](#13f-video-remake-cloud-edition) lists them in its `resolutions` (for example `["720p", "1080p", "4k"]`), and a run's `resolution` names the size the video comes back at; without the field (and from a server before it) the sizes are read as listed above. Each slot is `{ key, label, kind, required, hint?, hintImageUrl?, defaultImages?, emptyFill?, chips, defaults? }` (`hintImageUrl`: a picture of who or what the slot is in the original; `defaultImages`: an optional slot's original look, 1–3 https pictures of that role as it is in the original, the ones a run sends for it when you leave it empty; on a trend that hides its original, the pictures of the example shown as its `original` for that slot (the slot's own are never shown there); absent on a required slot; `emptyFill`, on an optional slot only: what a run takes when you leave it empty, `"default"` its original look, `"example"` the chosen example's pictures for it (none when that example has none: then it stays as in the original), or `"original"` no pictures, the role as in the original): `chips` lists the chips you may set on it, in the kind's order (`[]` = none, so show no chips row), and `defaults` the starting value of those. Query: `locale`. |
 | `POST` | `/v1/trends/:slug/estimate` | Quote a run before starting it. Free. Returns `{ data: { expectedCredits, holdCredits, engine, engineName, breakdown, privacyCredits?, firstRemakeOffer? } }` (`firstRemakeOffer`: see [First Remake on us](#first-remake-on-us)): `holdCredits` is reserved when the run starts, `expectedCredits` is what it is expected to be charged. `engine` is the engine the run was priced on, the trend's own (`"nodaro-prism"` or `"nodaro-pulse"`, as on its page), with its name in `engineName` ("Nodaro Prism" or "Nodaro Pulse"). `breakdown` names the quote's parts for display only (some sit outside the totals: read the totals, never the sum). `privacyCredits`, on a trend that retries a clip the video model refuses, is what is charged on top if that retry runs; it is not in `expectedCredits` or `holdCredits`, and is 0 when the trend's clip was prepared ahead of time. |
 | `POST` | `/v1/trends/:slug/runs` | Start a run. Returns `202 { data: { jobId } }`; follow the job like any other (`GET /v1/jobs/:id`). Takes an `Idempotency-Key`: a repeat with the same key answers with the first run's job and starts nothing new. |
 | `GET` | `/v1/trends/runs` | Your trend runs, newest first: `{ data: TrendRun[], next }`. Query: `trend` (a slug), `cursor`, `limit` (1–60, default 30). A run stays readable after its trend moves on to a new version, is unpublished or is archived. |
@@ -7207,11 +7341,15 @@ The estimate and run body is
   `{slot:<key>}`.
 - `preview: true` runs 4 seconds (only when the trend's `previewSec` is 4).
 - `resolution`: one of the trend's `resolutions`, default its first
-  (`"480p"`, or `"720p"` on a Nodaro Pulse trend); another is a `400`
-  `resolution_unsupported`. `draft` (default `false`, so a 480p run is plain):
-  `true` makes a 480p draft whose same take [Full Quality](#full-quality) can
-  finish at 1080p, only on a Nodaro Prism trend; `draft: true` on a
-  Nodaro Pulse trend is a `400` `draft_unsupported`.
+  (`"480p"`, or `"720p"` on a Nodaro Pulse trend; on a trend whose page says
+  `deliveredResolution`, its first size delivered); another is a `400`
+  `resolution_unsupported`. `"4k"` is a size only on a trend with
+  `deliveredResolution` (elsewhere a `400` `validation_error`). `draft`
+  (default `false`, so a 480p run is plain): `true` makes a 480p draft whose
+  same take [Full Quality](#full-quality) can finish at 1080p, only on a Nodaro
+  Prism trend, whatever its `resolutions` list (leave `resolution` out or send
+  `"480p"`; another is a `400` `validation_error`); `draft: true` on a Nodaro
+  Pulse or Flash trend is a `400` `draft_unsupported`.
 - `sessionId`: one of your generation sessions. Accepted (one you may not
   use is still a `404`), but not yet applied: trend runs are not filed into
   sessions yet.
@@ -7262,8 +7400,8 @@ anything is charged:
 | `400` | `missing_slot` | A required slot has no images. (An optional slot left empty that nothing fills is not refused: it stays as in the original.) |
 | `400` | `unknown_slot` | `slots` names a key the trend does not have. |
 | `400` | `invalid_choice` | A chip the slot's kind does not take (a `coat` on a person, any chip on a location). |
-| `400` | `draft_unsupported` | `draft: true` on a trend whose engine has no draft (Nodaro Pulse). |
-| `400` | `resolution_unsupported` | A `resolution` the trend does not offer (480p on a Nodaro Pulse trend). |
+| `400` | `draft_unsupported` | `draft: true` on a trend whose engine has no draft (Nodaro Pulse, or a Flash trend). |
+| `400` | `resolution_unsupported` | A `resolution` the trend does not offer (480p on a Nodaro Pulse trend; on a trend with `deliveredResolution`, a size not in its `resolutions`). The message names the sizes it offers. |
 | `400` | `too_many_images` | A Nodaro Pulse trend's run would send more than 10 pictures (yours, the slot's original look or the example's for slots you left empty, and the trend's own): send fewer per slot. |
 | `400` | `role_name_required` | A role of the trend has no name (the trend's own data; a trend's roles are always named). |
 | `400` | `chip_not_offered` | A chip of the slot's kind that the trend does not offer on that slot (not in its `chips`): the trend fixes it. Carries `slot` and `chip`. |
@@ -7293,8 +7431,10 @@ with their OWN codes and fixed messages; the engine's message and any
 | `400` | `clip_out_of_range` / `preview_out_of_range` / `video_unreadable` | This trend's own clip cannot be run as it is. |
 | `400` | `unsafe_url` | A picture is not a public http(s) address. |
 | `400` | `raw_reference_token` | `details` contains `{image:`, `{video:` or `{audio:`. |
+| `400` | `resolution_unsupported` | (a trend with `deliveredResolution`) The size is not delivered for the trend's engine choice on this deployment right now. |
 | `402` | `insufficient_credits` | Your credits (or a workspace cap: `budget_exceeded`, `member_cap_exceeded`, `user_allowance_exceeded`) cannot cover the run. Passed on as the engine gave it. |
-| `402` | `first_remake_option_locked` | Your credits cannot cover the run and your [first Remake on us](#first-remake-on-us) would, but the run is not a 4-second preview it covers (Nodaro Prism at 480p, Nodaro Pulse at 720p). Passed on as the engine gave it. |
+| `402` | `first_remake_option_locked` | Your credits cannot cover the run and your [first Remake on us](#first-remake-on-us) would, but the run is not a 4-second preview it covers (Nodaro Prism at 480p, Nodaro Pulse at 720p; on a trend with `deliveredResolution`, a preview delivered at 720p on either). Passed on as the engine gave it. |
+| `409` | `resolution_unavailable` | (a trend with `deliveredResolution`) The size is offered but cannot be made for this run right now: choose a smaller one, or try again later. |
 | `413` | `storage_limit_exceeded` | Your storage is full. |
 | `422` | `job_blocked` | The job policy blocked the run. |
 | `429` | `rate_limited` | Too many requests; try again shortly. |
@@ -7373,9 +7513,9 @@ whose storage does not have the radar yet answers `503 not_available`.
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/v1/trend-radar/summary` | `{ data: { lastRun, counts: { candidates, watching, slowing }, searchesToday, dailySearchBudget } }`. |
-| `GET` | `/v1/trend-radar/candidates` | `{ data: TrendCandidateCard[], next }`. Query: `status` (`watching`, `candidate`, `slowing`, `approved`, `rejected`, `archived`; left out = everything but the last two), `sort` (`creators` default, `dayChange`, `firstSeen`), `cursor`, `limit` 1–200. |
-| `GET` | `/v1/trend-radar/candidates/:id` | `{ data: TrendCandidate }`: the card plus `posts`, `readings` (one per day, oldest first), `templatesElsewhere`, `search`, `history`, `checklist` and `rejectReason`. `404 not_found`. |
+| `GET` | `/v1/trend-radar/summary` | `{ data: { lastRun, counts: { candidates, watching, slowing }, searchesToday, dailySearchBudget, reading } }`. `reading` is `{ searchesPerRead, creditsPerRead, runnerCredits, maxSearchesPerDay, deepSearchesMax, creditsPerDeepSearch }`: the searches one candidate's reading takes (one per platform), the credits that reading is charged at the search's current charged price (`null` when a price cannot be read), what the account the run searches as holds now (`null` before a runner is set), the highest daily search budget the settings take, and the deeper count: a platform whose search came back full is searched again in other orders so a big trend's people are counted past one search's ceiling, at most `deepSearchesMax` extra searches per candidate, each charged `creditsPerDeepSearch`, out of the same daily budget — enough to set the budget in candidates per day and see what a day costs. `lastRun.stoppedEarly` says why the last run stopped before reading every candidate it could afford (the account it searches as ran out of credits; it stops at the first refused search and leaves the rest for the next run), `null` or absent when it did not. |
+| `GET` | `/v1/trend-radar/candidates` | `{ data: TrendCandidateCard[], next }`. Query: `status` (`watching`, `candidate`, `slowing`, `approved`, `rejected`, `archived`; left out = everything but the last two), `sort` (`creators` default, `dayChange`, `firstSeen`, `plays`), `cursor`, `limit` 1–200. |
+| `GET` | `/v1/trend-radar/candidates/:id` | `{ data: TrendCandidate }`: the card plus `posts` (up to 8: each platform's most-played post, then the most-played overall), `readings` (one per day, oldest first: `{ date, creators, plays, posts, growthPct }`), `templatesElsewhere`, `search`, `history`, `checklist` and `rejectReason`. `404 not_found`. |
 | `POST` | `/v1/trend-radar/candidates/:id/approve` | Creates a draft trend named after the candidate and marks it `approved`: `{ data: { trendId, clip } }`. `clip` is `"attaching"` when the top post is being downloaded (as the approving admin) and stored as the draft's source clip in the background — the candidate's `history` then gains `source_attached`, or `source_failed` with why — else `"none"`. Approving again answers the same trend. `409 slug_taken` when no free slug was found. |
 | `POST` | `/v1/trend-radar/candidates/:id/watch` | Back to `watching`: `{ data: TrendCandidateCard }`. |
 | `POST` | `/v1/trend-radar/candidates/:id/reject` | Body `{ reason }` (1–500 characters). `rejected`: `{ data: TrendCandidateCard }`. |
@@ -7384,12 +7524,43 @@ whose storage does not have the radar yet answers `503 not_available`.
 | `POST` | `/v1/trend-radar/run` | Starts today's run now: `202 { data: { runId, startedAt } }`. One run at a time. |
 
 A card: `{ id, name, slug, status, label, soundName, durationSec, creators,
-plays, dayChangePct, firstSeen: { kind, name, url, firstSeenAt }, topPost,
-passedAt, trendId, createdAt, updatedAt }`. A post: `{ platform, url, author,
-postedAt, plays, likes, soundName, stillUrl, embedUrl, durationSec }` — on
-Instagram `plays` is `null` (views are hidden to a logged-out reader) and
-`likes` is the count to show. Labels: `new`, `watching`, `rising`, `hot`,
-`slowing`.
+creatorsCapped, plays, dayChangePct, firstSeen: { kind, name, url, firstSeenAt },
+topPost, platforms, firstPostedAt, lastReadAt, passedAt, trendId, createdAt,
+updatedAt }`. A post: `{ platform, url, author, postedAt, plays, likes,
+soundName, stillUrl, embedUrl, durationSec }` — on Instagram `plays` is `null`
+(views are hidden to a logged-out reader) and `likes` is the count to show.
+`stillUrl` is a small copy the read kept on this deployment's storage (the
+platforms' own stills stop answering within hours), or, when no copy could be
+made, the platform's own short-lived link. Kept stills are for the admin's
+review only.
+Labels: `new`, `watching`, `rising`, `hot`, `slowing`.
+
+**How a candidate is read.** Each read searches the candidate's name plus
+"ai" on TikTok, Instagram and YouTube (Shorts): three searches against the
+daily search budget (`thresholds.dailySearchBudget`, default 900: every open
+candidate read every day), for up to
+60 posts on TikTok and Instagram and 20 on YouTube. A candidate is read only
+when the day's budget still covers all three; candidates never read come
+first (newest first), then the ones read longest ago, so every open candidate
+gets its turn. A platform whose search fails is skipped for that read and the
+others are kept.
+
+- `creators` counts distinct accounts across the platforms (the same handle on
+  two platforms counts twice). `creatorsCapped` is `true` when a platform's
+  search returned as many posts as it may: more creators likely posted it, so
+  show the count as "n+".
+- `platforms` holds each platform the last read found posts on:
+  `{ posts, creators, plays, capped, top }`, `top` being its most-played post.
+- `firstPostedAt` is the earliest post date any read saw (how old the trend
+  is); `lastReadAt` is when the run last read the candidate.
+- `growthPct` on a reading is the plays growth per day, in percent, over the
+  posts that reading and the previous one both saw — the same posts, so a
+  search that answers different posts on another day does not move it. Over
+  a gap of several days it is the daily rate, compounded. It is `null` on the
+  first reading, when no post was seen twice, and on readings from before it
+  was measured. `dayChangePct` on the card is the latest reading's
+  `growthPct`; when that is `null`, it is the change in summed plays from the
+  previous reading. The labels read the same figure.
 
 ## 13i. Content rights (import confirmations)
 
@@ -9449,6 +9620,7 @@ for the formulas). Off Cloud, the four `voice-changer-pro*` routes are absent (4
 | `POST` | `/v1/video-depth` | Turn a video into a depth video — near is bright, far is dark (`{ videoUrl, provider?: video-depth-anything\|depth-anything-frames, modelSize?: small\|base\|large, colormap?: grayscale\|turbo\|inferno\|magma\|viridis, resolution?: auto\|360p\|480p\|720p\|1080p, sideBySide? }`; `provider` defaults to `video-depth-anything` and `modelSize` to `large`). `video-depth-anything` honours every lever; `depth-anything-frames` (per frame, may flicker) honours `modelSize` and `colormap` `grayscale` or `inferno` only. A lever the provider does not take is ignored and a colormap it cannot render becomes `grayscale`, so switching providers never fails a request — but every value sent must still be valid (an unknown provider, model size, colormap or resolution is a `400 validation_error`). The clip is measured before anything is created and priced per whole second of its length: `400 video_too_long` over the provider's limit (2,400 frames and at most 300 s for `video-depth-anything`, a clip with no frame rate counted at 30 fps; 80 s for `depth-anything-frames`), `400 video_unreadable` when the clip cannot be read, `400 validation_error` on a malformed body, `403 model_not_available` when this deployment has turned the provider off (an omitted `provider` is checked as the default) — nothing is reserved on any of them. → `{ jobId }`; output `{ videoUrl, thumbnailUrl }`. Full reference: [Video Depth](./nodes/processing-video/video-depth.md). |
 | `POST` | `/v1/generate-mask` | Text-prompted image segmentation (Grounded SAM) → a black-and-white mask image, white = the subject (`{ imageUrl, prompt (1–500 chars, e.g. "the person"), threshold?: 0–1 (default 0.3; lower selects more) }`; a malformed body is a `400 validation_error`). → `{ jobId }`; output `{ maskUrl, imageUrl }` — `maskUrl` is the mask PNG, `imageUrl` the source image passed through unchanged. Price: `GET /v1/credits/model-cost?model=generate-mask`. Full reference: [Generate Mask](./nodes/ai-image/generate-mask.md). |
 | `POST` | `/v1/split-into-layers` | One image → a base picture and separate layers, each element on its own transparent PNG (`{ imageUrl, maxLayers?, size?, prompt?, sessionId?, origin? }`, plus an optional `Idempotency-Key` header: a retry with the same key answers `{ jobId, deduped: true }` for the job it already started — unless the first request was answered `500 internal_error` because its job could not be queued: that job is failed and refunded at once, and the retry starts a new run (in the rare case that the failure cannot be confirmed, either it did not land, and a retry with the same key is answered with that job — if that job then fails, send the request again with a new key — or it landed with only its answer lost, and the key was freed with it, so a retry with the same key starts a new run); `sessionId` files the job in one of your sessions and `origin` tags it with your app's slug, as on every job-creating route; `imageUrl` an http(s) URL; `maxLayers` 1–99, default 9 — more elements than that merge into fewer layers, none is dropped; `size` `"1K"\|"1.5K"\|"2K"\|"auto"`, default `"1K"` — each image's pixel budget, about one megapixel at 1K, while `"auto"` keeps the picture's own size, between 1K and 2K; `prompt` up to 2,000 characters — what to separate, optionally with `<bbox>x1 y1 x2 y2</bbox>` marks (0–1000); left empty, the main elements are found automatically. A malformed body is a `400 validation_error` before any credits are held). → `{ jobId }`; output `{ imageUrl, layers, layerData, layerCount, layersNotSaved, libraryImages }`: `imageUrl` is the base picture (an opaque PNG), `layers` each layer's file, bottom to top, and `layerData` one `{ name?, description?, zIndex, width?, height?, box?, boxNormalized?, url, baseUrl }` per layer in the same order, `baseUrl` naming the base picture the layer was cut from (the job's own `imageUrl`). `zIndex` is the stacking order (1 sits on the base, higher is drawn above); `box` (`{ x1, y1, x2, y2 }`, top-left and bottom-right) is where the layer sits on the base, in the BASE's pixels, and `boxNormalized` the same box on a 0–1000 scale of the base's width and height; `width` / `height` are the layer FILE's own pixels — a layer is cropped to its element at about the size's pixel budget, so scale it to its `box` to put it back in place. A run holds the price of the most images it may return (`maxLayers` + 1, the base included) at its size and is charged only for the images it returns (1K and 1.5K are priced alike, 2K and auto alike): the default run holds **104 credits**<!-- credits: split-into-layers:1k:10 -->, 3 layers returned at 1K are **44 credits**<!-- credits: split-into-layers:1k:4 --> (**74 credits**<!-- credits: split-into-layers:2k:4 --> at 2K or auto), and `maxLayers: 5` at 1K holds **64 credits**<!-- credits: split-into-layers:1k:6 -->. A run that finds no element completes with the base only (`layers` empty) at the one-image price. A layer that cannot be saved after a few tries is left out and counted in `layersNotSaved`, and the run is charged only for the images saved; a run whose base picture cannot be saved fails and is refunded. `POST /v1/quote` with `{ "type": "split-into-layers", "params": <this body> }` states a run's hold before it starts ([Run quotes](#run-quotes)). Full reference: [Split into Layers](./nodes/ai-image/split-into-layers.md). |
+| `POST` | `/v1/long-image` | One very tall picture from a prompt: a webpage design or a product detail page (`{ mode?, prompt, resolution?, length?, productImageUrls?, styleImageUrl?, subjectImageUrl?, sessionId?, origin? }`, plus an optional `Idempotency-Key` header: a retry with the same key answers `{ jobId, deduped: true }` for the job it already started). `mode` `"webpage"` (default) or `"ecommerce"`; `prompt` 1–20,000 characters; `resolution` `"1K"\|"2K"`, default `"2K"`. A product page (`ecommerce`) takes `productImageUrls`, one to three http(s) links (the first is `@image_1` in the prompt; an entry may be `null` to keep the numbering of the ones after it), and `length` `"short"\|"medium"\|"long"`, default `"medium"`; a webpage design takes an optional `styleImageUrl` (`@style`) and `subjectImageUrl` (`@subject`). Any other `@` before a letter, digit or `_` is sent as the full-width `＠`, which the model does not read as a picture's name. A body that mixes the two modes' fields, has an empty prompt, or is a product page with no product picture is a `400 validation_error` before any credits are held. → `{ jobId }`; output `{ imageUrl, imageMimeType }`: the picture, stored as what it is (PNG or JPEG; one over the stored-image size limit is re-encoded to fit it). A run is charged the price of its mode, length, size and the pictures it sends: a webpage design at 2K with no picture is **296 credits**<!-- credits: long-image:webpage:2K -->, a medium product page at 2K with one product picture **274 credits**<!-- credits: long-image:ecommerce:medium:2K:1ref -->; a run that fails is refunded. `POST /v1/quote` with `{ "type": "long-image", "params": <this body> }` states a run's price before it starts ([Run quotes](#run-quotes)). Full reference: [Long Image](./nodes/ai-image/long-image.md). |
 | `POST` | `/v1/video-mask` | Text-prompted video segmentation (SAM 3.1 / SAM 3) → a black-and-white mask video, white = the subject (`{ videoUrl, prompt (≤500 chars; commas track several subjects), threshold?: 0.05–0.95 (default 0.5), provider?: "sam-3.1" (default) \| "sam-3" (about half the price), holdLastMask?: boolean (default false — frames where the subject is lost, under 0.002 % of the picture, repeat the most recent non-empty mask; frames before the first detection stay empty; the output then carries `heldFrames`), minSubjectHeightPct?: 0–100 (default 0 = off — drops every connected region shorter than that % of the frame height, before holdLastMask; the output then carries `droppedRegions`), maxSubjectHeightPct?: 0–100 (default 0 = off — the mirror: drops regions taller than that %; with both set a region is kept when min ≤ height ≤ max, and min > max is a 400 `validation_error`), zone?: { leftPct?, rightPct?, topPct?, bottomPct? } \| null (each 0–49 % of the frame cut off that side, a side left out is 0; default null = off — keeps only the regions whose bounding-box centre is inside the rectangle left, after the size cuts and before holdLastMask), perShot?: boolean (default false — the clip's scene cuts are found first and each shot is segmented on its own: the subject is detected again after every cut, holdLastMask never crosses a cut, each shot's mask is fitted to that shot's exact frame count; on a clip with no cut it is one shot: the same mask, fitted to the clip's exact frame count), redetectEverySec?: 0 \| 1–10 (default 0 = off — the subject is also detected again every that many seconds: the clip, or each shot with perShot, is sent to the model in pieces of at most that length, a last piece under 8 frames joining the one before; holdLastMask holds across these boundaries; slower — one more request per piece — at the same price; a value between 0 and 1 or above 10 is a 400) }`). Clips up to 5 minutes at 30 fps (a faster clip counts proportionally longer; over 60 s is segmented in chunks); a clip that can't be read or is over the limit is refused with 400 `invalid_video_duration` / `video_duration_exceeds_limit` before anything is charged. Priced by length: `sam-3.1-video:<n>s` / `sam-3-video:<n>s` for n = 5, 10, 15, 30, 60, 90, 120, 180, 240, 300 (SAM 3.1: 55<!-- credits: sam-3.1-video:5s --> … 3108 credits<!-- credits: sam-3.1-video:300s -->; SAM 3: 28<!-- credits: sam-3-video:5s --> … 1555<!-- credits: sam-3-video:300s -->) → job; output `{ videoUrl, thumbnailUrl, width, height, frames, chunks, shots, coverage, kept, recipe }` (`shots` is 1 unless perShot found cuts; `recipe` is the version of the masking algorithm that made it (`VIDEO_MASK_RECIPE` in `@nodaro/shared/media`), which changes whenever the same clip and settings would give a different mask; `kept` is false only when the size / zone filters left nothing on any frame — read it rather than `coverage`, which is rounded to 4 decimals). Full reference: [Video Mask](./nodes/ai-video/video-mask.md). |
 | `POST` | `/v1/mask-composite` | A foreground video over a background video through a mask video (white = foreground), local FFmpeg, keyless, **11 credits**<!-- credits-rate: mask-composite --> **per started 5 s of the result** (the video it follows measured first; over 300 s → 400 `video_duration_exceeds_limit`) (`{ foregroundUrl?, backgroundUrl, maskUrl, invertMask?, feather?: 0–20, grow?: -10–10, opacity?: 0–1 (default 1; inside the mask, opacity × fill + (1 − opacity) × background), fill?: video\|pixelate\|blur (default video), pixelSizePct?: 0.2–10 (default 1.25; block = max(2, round(width × pct ÷ 100)) px), blurStrengthPct?: 0.1–5 (default 2; gaussian sigma = width × pct ÷ 100 px), backgroundFit?: cover\|contain\|stretch, audioSource?: foreground\|background\|mix\|none }`; the result follows the foreground's size, rate and length — the background loops, the mask holds its last frame. `foregroundUrl` is required for `fill: "video"` (400 `validation_error` without it); `pixelate` / `blur` fill the mask with the background itself, take no foreground (one sent is ignored), follow and are priced on the background, and the result always carries the background's sound (`audioSource` is ignored)) → job; output `{ videoUrl, thumbnailUrl, width, height, durationSec }`. Full reference: [Mask Composite](./nodes/processing-video/mask-composite.md). |
 | `POST` | `/v1/site-capture` | A web page captured at phone width: full page + up to 8 section stills and a section map, **11 credits**<!-- credits: site-capture --> (`{ url, maxStills?: 3–8 }`). Always answers `{ jobId, status: "pending" }` at once; poll `GET /v1/jobs/:id`. Blocked, empty, unreachable or failed captures are refunded; a site that answers 403 or 429, or shows only a bot challenge, counts as blocked. Each still is shot with its section scrolled into view, so sections that appear as you scroll are captured too. A still that renders as one flat colour, or as mostly one empty band, is shot once more and then skipped: the next section takes its place (`still_blank_skipped:<section order>` in `warnings`). A section whose heading still does not show once it is on screen (a carousel slide that is not showing, for one) is skipped (`still_hidden_skipped:<section order>`), and the stills stop after about 45 s with what they have (`stills_time_budget`). `facts[]` are whole figures on one line (a price with its period, a count with its noun, a percentage, a date). A robots.txt disallow, an unreadable robots.txt, an address that does not resolve, or missing media storage is a 422 before any charge. Output `{ pageUrl, finalUrl, title, lang, dir, fullPage, stills[], sections[], facts[], usableStills, warnings[] }`; a failed job carries `error.code`. Served only where capture is enabled on the install (`SITE_CAPTURE_ENABLED`, on by default); elsewhere the route answers 404. |

@@ -12,7 +12,7 @@
  * Same DOM-construction safety rules apply: `document.createElement` +
  * `textContent` + `setAttribute` ONLY — never raw HTML assignment.
  */
-import { uiProtocolShim } from "./_common.js"
+import { downloadLinkShim, uiProtocolShim } from "./_common.js"
 import { mcpLaneAddresses } from "../../mcp-lane-addresses.js"
 import { widgetJs } from "../deployment-name.js"
 
@@ -208,6 +208,7 @@ export function buildSingleJobWidget(mediaKind: MediaKind, pagesBase: string = m
 <meta charset="UTF-8" />
 <style>${SHARED_CSS}</style>
 ${uiProtocolShim()}
+${downloadLinkShim(pagesBase)}
 </head>
 <body>
 <div class="card">
@@ -577,7 +578,8 @@ ${uiProtocolShim()}
     });
     wire('btn-download', function() {
       if (!state.outputUrl) return;
-      window.NodaroMCP.openLink(state.outputUrl);
+      // A video result: the original file kept beside it when there is one (downloadLinkShim).
+      window.NodaroMCP.openLink(window.resultDownloadUrl(state.outputUrl));
     });
     wire('btn-recreate', function() {
       // Recreate: push the prompt back into chat as a fresh user turn.

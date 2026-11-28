@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
-import { scaledTimeout } from "../../../../../../tools/vitest/ci-limits.mjs"
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import type { ReactNode } from "react"
@@ -196,7 +195,7 @@ describe("VoiceBrowser — Voice Library infinite scroll", () => {
         expect(mockSearchVoiceLibrary).toHaveBeenCalledWith(
           expect.objectContaining({ search: "warm narrator", page: 0 }),
         ),
-      { timeout: scaledTimeout(2000) },
+      { timeout: 2000 },
     )
   })
 

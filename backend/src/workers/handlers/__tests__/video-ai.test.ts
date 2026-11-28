@@ -266,8 +266,8 @@ describe("image-to-video handler", () => {
       voiceoverVolume: 100,
       backgroundVolume: 30,
       keepOriginalAudio: false,
-      // An HDR picture is copied as it is (decided 2026-11-25); any other merges as before.
-      keepHdrPicture: true,
+      // The provider's picture is copied as it is (decided 2026-11-22: the steps that finish a generation keep 10-bit).
+      keepPicture: true,
     }]])
 
     // Should watermark the merged file
@@ -852,6 +852,8 @@ describe("lip-sync handler", () => {
         audioTracks: [{ url: "https://speech.mp3", startTime: 0, volume: 100, sourceType: "audio" }],
         keepOriginalAudio: false,
         fitAudioToVideo: true,
+        // The provider's picture as it is (decided 2026-11-22: the steps that finish a generation keep 10-bit).
+        keepPicture: true,
       })
       expect(mocks.mockWatermarkLocalVideoAndUpload).toHaveBeenCalledWith("/tmp/workdir/merged.mp4", "job-1", "user-1", true)
       expect(mocks.mockCleanupWorkDir).toHaveBeenCalledWith("/tmp/workdir")

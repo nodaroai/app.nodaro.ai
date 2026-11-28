@@ -9,11 +9,17 @@
  *                        output's `durationSec` is the part's length.
  *   Short clips          a clip of 2–30 s instead of 4–30 s (padded in time, run and cut back; priced at
  *                        the padded length). A 4 s preview of a clip under 4 s stays refused.
+ *   Long clips           (decided 2026-11-25 and 2026-11-27) a whole run on one engine with the Precise
+ *                        style takes a source over 30 s, up to the declared `maxSourceSec`, run in parts
+ *                        joined into one result; no request field. Refused past it (`long_clip_too_long`),
+ *                        and for Full Quality (`long_clip_no_full_quality`). A job may complete with only
+ *                        its first parts (`partial` in its output).
  *
  * The engine is the authority on every rule and refusal (400 `portion_unavailable`,
  * `portion_incomplete`, `portion_with_preview`, `portion_not_for_trends`, `portion_out_of_range`,
  * `source_too_long`, `long_source_unpriceable`). The platform only says whether the loaded engine
- * declares each one (`castSwap.portion`, `castSwap.shortClips`, read at load), never from a setting.
+ * declares each one (`castSwap.portion`, `castSwap.shortClips`, `castSwap.longClips`, read at load),
+ * never from a setting.
  */
 import type { PluginSupports } from "./private-plugins/types.js"
 import { getPluginSupports } from "./private-plugins/supports-registry.js"
@@ -31,4 +37,23 @@ export function loadedEngineTakesPortion(): boolean {
 /** Whether an engine's supports take a clip of 2 s or more (`castSwap.shortClips`); absent: 4 s or more. */
 export function engineTakesShortClips(cs: PluginSupports["castSwap"] | undefined): boolean {
   return cs?.shortClips === true
+}
+
+/** The longest clip one run takes whole (seconds); a long clip is longer. */
+const ONE_RUN_MAX_SEC = 30
+
+/**
+ * The longest source an engine runs in parts (`castSwap.longClips.maxSourceSec`, seconds), as a fresh record, or
+ * null when it declares none: absent, not an object, or a `maxSourceSec` that is not a finite number over 30.
+ */
+export function engineLongClips(cs: PluginSupports["castSwap"] | undefined): { maxSourceSec: number } | null {
+  const declared: unknown = cs?.longClips
+  if (!declared || typeof declared !== "object") return null
+  const max = (declared as { maxSourceSec?: unknown }).maxSourceSec
+  return typeof max === "number" && Number.isFinite(max) && max > ONE_RUN_MAX_SEC ? { maxSourceSec: max } : null
+}
+
+/** This process's Cast Swap engine's long clips (`engineLongClips`). */
+export function loadedEngineLongClips(): { maxSourceSec: number } | null {
+  return engineLongClips(getPluginSupports().castSwap)
 }

@@ -1,5 +1,6 @@
+import { downloadEditingSource } from "./editing-source.js"
 import { join } from "node:path"
-import { downloadFile, runFfmpeg, getVideoDuration, createWorkDir, cleanupWorkDir } from "./ffmpeg-utils.js"
+import { runFfmpeg, getVideoDuration, createWorkDir, cleanupWorkDir } from "./ffmpeg-utils.js"
 
 interface FadeVideoOptions {
   readonly videoUrl: string
@@ -19,7 +20,7 @@ export async function fadeVideo(options: FadeVideoOptions): Promise<string> {
     const outputPath = join(workDir, "output.mp4")
 
     console.log(`[fadeVideo] Downloading video from ${videoUrl}`)
-    await downloadFile(videoUrl, inputPath)
+    await downloadEditingSource(videoUrl, inputPath)
 
     // Get video duration for fade out start point
     const duration = await getVideoDuration(inputPath)

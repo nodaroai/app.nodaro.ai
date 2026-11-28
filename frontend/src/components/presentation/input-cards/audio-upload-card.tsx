@@ -83,7 +83,7 @@ export function AudioUploadCard({ label, url, nodeId, isFullscreen, inputValues,
                 <WaveformAudioPlayer url={media.effectiveUrl} variant="compact" className="flex-1" />
                 {/* Desktop inline actions */}
                 <div className="hidden md:flex gap-1.5 flex-shrink-0">
-                  <GlassButton onClick={() => downloadFile(media.effectiveUrl!, `${label.replace(/\s+/g, "-").toLowerCase()}.mp3`)} title={t("common.download")}>
+                  <GlassButton /* download-site: a sound */ onClick={() => downloadFile(media.effectiveUrl!, `${label.replace(/\s+/g, "-").toLowerCase()}.mp3`)} title={t("common.download")}>
                     <Download className="w-3.5 h-3.5" />
                   </GlassButton>
                   <GlassButton onClick={() => copyUrl(media.effectiveUrl!)} title={t("cfgshared.copyUrl")}>

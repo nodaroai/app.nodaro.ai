@@ -152,6 +152,7 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
       const a = document.createElement("a")
       a.href = url
       const safeName = (workflowName || workflowData.name || "workflow").replace(/[^a-z0-9]/gi, "-").toLowerCase()
+      // download-site: a file this page made (a JSON or text export), no stored result
       a.download = `${safeName}-${includeAssets ? "with-assets" : "template"}.json`
       document.body.appendChild(a)
       a.click()

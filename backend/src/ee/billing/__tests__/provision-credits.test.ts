@@ -1055,7 +1055,7 @@ describe("provision-credits", () => {
       mockSelect("stripe_customers", { user_id: "user-001" })
       mockRpc.mockResolvedValueOnce({ data: null, error: { message: "transient db error" } })
 
-      await handleTransactionCompleted(baseTransactionData)
+      await expect(handleTransactionCompleted(baseTransactionData)).rejects.toThrow("Top-up funding could not be confirmed")
 
       expect(mockInvalidateBalanceCache).not.toHaveBeenCalled()
       // Regression guard: NO compensating delete — claim+grant are atomic in the
@@ -1110,7 +1110,7 @@ describe("provision-credits", () => {
       mockSelect("stripe_customers", { user_id: "user-001" })
       mockRpc.mockResolvedValueOnce({ data: null, error: { message: "transient db error" } })
 
-      await handleTransactionCompleted(baseTransactionData)
+      await expect(handleTransactionCompleted(baseTransactionData)).rejects.toThrow("Top-up funding could not be confirmed")
 
       expect(mockActivateOnPurchase).not.toHaveBeenCalled()
       expect(mockReleaseQuietStop).not.toHaveBeenCalled()
@@ -1170,7 +1170,7 @@ describe("provision-credits", () => {
       await handleAutoRechargeSucceeded(recharge)
 
       mockRpc.mockResolvedValueOnce({ data: null, error: { message: "db down" } })
-      await handleAutoRechargeSucceeded(recharge)
+      await expect(handleAutoRechargeSucceeded(recharge)).rejects.toThrow()
 
       expect(mockActivateOnPurchase).not.toHaveBeenCalled()
     })

@@ -11,7 +11,11 @@
  *     record does not land deletes it again and keeps none. Every delete of
  *     one first CLAIMS it off the record (`claimStoredObjects`, under the row
  *     lock) and gives back only what the claim answered, so two deleters of
- *     one object give its bytes back once.
+ *     one object give its bytes back once. A delete for good of the job itself
+ *     cannot claim (it destroys the record): the delete function reads the
+ *     record instead, answering its bytes (given back once,
+ *     lib/workflow-delete.ts) and its keys (removed unless still used,
+ *     lib/deleted-job-files.ts).
  *   - `rawExtensionUrl`: a watermarked Extend's raw clip (the chain reads it).
  */
 import { supabase } from "./supabase.js"

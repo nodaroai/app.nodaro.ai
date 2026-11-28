@@ -37,7 +37,7 @@ import { videoOverlayListRowFields, videoOverlayRunOutputFields } from "@/lib/vi
 import { perHandleRunFields } from "@/lib/per-handle-batch"
 import { applyEdlRunCutFields, applyEdlTakeTranscriptField } from "@/lib/apply-edl-cut"
 import { usecaseFailedRunFields, usecaseRefusedBeforeWorkPatch, usecaseRestoredResults } from "@/lib/use-case-run-result"
-import { carriesRowStamps, runResultIdentity, runResultRowIdentity } from "@/lib/run-result-identity"
+import { carriesRowStamps, runMediaRows, runResultIdentity, runResultRowIdentity } from "@/lib/run-result-identity"
 import { holdsJsonRunResult, isJsonRunResultType, jobRunOutput, jsonRunResultPatch, unitBatchClearFields, unitSideJobFields, unitSideListRowFields, unitSideRunFields } from "@/lib/json-run-result"
 import { UGC_JOB_RESULT_TYPES, UGC_NEWER_RUN_WINS_TYPES, UGC_NEWER_TAKE_WINS_TYPE, UGC_PATCH_REPLACES_GENERIC, holdsUgcRunResult, ugcCreatorShowsRun, ugcEndedRunMayLand, ugcFinishEndedRunMayLand, ugcFinishShowsThisOrNewer, ugcRunIsNewer, ugcRunPatch, ugcRunShowsThisOrNewer, ugcStopPatch } from "@/lib/ugc-run-patch"
 import { ugcFinishNodeIds } from "@nodaro/render-rules"
@@ -605,34 +605,30 @@ export function applyBackendExecutionState(
         Object.assign(data, sunoSeparateRunOutputFields(nodeType, state.output))
 
         // Build generated result entries from the output
-        const listResultUrls = (state.output.listResults ?? []).filter(
-          (u: string) => u && u.startsWith("http"),
-        )
         const results = (data.generatedResults ?? []) as GeneratedResult[]
         const existingUrls = new Set(results.map(r => r.url))
 
-        if (listResultUrls.length > 1) {
+        const mediaRows = runMediaRows(nodeType, state.output, results)
+        if (mediaRows.multiple) {
           // Fan-out: multiple results from list execution — on Video Overlay
           // each row carries its own composition's key, on a node unit with
           // side outputs its own (the live lane's mapping).
           const rowFields = videoOverlayListRowFields(nodeType, state.output)
           const rowSide = unitSideListRowFields(nodeType, state.output)
-          const newResults = listResultUrls
-            .filter((url: string) => !existingUrls.has(url))
-            .map((url: string, i: number) => {
-              // The row's OWN job, thumbnail and stamps (lib/run-result-identity.ts).
-              const { jobId: rowJobId, ...rowIdentity } = runResultRowIdentity(nodeType, state.output, url)
-              return {
-                url,
-                timestamp: new Date().toISOString(),
-                jobId: rowJobId ?? `exec-${node.id}-${i}`,
-                ...rowIdentity,
-                ...rowFields(url),
-                ...rowSide(url),
-                // Apply EDL: only the render the output describes keeps its Transcript.
-                ...applyEdlTakeTranscriptField(nodeType, state.output, url),
-              }
-            })
+          const newResults = mediaRows.newRows.map(({ url, i }) => {
+            // The row's OWN job, thumbnail and stamps (lib/run-result-identity.ts).
+            const { jobId: rowJobId, ...rowIdentity } = runResultRowIdentity(nodeType, state.output, i)
+            return {
+              url,
+              timestamp: new Date().toISOString(),
+              jobId: rowJobId ?? `exec-${node.id}-${i}`,
+              ...rowIdentity,
+              ...rowFields(url),
+              ...rowSide(url),
+              // Apply EDL: only the render the output describes keeps its Transcript.
+              ...applyEdlTakeTranscriptField(nodeType, state.output, url),
+            }
+          })
           if (newResults.length > 0) {
             data.generatedResults = [...newResults, ...results]
             data.activeResultIndex = 0
@@ -883,32 +879,27 @@ export function applyCompletedExecutionResults(
     Object.assign(newData, sunoSeparateRunOutputFields(nodeType, state.output))
 
     // Handle fan-out list results — create a generatedResult entry for each URL
-    const listResultUrls = (state.output.listResults ?? []).filter(
-      (u: string) => u && u.startsWith("http"),
-    )
-    if (listResultUrls.length > 1) {
+    const mediaRows = runMediaRows(nodeType, state.output, existingResults)
+    if (mediaRows.multiple) {
       // Fan-out: multiple results from list execution — on Video Overlay each
       // row carries its own composition's key, on a node unit with side
       // outputs its own (the live lane's mapping).
-      const existingUrls = new Set(existingResults.map(r => r.url))
       const rowFields = videoOverlayListRowFields(nodeType, state.output)
       const rowSide = unitSideListRowFields(nodeType, state.output)
-      const newResults = listResultUrls
-        .filter((url: string) => !existingUrls.has(url))
-        .map((url: string, i: number) => {
-          // The row's OWN job, thumbnail and stamps (lib/run-result-identity.ts).
-          const { jobId: rowJobId, ...rowIdentity } = runResultRowIdentity(nodeType, state.output, url)
-          return {
-            url,
-            timestamp: new Date().toISOString(),
-            jobId: rowJobId ?? `exec-${node.id}-${i}`,
-            ...rowIdentity,
-            ...rowFields(url),
-            ...rowSide(url),
-            // Apply EDL: only the render the output describes keeps its Transcript.
-            ...applyEdlTakeTranscriptField(nodeType, state.output, url),
-          }
-        })
+      const newResults = mediaRows.newRows.map(({ url, i }) => {
+        // The row's OWN job, thumbnail and stamps (lib/run-result-identity.ts).
+        const { jobId: rowJobId, ...rowIdentity } = runResultRowIdentity(nodeType, state.output, i)
+        return {
+          url,
+          timestamp: new Date().toISOString(),
+          jobId: rowJobId ?? `exec-${node.id}-${i}`,
+          ...rowIdentity,
+          ...rowFields(url),
+          ...rowSide(url),
+          // Apply EDL: only the render the output describes keeps its Transcript.
+          ...applyEdlTakeTranscriptField(nodeType, state.output, url),
+        }
+      })
       if (newResults.length > 0) {
         newData.generatedResults = [...newResults, ...existingResults]
         newData.activeResultIndex = 0

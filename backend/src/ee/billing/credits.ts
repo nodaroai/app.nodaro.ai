@@ -1,3 +1,7 @@
+import { isMissingFunctionError } from "../../lib/postgrest-errors.js"
+import { retryCreditTransaction } from "./credit-transaction-retry.js"
+import { pluginServicesLoaded } from "../../lib/private-plugins/services-registry.js"
+import { routedEstimateData } from "./routed-estimate-inputs.js"
 import {
   usdToCredits,
   buildLipSyncCreditId,
@@ -126,7 +130,7 @@ import {
   editPlanReserveCreditId,
 } from "@nodaro/shared/edl"
 import { UGC_NODE_TYPES, ugcKeptOutputs } from "@nodaro/shared/ugc"
-import { trySettleManagedJob } from "./managed-job-settlement.js"
+import { trySettleManagedJob, trySettleManagedJobOrReadLog, type SettledLogRead } from "./managed-job-settlement.js"
 import {
   chargedVideoOutputLength,
   generatedVoiceLength,
@@ -200,7 +204,7 @@ import { modelOfPriceId, routedListedPrice, type RoutedListing } from "./video-r
 import { anyModelRouted } from "../../lib/video-route-policy.js"
 import { routeListingSource } from "../../lib/alternate-route-prices.js"
 import { HOST_ROUTES_PER_MODEL } from "../../lib/video-route-host.js"
-import { refVideoClipSources, seedanceDraftFinalizeEstimateCredits, seedanceFinalizeDraftQuoteOf, seedanceRefVideoEstimateCredits, unpricedWiredClip } from "./seedance-ref-video-estimate.js"
+import { refVideoClipSources, seedanceDraftFinalizeEstimateCredits, seedanceFinalizeDraftQuoteOf, seedanceRefVideoEstimateCredits, seedanceRefVideoEstimateInput, unpricedWiredClip } from "./seedance-ref-video-estimate.js"
 import { uploadClipSec, withUploadClipLengths } from "./upload-clip-lengths.js"
 import { listingCeiling, listingFieldDomains, listingOpenValueNodeIds } from "./listing-range.js"
 import { dubbingModelIdentifier } from "../../lib/dubbing-model.js"
@@ -632,6 +636,7 @@ export interface UserBalance {
 }
 
 export interface ReserveResult {
+  routedRunToken?: string
   usageLogId: string
   creditsReserved: number
   watermark: boolean
@@ -688,16 +693,11 @@ export interface StorageProfile {
 // Errors
 // ============================================================
 
-// See backend/CLAUDE.md "Hard-Fail Policy for Missing Prices" for the policy
-// rationale. Translated to HTTP 503 `price_not_configured` by credit-guard-impl.
-export class PriceNotConfiguredError extends Error {
-  readonly modelIdentifier: string
-  constructor(modelIdentifier: string) {
-    super(`Pricing is not configured for "${modelIdentifier}".`)
-    this.name = "PriceNotConfiguredError"
-    this.modelIdentifier = modelIdentifier
-  }
-}
+// The class lives in a leaf module (price-not-configured.ts) so the routed
+// pricing modules this one loads can throw it without importing it back.
+import { PriceNotConfiguredError } from "./price-not-configured.js"
+import { registeredRoutedNodeEstimators } from "./routed-node-estimators.js"
+export { PriceNotConfiguredError }
 
 // ============================================================
 // Fallback Static Credit Costs (used when model_pricing table doesn't exist)
@@ -4003,6 +4003,13 @@ export interface ChargedPriceTable {
   /** True for an id whose model the admin routed but whose price the route does not list: refused
    *  (`PriceNotConfiguredError`) wherever it is estimated, never a node-type row or 0. */
   refuses?(identifier: string): boolean
+  /** True for an id whose model the admin routed (its listed price is the route's, as it is: a `-ref` row is a whole-run price, never a per-second rate). */
+  routes?(identifier: string): boolean
+  /** A routed node's price for this request (`estimateRoutedNode`), where this process can quote it. */
+  routedNode?(args: { nodeType: string; data: Record<string, unknown>; priceId: string; referenceVideoDurationsSec?: readonly number[] }):
+    { kind: "route"; credits: number } | { kind: "default" } | { kind: "listed" } | null
+  /** The same table with no routing (the default prices), for a node admission keeps on the default route. */
+  readonly unrouted?: ChargedPriceTable
   readonly seedanceDrafts?: {
     readonly stateTaskIdOf?: (nodeId: string) => string | undefined
     readonly credits: ReadonlyMap<string, number>
@@ -4080,9 +4087,30 @@ async function modelPricingRows(): Promise<ReadonlyMap<string, number>> {
   return rows
 }
 
+
 export async function getChargedPriceTable(): Promise<ChargedPriceTable> {
   const [rows, settings, editPlanPerMinute] = await Promise.all([modelPricingRows(), getAppSettings(), editPlanPerMinuteActive()])
-  return chargedPriceTableFrom(rows, settings, editPlanPerMinute, routedListingOf(settings))
+  const routed = routedListingOf(settings)
+  const table = chargedPriceTableFrom(rows, settings, editPlanPerMinute, routed)
+  if (!routed) return table
+  // A node's own request is priced as its admission would hold it, where this
+  // process can quote (it loaded the route); elsewhere the listing stands.
+  const estimators = registeredRoutedNodeEstimators()
+  // Not registered (a process that never loaded the admission module): the listing stands, the safe figure.
+  if (!estimators) return { ...table, unrouted: chargedPriceTableFrom(rows, settings, editPlanPerMinute) }
+  const { estimateRoutedNode, listedRoutedNode } = estimators
+  const view = routed.view
+  return {
+    ...table,
+    unrouted: chargedPriceTableFrom(rows, settings, editPlanPerMinute),
+    // Where this process cannot quote (the standalone orchestrator loads no route), the
+    // admin's choice for the node's own service still decides: the default price where
+    // admission keeps it on the default route, the published listing (the safe figure)
+    // where it routes — never the default per-second rate of a routed model.
+    routedNode: pluginServicesLoaded()
+      ? (args: Parameters<NonNullable<ChargedPriceTable["routedNode"]>>[0]) => estimateRoutedNode({ ...args, settings, view })
+      : (args: Parameters<NonNullable<ChargedPriceTable["routedNode"]>>[0]) => listedRoutedNode({ ...args, settings }),
+  }
 }
 
 /**
@@ -4117,6 +4145,7 @@ export function chargedPriceTableFrom(
       const listed = routedListedPrice(routed, pricedAsId(asked))
       return listed.routed && listed.base === undefined
     },
+    routes: (asked) => routedListedPrice(routed, pricedAsId(asked)).routed,
     editPlanPerMinute,
     // A speech `:per-100-chars` row is served only while length pricing is on
     // (lib/speech-credits.ts): its absence is how a client learns the flag.
@@ -4451,16 +4480,17 @@ export class CreditsService {
 
     // Atomic update using SQL expression to avoid TOCTOU race condition.
     // GREATEST ensures credits never go below 0.
-    const { data: updated, error: updateError } = await supabase
+    const { data: updated, error: updateError } = await retryCreditTransaction(() => supabase
       .rpc("admin_adjust_credits" as string, {
         p_user_id: params.userId,
         p_field: field,
         p_amount: params.amount,
-      })
+      }))
 
     // Fallback if RPC doesn't exist yet: use read-then-write (existing behavior)
     let newValue: number
     let otherValue: number
+    if (updateError && !isMissingFunctionError(updateError)) throw new Error(`Failed to adjust credits: ${updateError.message}`)
     if (updateError) {
       const { data: profile, error: profileError } = await supabase
         .from("profiles")
@@ -4784,6 +4814,7 @@ export class CreditsService {
       communityInstance?: boolean
       billingContext?: BillingContext
       oncePerJob?: boolean
+      routedRun?: { token: string; env: string }
       /** Welcome credits opt-in: ONLY the route guard sets this, and only for
        *  an extension-origin request (`consentBlockExempt`). Every other
        *  reservation for an account that still owes its consent is refused. */
@@ -5017,7 +5048,8 @@ export class CreditsService {
     // its workspace branch — membership, suspension, member cap and budget
     // headroom under FOR UPDATE. The key is spread conditionally so the
     // personal call's wire shape stays byte-identical to pre-P14.
-    const { data: reserveData, error: reserveError } = await supabase.rpc(options?.oncePerJob ? "reserve_job_credits" : "reserve_credits", {
+    const { data: reserveData, error: reserveError } = await supabase.rpc(options?.routedRun ? "reserve_video_route_credits" : options?.oncePerJob ? "reserve_job_credits" : "reserve_credits", {
+      ...(options?.routedRun ? { p_run_token: options.routedRun.token, p_env: options.routedRun.env } : {}),
       p_user_id: debitUserId,
       p_credits: pricing.creditCost,
       p_job_id: jobId,
@@ -5061,9 +5093,10 @@ export class CreditsService {
     }
 
     if (options?.oncePerJob) {
-      const result = reserveData as { usageLogId?: unknown; creditsReserved?: unknown; watermark?: unknown; replayed?: unknown } | null
+      const result = reserveData as { usageLogId?: unknown; creditsReserved?: unknown; watermark?: unknown; replayed?: unknown; routedRunToken?: unknown } | null
       if (!result || typeof result.usageLogId !== "string" || result.creditsReserved !== pricing.creditCost
-        || typeof result.watermark !== "boolean" || typeof result.replayed !== "boolean") {
+        || typeof result.watermark !== "boolean" || typeof result.replayed !== "boolean"
+        || (options.routedRun && (typeof result.routedRunToken !== "string" || !result.routedRunToken))) {
         throw new Error("Job reservation response could not be verified")
       }
       // The SQL boundary already persisted the job pointer and debit ledger.
@@ -5072,7 +5105,8 @@ export class CreditsService {
       if (dep) await invalidateRequesterBalance(userId)
       const rechargeTarget = autoRechargeTargetFor(userId, options.billingContext)
       if (!result.replayed && !options.skipAutoRecharge && rechargeTarget) void attemptAutoRecharge(rechargeTarget)
-      return { usageLogId: result.usageLogId, creditsReserved: pricing.creditCost, watermark: result.watermark }
+      return { usageLogId: result.usageLogId, creditsReserved: pricing.creditCost, watermark: result.watermark,
+        ...(typeof result.routedRunToken === "string" ? { routedRunToken: result.routedRunToken } : {}) }
     }
     const usageLogId = reserveData
 
@@ -5178,6 +5212,14 @@ export class CreditsService {
     return { usageLogId: usageLogId as string, creditsReserved: pricing.creditCost, watermark }
   }
 
+  /** {@link trySettleManagedCredits}, also handing back the log the same read found (a routed settle decides from it). */
+  static async trySettleManagedCreditsOrReadLog(usageLogId: string): Promise<{ managed: true } | { managed: false; log: SettledLogRead | null }> {
+    if (creditsDisabled() || usageLogId === "self-hosted-skip") return { managed: false, log: null }
+    const requester = await settlementRequester(usageLogId)
+    try { return await trySettleManagedJobOrReadLog(usageLogId) }
+    finally { await invalidateRequesterBalance(requester); void deliverExternalWalletSettlements(usageLogId) }
+  }
+
   /** Detect opt-in settlement before callers reprice or overwrite actual costs. */
   static async trySettleManagedCredits(usageLogId: string): Promise<boolean> {
     if (creditsDisabled() || usageLogId === "self-hosted-skip") return false
@@ -5197,13 +5239,13 @@ export class CreditsService {
   static async commitCredits(
     usageLogId: string,
     actualCredits?: number,
-    opts?: { collectOverHold?: boolean },
+    opts?: { collectOverHold?: boolean; routedJobId?: string },
   ): Promise<CommitOutcome | void> {
     if (creditsDisabled() || usageLogId === "self-hosted-skip") return
     const requester = await settlementRequester(usageLogId)
     try {
       if (await trySettleManagedJob(usageLogId)) return
-      if (opts?.collectOverHold) return await CreditsService.settleCommitMetered(usageLogId, actualCredits)
+      if (opts?.collectOverHold) return await CreditsService.settleCommitMetered(usageLogId, actualCredits, opts.routedJobId)
       await CreditsService.settleCommit(usageLogId, actualCredits)
     } finally {
       await invalidateRequesterBalance(requester)
@@ -5232,6 +5274,7 @@ export class CreditsService {
   private static async settleCommitMetered(
     usageLogId: string,
     actualCredits?: number,
+    routedJobId?: string,
   ): Promise<CommitOutcome | undefined> {
     // A covered step (lib/covered-step.ts) collects nothing over its 0 hold:
     // its pack paid. The ONE place an overrun can be collected, so the ONE
@@ -5242,14 +5285,16 @@ export class CreditsService {
       console.error(`[credits] the metered settle could not read usage log ${usageLogId} — row left reserved for retry:`, logError.message)
       return undefined
     }
-    if (coveredMarkOf((log as { metadata?: unknown } | null)?.metadata)) {
+    const covered = coveredMarkOf((log as { metadata?: unknown } | null)?.metadata)
+    if (covered && !routedJobId) {
       await CreditsService.settleCommit(usageLogId, 0)
       return { charged: 0, collectedOverHold: 0, shortfall: 0 }
     }
     // billing-payer-ok: the RPC reads the payer from the usage_logs row (mig 551 → 351/382/434 branches) — this wrapper relays the log id; there is no TS fallback
-    const { data, error } = await supabase.rpc("commit_credits_metered", {
+    const { data, error } = await supabase.rpc(routedJobId ? "commit_video_route_credits" : "commit_credits_metered", {
+      ...(routedJobId ? { p_job_id: routedJobId } : {}),
       p_usage_log_id: usageLogId,
-      p_actual_credits: actualCredits,
+      p_actual_credits: covered ? 0 : actualCredits,
     })
     if (error) {
       console.error(
@@ -6709,6 +6754,23 @@ function estimateNodeCredits(
   // while the flag is off: the flat row below, byte for byte.
   const speech = speechEstimate(priced.type, priced.data ?? {}, upstreamSpeechText(priced, nodes, edges ?? [], speechTextCaps ?? {}))
   if (speech) return (chargedCredits(prices, speech.quoteId) ?? chargedCredits(prices, node.type) ?? 0)
+  // A model the admin routed: its own request, priced as its admission holds
+  // it — the route's quote, or the default price where admission keeps it on
+  // the default route. A request not concrete yet keeps the listed price.
+  let routedListed = false
+  if (prices.routedNode && priced.data && typeof priced.data.provider === "string") {
+    const refInput = seedanceRefVideoEstimateInput(node, nodes, edges, prices)
+    const routedId = getNodeModelIdentifier(priced, {})
+    routedListed = prices.routes?.(routedId) === true
+    const routedPrice = prices.routedNode({
+      nodeType: node.type,
+      data: routedEstimateData(priced, nodes, edges, refInput?.unknownClips),
+      priceId: routedId,
+      ...(refInput ? { referenceVideoDurationsSec: refInput.durationsSec } : {}),
+    })
+    if (routedPrice?.kind === "route") return routedPrice.credits * Math.max(1, unitsOf(node, priced))
+    if (routedPrice?.kind === "default" && prices.unrouted) return estimateNodeCredits(node, nodes, edges, prices.unrouted, speechTextCaps, unitsOf, wires, rerunIds)
+  }
   // A Seedance run with reference video(s) is billed input + output seconds:
   // priced as the reservation prices it, from the clips' probed lengths (the
   // worst case for a clip the estimate cannot know).
@@ -6716,7 +6778,8 @@ function estimateNodeCredits(
   // on whichever price follows: the reference-video quote or the clip's row,
   // each marked up once with it, as the run holds it.
   const hdrBase = videoHdrEstimateBaseCredits(priced, prices)
-  const refVideo = seedanceRefVideoEstimateCredits(node, nodes, edges, prices, hdrBase)
+  // (A routed model's `-ref` row is a whole-run price: never the per-second formula below.)
+  const refVideo = routedListed ? undefined : seedanceRefVideoEstimateCredits(node, nodes, edges, prices, hdrBase)
   if (refVideo !== undefined) return refVideo
   // A Seedance 2.5 HD finalize of a draft this run makes: priced at the length
   // the draft's run reserves for (decided 2026-11-12) — the shared rule the
@@ -6759,6 +6822,8 @@ function estimateNodeCredits(
     // Audio-to-video (LTX 2.5 Fast): its first audio wire, read as Lip Sync's audio wire is read.
     ...drivingAudioWireOf(node, edges, (sourceId) => wires.measuredSec(sourceId, "lip-sync", LIP_SYNC_AUDIO_WIRE_READ_OPTIONS)),
     imageRefsWired: edges && node.id ? countImageInputEdges(edges, node.id) : undefined,
+    // A node unit priced by the inputs it is sent: which of its inputs carry a wire.
+    wiredInputs: edges && node.id ? wiredInputIdsOf(edges, node.id) : undefined,
     // Kling Image 4.0: the node and its graph, so its input items are counted as its run counts them.
     imageInputGraph: edges && nodes && node.id && isKlingImage4((node.data as { provider?: unknown } | undefined)?.provider)
       ? {
@@ -8258,6 +8323,11 @@ export type EstimateNode = { id?: string; type: string; data?: Record<string, un
  *  stop rule follows (`sourceHandle`, `data.outputMode`). */
 export type EstimateEdge = { source?: string; target: string; sourceHandle?: string | null; targetHandle?: string | null; data?: unknown }
 
+/** The ids of node `nodeId`'s inputs that carry a wire (each edge into it names its target handle). */
+function wiredInputIdsOf(edges: ReadonlyArray<EstimateEdge>, nodeId: string): ReadonlySet<string> {
+  return new Set(edges.flatMap((e) => (e.target === nodeId && typeof e.targetHandle === "string" && e.targetHandle !== "" ? [e.targetHandle] : [])))
+}
+
 /**
  * Does an edge feed this add-captions node a TIMED caption source — a Transcript
  * on its `transcript` handle, or a transcribe node wired straight in? That makes
@@ -8394,6 +8464,8 @@ export function getNodeModelIdentifier(
     grokExtendSourceResolution?: string
     /** Nodaro Video Upscale: the mode the estimate decided from the wired clip (`nodaroEstimateMode`); absent, read from the node (unknown clip: no mode is Transparent). */
     nodaroVideoUpscaleMode?: "transparent" | "sharp"
+    /** The ids of the node's inputs that carry a wire (a GRAPH fact; undefined = unknown), for a node unit priced by the inputs it is sent. */
+    wiredInputs?: ReadonlySet<string>
   } = {},
 ): string {
   // A retired video model is quoted as the model it runs as — what the run reserves.
@@ -8410,6 +8482,15 @@ export function getNodeModelIdentifier(
   const meteredCall = meteredNodeCall(node)
   const meteredKey = meteredCall && llmMeteredPricing() ? meteredLlmPriceKeyOf(meteredCall) : null
   if (meteredKey) return meteredKey
+
+  // A node unit priced by its settings (its price.ee.ts `creditId`): the row
+  // its run is charged, by the unit's own rule, handed the node's wired inputs
+  // when the graph is known — as the editor's estimate hands them
+  // (frontend/src/lib/unit-price-ids.ts) — so the server and the editor quote
+  // one row, the run's. Without the rule a unit fell through to its bare row
+  // whatever its settings. A flat-priced unit names no rule and keeps its row.
+  const unitCreditId = UNIT_PRICES[nodeType]?.creditId
+  if (unitCreditId) return unitCreditId(data, graph.wiredInputs)
 
   // Audio Sync: priced per source aligned to the reference — a GRAPH fact (how
   // many recordings are wired into `sources`), counted by the caller from the

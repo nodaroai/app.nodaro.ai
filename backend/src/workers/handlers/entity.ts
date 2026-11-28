@@ -355,7 +355,8 @@ const handleGenerateCharacterMotion: HandlerFn = async function handleGenerateCh
     undefined,
     undefined,
     aspectRatio ? { aspectRatio } : undefined,
-    { onTaskCreated },
+    // `routeJob`: this job may run on the route the admin chose (lib/alternate-route.ts).
+    { onTaskCreated, routeJob: { jobId: ctx.jobId, jobType: "generate-character-motion" } },
   )
   await setJobProgress(job, ctx.jobId, 50)
 
@@ -437,7 +438,8 @@ const handleGenerateLocationMotion: HandlerFn = async function handleGenerateLoc
     undefined,
     undefined,
     aspectRatio ? { aspectRatio } : undefined,
-    { onTaskCreated },
+    // `routeJob`: this job may run on the route the admin chose (lib/alternate-route.ts).
+    { onTaskCreated, routeJob: { jobId: ctx.jobId, jobType: "generate-location-motion" } },
   )
   await setJobProgress(job, ctx.jobId, 50)
 
@@ -525,7 +527,8 @@ const handleGenerateObjectMotion: HandlerFn = async function handleGenerateObjec
     duration,
     undefined,
     aspectRatio ? { aspectRatio } : undefined,
-    { onTaskCreated },
+    // `routeJob`: this job may run on the route the admin chose (lib/alternate-route.ts).
+    { onTaskCreated, routeJob: { jobId: ctx.jobId, jobType: "generate-object-motion" } },
   )
   await setJobProgress(job, ctx.jobId, 50)
 
@@ -613,7 +616,8 @@ const handleGenerateCreatureMotion: HandlerFn = async function handleGenerateCre
     duration,
     undefined,
     aspectRatio ? { aspectRatio } : undefined,
-    { onTaskCreated },
+    // `routeJob`: this job may run on the route the admin chose (lib/alternate-route.ts).
+    { onTaskCreated, routeJob: { jobId: ctx.jobId, jobType: "generate-creature-motion" } },
   )
   await setJobProgress(job, ctx.jobId, 50)
 

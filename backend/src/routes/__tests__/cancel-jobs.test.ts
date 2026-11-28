@@ -450,7 +450,7 @@ describe("POST /v1/jobs/cancel-all", () => {
     setupTableMocks({ jobs: jobsHandler({ jobsList: { data: [], error: null } }) })
     await app.inject({ method: "POST", url: "/v1/jobs/cancel-all", payload: { userId: TEST_USER_ID } })
     expect(cancelAllFilters).toEqual([
-      "provider_task_id.is.null,reconcile_attempts.gt.0,status.eq.pending_review,job_type.in.(web-scrape,site-capture,meta-ads-scrape,instagram-scrape)",
+      "provider_task_id.is.null,reconcile_attempts.gt.0,status.eq.pending_review,job_type.in.(generate-video-pro,edit-video-pro,ugc-clip),job_type.in.(web-scrape,site-capture,meta-ads-scrape,instagram-scrape)",
     ])
   })
 

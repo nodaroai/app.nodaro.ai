@@ -135,6 +135,7 @@ import { dispatchSlots, type DispatchSlots } from "../lib/dispatch-slots.js"
 import { assembleFanOutResult } from "./fan-out-result.js"
 import { resolveFanOutIterationInputs } from "./fan-out-inputs.js"
 import { hydrateEntityNodes } from "../lib/entity-hydration.js"
+import { withRepairedProVideoTakes } from "../lib/repaired-pro-video-takes.js"
 import { withLegacyExtensionOutputs } from "../lib/legacy-extension-output.js"
 import { withResolvedResultIds } from "../lib/canvas-result-ids.js"
 import { settleAppRunFinalEdits } from "../lib/app-run-final-column.js"
@@ -803,12 +804,13 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     // cancel and refund the ones no provider has been paid for, as a resume
     // would, rather than leave them running for a run that is over.
     if (await isUserBlocked(userId)) {
-      await cancelInFlightChildJobs(executionId, userId)
+      // A penalty: a video already started is cancelled too (what the provider billed for it is our loss, on its ledger).
+      await cancelInFlightChildJobs(executionId, userId, { punitive: true })
       await failExecution(executionId, "This account is blocked.")
       return
     }
     if (ctx.workflowOwnerId && ctx.workflowOwnerId !== userId && (await isUserBlocked(ctx.workflowOwnerId))) {
-      await cancelInFlightChildJobs(executionId, userId)
+      await cancelInFlightChildJobs(executionId, userId, { punitive: true })
       await failExecution(executionId, "This workflow is unavailable.")
       return
     }
@@ -878,7 +880,8 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     // this workflow: a task is never read off another account's, nor off a
     // node of the same id in another workflow. Nothing is asked when no node
     // needs it.
-    const nodes: SimpleNode[] = [...(await withLegacyExtensionOutputs(loadedNodes, edges, { userId, workflowId }))]
+    const repaired = await withRepairedProVideoTakes(loadedNodes, userId)
+    const nodes: SimpleNode[] = [...(await withLegacyExtensionOutputs(repaired, edges, { userId, workflowId }))]
 
     // Pass workflow settings (character definitions, prompt templates) to context
     // Load user-level prompt templates and tier from profiles

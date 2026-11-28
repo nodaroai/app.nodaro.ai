@@ -26,8 +26,8 @@ export interface SunoAddTrackVerbOpts extends RegisterOpts {
 }
 
 const UI_META = {
-  "ui/resourceUri": "ui://nodaro/widget/v5/job-audio",
-  ui: { resourceUri: "ui://nodaro/widget/v5/job-audio", visibility: ["model", "app"] },
+  "ui/resourceUri": "ui://nodaro/widget/v6/job-audio",
+  ui: { resourceUri: "ui://nodaro/widget/v6/job-audio", visibility: ["model", "app"] },
 }
 
 const weight = (what: string) => z.number().min(0).max(1).optional().describe(`${what}, 0-1.`)

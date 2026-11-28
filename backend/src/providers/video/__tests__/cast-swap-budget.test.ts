@@ -5,6 +5,7 @@ import { describe, it, expect } from "vitest"
 import {
   CAST_SWAP_FACE_CHECK_LADDER_MS,
   CAST_SWAP_FULL_BUDGET_MS,
+  CAST_SWAP_LONG_CLIP_MS,
   CAST_SWAP_MASK_ALWAYS_BUDGET_MS,
   CAST_SWAP_MASK_AUTO_BUDGET_MS,
   CAST_SWAP_PRECISE_UPSCALE_MAX_WAIT_MS,
@@ -183,5 +184,67 @@ describe("cast-swap job budget", () => {
   it("the Full Quality redo (`cast-swap-full-quality`) declares the same full-clip bound", () => {
     expect(declaredJobBudgetMs("cast-swap-full-quality", {})).toBe(120 * MINUTE)
     expect(declaredJobBudgetMs("cast-swap-full-quality", { fullQualityOf: "job-1" })).toBe(120 * MINUTE)
+  })
+})
+
+/**
+ * A long clip (decided 2026-11-25 and 2026-11-27): a source of 30 s to 2 minutes the engine runs in parts and joins,
+ * its plan queued as `longClip` and stored hidden as `__longClip`. Its job takes its run shape's bound plus the plan
+ * over the whole clip (10 + 6 min) and the join (15 min); the parts run at once, so one run's bound covers them.
+ */
+describe("cast-swap job budget: a long clip", () => {
+  /** The route's plan of a 2-minute source at 24 fps: 5 parts of 24 s. */
+  const PLAN = { v: 1, sourceSec: 120, videoSec: 120, fps: 24, byFrame: true, parts: [0, 1, 2, 3, 4].map((k) => ({ startFrame: k * 576, frames: 576, startSec: k * 24, sec: 24 })) }
+  /** A 31 s source: 2 parts. */
+  const SHORT_PLAN = { v: 1, sourceSec: 31, videoSec: 31, fps: 25, byFrame: true, parts: [{ startFrame: 0, frames: 388 }, { startFrame: 388, frames: 387 }] }
+
+  it("adds 31 minutes: the plan over the whole clip and the join", () => {
+    expect(CAST_SWAP_LONG_CLIP_MS).toBe(31 * MINUTE)
+  })
+
+  it("adds them to the bound its run shape takes, the slowest part being one run's bound whatever the part count", () => {
+    for (const plan of [PLAN, SHORT_PLAN]) {
+      expect(castSwapJobBudgetMs({ longClip: plan })).toBe(151 * MINUTE)
+      expect(castSwapJobBudgetMs({ longClip: plan, faceMasking: { mode: "always" } })).toBe(ALWAYS + 31 * MINUTE)
+      expect(castSwapJobBudgetMs({ longClip: plan, faceMasking: { mode: "auto" } })).toBe(AUTO + 31 * MINUTE)
+    }
+  })
+
+  it("keeps the one upscale of the joined take: the wait the route recorded, else the cap for a named target", () => {
+    expect(castSwapJobBudgetMs({ longClip: PLAN, preciseUpscale: "4k", preciseUpscaleWaitMs: 44 * MINUTE + 1 })).toBe((120 + 45 + 31) * MINUTE)
+    expect(castSwapJobBudgetMs({ longClip: PLAN, preciseUpscale: "1080p" })).toBe((120 + 45 + 31) * MINUTE)
+    expect(castSwapJobBudgetMs({ __longClip: PLAN, __castSwapPreciseUpscale: "1080p", __castSwapUpscaleWaitMs: 20 * MINUTE })).toBe((120 + 20 + 31) * MINUTE)
+  })
+
+  it("reads the stored plan (`__longClip`) when the queued one is absent, as a row reader passes input_data", () => {
+    expect(castSwapJobBudgetMs({ __longClip: PLAN })).toBe(151 * MINUTE)
+    expect(declaredJobBudgetMs("cast-swap", { __longClip: PLAN, faceMasking: { mode: "always" } })).toBe(ALWAYS + 31 * MINUTE)
+    expect(declaredJobBudgetMs("cast-swap", { longClip: PLAN })).toBe(151 * MINUTE)
+  })
+
+  it("a preview or a plan the engine would not make adds nothing: the bound is exactly today's", () => {
+    expect(castSwapJobBudgetMs({ longClip: PLAN, preview: true })).toBe(30 * MINUTE)
+    const broken: unknown[] = [
+      null,
+      "plan",
+      [],
+      {},
+      { ...PLAN, v: 2 },
+      { ...PLAN, sourceSec: 0 },
+      { ...PLAN, videoSec: "120" },
+      { ...PLAN, fps: Number.NaN },
+      { ...PLAN, byFrame: "yes" },
+      { ...PLAN, parts: PLAN.parts.slice(0, 1) },
+      { ...PLAN, parts: "5" },
+      { ...PLAN, parts: [PLAN.parts[0], { startFrame: 600, frames: 576 }] },
+      { ...PLAN, parts: [PLAN.parts[0], { startFrame: 576, frames: 0 }] },
+      { ...PLAN, parts: [PLAN.parts[0], null] },
+    ]
+    for (const plan of broken) {
+      expect(castSwapJobBudgetMs({ longClip: plan }), JSON.stringify(plan)).toBe(120 * MINUTE)
+      expect(castSwapJobBudgetMs({ __longClip: plan, faceMasking: { mode: "always" } }), JSON.stringify(plan)).toBe(ALWAYS)
+    }
+    // A queued key that is present decides, as `faceMasking` does over `__faceMasking`.
+    expect(castSwapJobBudgetMs({ longClip: null, __longClip: PLAN })).toBe(120 * MINUTE)
   })
 })

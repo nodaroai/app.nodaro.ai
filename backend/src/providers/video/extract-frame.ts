@@ -1,5 +1,6 @@
+import { downloadEditingSource } from "./editing-source.js"
 import { join } from "node:path"
-import { downloadFile, runFfmpeg, runFfprobe, createWorkDir, cleanupWorkDir, wroteOutputFile } from "./ffmpeg-utils.js"
+import { runFfmpeg, runFfprobe, createWorkDir, cleanupWorkDir, wroteOutputFile } from "./ffmpeg-utils.js"
 import { resolveFrameCount } from "../../lib/ffprobe-frames.js"
 
 interface ExtractFrameOptions {
@@ -84,7 +85,7 @@ export async function extractFrame(options: ExtractFrameOptions): Promise<{ imag
     const outputPath = join(workDir, "frame.png")
 
     console.log(`[extractFrame] Downloading video from ${videoUrl}`)
-    await downloadFile(videoUrl, inputPath)
+    await downloadEditingSource(videoUrl, inputPath)
 
     const args: string[] = ["-y"]
 

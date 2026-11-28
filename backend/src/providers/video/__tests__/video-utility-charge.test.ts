@@ -135,8 +135,10 @@ describe("Loop Video re-measures the video it downloaded", () => {
     rmSync(dir, { recursive: true, force: true })
   })
 
-  it("a smart loop cut before the repeat downloads the video again, and that copy is checked too", async () => {
-    // The loop's own download is within its price; the smart cut's (the one the loop repeats) has grown.
+  it("a smart loop cut before the repeat reads the loop's own download, and checks it again", async () => {
+    // The cut reads the file the loop downloaded (its editing source), never a
+    // second download, and checks it again before it cuts (a second reading
+    // here grows it, as a file that changed would).
     m.probeVideoSource
       .mockResolvedValueOnce({ width: 640, height: 360, durationSeconds: 10 })
       .mockResolvedValueOnce({ width: 640, height: 360, durationSeconds: 20 })
@@ -144,7 +146,8 @@ describe("Loop Video re-measures the video it downloaded", () => {
     const err = await refusal(loopVideo({ videoUrl: URL, mode: "repeat", repeatCount: 2, smartLoopCutBeforeRepeat: true, chargeCheck: videoUtilityChargeCheck("loop-video", job) }))
     expect(err.message).toBe("The video is 20 seconds, longer than the 10 seconds this run was priced for — run it again")
     expect(m.probeVideoSource).toHaveBeenNthCalledWith(1, "/tmp/loop-video/input.mp4")
-    expect(m.probeVideoSource).toHaveBeenNthCalledWith(2, "/tmp/smart-loop-cut/input.mp4")
+    expect(m.probeVideoSource).toHaveBeenNthCalledWith(2, "/tmp/loop-video/input.mp4")
+    expect(m.downloadFile).toHaveBeenCalledTimes(1)
     expect(m.runFfmpeg).not.toHaveBeenCalled()
   })
 })

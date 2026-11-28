@@ -163,9 +163,12 @@ export interface UnitDefinition {
  * price-id.ts — the credit id a run of the unit reserves, named from the node's
  * data by the same rule as its backend price.ee.ts `creditId` (a unit priced by
  * its settings: the editor's Run button, config panel and run estimate quote
- * that row). Composed by lib/unit-price-ids.ts.
+ * that row). Composed by lib/unit-price-ids.ts. `wiredInputs`, when the caller
+ * has the canvas's edges: the ids of the node's inputs that carry a wire, for a
+ * unit priced by the inputs it is sent (Long Image's pictures). Without it the
+ * rule prices from the data alone, as the server's estimate does.
  */
-export type UnitCreditId = (data: Readonly<Record<string, unknown>>) => string
+export type UnitCreditId = (data: Readonly<Record<string, unknown>>, wiredInputs?: ReadonlySet<string>) => string
 
 /** node.tsx — the canvas component. */
 export type UnitNodeComponent = ComponentType<NodeProps>

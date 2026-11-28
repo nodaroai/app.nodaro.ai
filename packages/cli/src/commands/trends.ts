@@ -9,7 +9,8 @@ interface GlobalOpts extends OutputOpts {
   profile?: string
 }
 
-const RESOLUTIONS: readonly TrendResolution[] = ["480p", "720p", "1080p"]
+/** Every size a run may name; which ones a trend offers is its page's (`trends get`), 4k only where it says `deliveredResolution`. */
+const RESOLUTIONS: readonly TrendResolution[] = ["480p", "720p", "1080p", "4k"]
 /** The server's slot-key shape (`SLOT_KEY_RE`). */
 const SLOT_KEY_RE = /^[a-z0-9_]{1,32}$/
 /** `--slot` pictures are split only where a new URL starts, so a URL holding commas stays whole. */
@@ -51,9 +52,9 @@ function addRunFlags(cmd: Command): Command {
     .option("--details <text>", "your own words (at most 1,000 characters); mention a slot as {slot:<key>}")
     .option("--preview", "a 4-second preview run (only when the trend offers one)")
     .addOption(
-      new Option("--resolution <r>", "one the trend offers (`trends get`); default its first: 480p, or 720p on a Nodaro Pulse trend").choices([...RESOLUTIONS]),
+      new Option("--resolution <r>", "one the trend offers (`trends get`: its resolutions, the size delivered where it says deliveredResolution); default its first").choices([...RESOLUTIONS]),
     )
-    .option("--draft", "make a 480p draft that Full Quality can finish at 1080p (Nodaro Prism only; without it a run is plain)")
+    .option("--draft", "make a 480p draft that Full Quality can finish at 1080p (Nodaro Prism only, whatever sizes the trend lists; without it a run is plain)")
     .option("--no-draft", "a plain run, the default (still accepted)")
 }
 

@@ -41,6 +41,7 @@ import { extractNodeOutput } from "@/components/editor/workflow-editor/execution
 import { copyToClipboard, computeDeleteResultUpdates } from "@/lib/utils"
 import type { VideoRetakeData, GeneratedResult, WorkflowNode, JobErrorHint } from "@/types/nodes"
 import { LTX_RETAKE_PER_SECOND_CREDIT_ID, ltxRetakeDurationSec } from "@nodaro/shared/credits"
+import { downloadVideoFile } from "@/lib/video-result-download"
 
 // Stable, module-level `accepts` predicates per typed handle — hoisting
 // keeps the predicate ref stable across renders. Inline arrows bust
@@ -369,7 +370,7 @@ function VideoRetakeNodeComponent({ id, data, selected }: NodeProps) {
                   if (shouldPlay) v.play().catch(() => {})
                 }}
               />
-              {unplayableVideo.unplayable && activeUrl && <VideoUnplayableNotice url={activeUrl} label={(nodeData.label as string | undefined) ?? ""} />}
+              {unplayableVideo.unplayable && activeUrl && <VideoUnplayableNotice url={activeUrl} />}
               {/* Top-right: extract-frame + delete this result */}
               <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover/video:opacity-100 transition-opacity">
                 <button
@@ -437,10 +438,7 @@ function VideoRetakeNodeComponent({ id, data, selected }: NodeProps) {
                   className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                   onClick={(e) => {
                     e.stopPropagation()
-                    const a = document.createElement("a")
-                    a.href = `/v1/image-proxy?url=${encodeURIComponent(activeUrl)}&download=1`
-                    a.download = `${(nodeData.label as string) || "retake"}.mp4`
-                    a.click()
+                    downloadVideoFile(activeUrl)
                   }}
                   title={t("cfgshared.download")}
                 >

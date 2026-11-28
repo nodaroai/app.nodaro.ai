@@ -12,6 +12,7 @@ export const UNIT_CONTRACTS: ReadonlyArray<readonly [type: string, producer: "au
   ["clip-pack", "dynamic"], // unit:clip-pack
   ["speaker-layout", "video"], // unit:speaker-layout
   ["remove-audio", "video"], // unit:remove-audio
+  ["long-image", "image"], // unit:long-image
   ["gif-to-video", "video"], // unit:gif-to-video
   ["split-into-layers", "image"], // unit:split-into-layers
   ["suno-speech", "audio"], // unit:suno-speech

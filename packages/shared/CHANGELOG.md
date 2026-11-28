@@ -1,5 +1,12 @@
 # @nodaro/shared
 
+## 3.78.0
+
+### Minor Changes
+
+- 3761931: The Long Image node (`long-image`) joins the node contracts as an image producer: its Image output is one picture, so it is an image source to every node that takes one. Nothing changes for any existing node.
+- 6f20a46: The runtime config contract has an optional `storageOrigins` key: the https origins of the deployment's own storage that its download routes accept. `parseRuntimeConfig` keeps only the https origins it lists, and drops the key when there are none.
+
 ## 3.77.0
 
 ### Minor Changes

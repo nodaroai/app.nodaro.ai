@@ -106,6 +106,8 @@ offer covers what your credits could not, so your balance ends at 0.
 
 - The offer is your first Video Remake run: once it finishes, the offer is
   used, also when your credits paid for all of it.
+- On Nodaro Prism the offer covers the Economy run (the default Quality), not
+  a Full one at 720p.
 - The offer's credits are held for that run alone: they are not added to
   your balance, and only that run's steps draw on them, after your own credits.
 - While the offer covers part of that run, another run you start is refused

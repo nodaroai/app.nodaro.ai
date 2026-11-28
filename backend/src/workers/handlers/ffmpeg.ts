@@ -5,7 +5,10 @@ import type { Caption } from "@remotion/captions"
 import { uploadFileToR2 } from "../../lib/storage.js"
 import { renderQueue } from "../../lib/render-queue.js"
 import { supabase } from "../../lib/supabase.js"
-import { cleanupWorkDir, createWorkDir, downloadFile, runFfmpeg, BROWSER_SAFE_VIDEO_ARGS, probeVideoSource } from "../../providers/video/ffmpeg-utils.js"
+import { cleanupWorkDir, createWorkDir, runFfmpeg, BROWSER_SAFE_VIDEO_ARGS, probeVideoSource } from "../../providers/video/ffmpeg-utils.js"
+import { downloadEditingSource } from "../../providers/video/editing-source.js"
+import { storedVideoFields, storeVideoResult, type StoredVideo } from "../../lib/video-result-store.js"
+import { isPostProcessingError } from "../../lib/post-processing-error.js"
 import { combineVideos } from "../../providers/video/combine-videos.js"
 import { applyEdl } from "../../providers/video/apply-edl.js"
 import { applyEdlOutputData } from "../../lib/apply-edl-output.js"
@@ -308,9 +311,31 @@ const handleMergeVideoAudio: HandlerFn = async function handleMergeVideoAudio(jo
     voiceoverVolume?: number; backgroundVolume?: number; keepOriginalAudio?: boolean
   }
   console.log(`[worker] merge-video-audio ${ctx.jobId}`)
-  const outputPath = await mergeVideoAudio({ videoUrl, audioUrl, audioTracks, voiceoverVolume, backgroundVolume, keepOriginalAudio })
+  // The video is read from its kept original when the run may read one, and
+  // that picture is copied as it is (decided 2026-11-22: Merge Video & Audio
+  // keeps 10-bit), so the result is stored through the video result funnel:
+  // the merged file kept as the original beside its browser-safe preview when
+  // a browser cannot play it, else the merged file alone, as before. Never
+  // watermarked, as before.
+  const outputPath = await mergeVideoAudio({ videoUrl, audioUrl, audioTracks, voiceoverVolume, backgroundVolume, keepOriginalAudio, readOriginal: true })
   await setJobProgress(job, ctx.jobId, 80)
-  await completeFfmpegVideoJob(outputPath, ctx)
+  let stored: StoredVideo
+  try {
+    stored = await storeVideoResult({ path: outputPath }, { jobId: ctx.jobId, userId: ctx.jobUserId, watermark: false })
+  } catch (err) {
+    // The funnel tags its failures post-processing (a provider's delivery is
+    // already paid for); this job called no provider, and its upload failing
+    // refunded before: it still does.
+    throw isPostProcessingError(err) ? new Error(`[merge-video-audio] the merged video could not be stored: ${err instanceof Error ? err.message : String(err)}`, { cause: (err as { cause?: unknown }).cause }) : err
+  } finally {
+    await cleanupWorkDir(dirname(outputPath))
+  }
+  const thumbUrl = await generateAndUploadThumbnail(stored.videoUrl, ctx.jobId, ctx.jobUserId)
+  if (!await shouldSaveJobResult(ctx.jobId)) return
+  const ok = await markJobCompleted(ctx.jobId, { output_data: { ...storedVideoFields(stored), thumbnailUrl: thumbUrl } })
+  if (!ok) return
+  await commitJobCredits(ctx.usageLogId, ctx.jobId)
+  console.log(`[worker] Job ${ctx.jobId} completed: ${stored.videoUrl}`)
 }
 
 const handleTrimAudio: HandlerFn = async function handleTrimAudio(job, ctx) {
@@ -367,6 +392,8 @@ const handleTrimVideo: HandlerFn = async function handleTrimVideo(job, ctx) {
       lookbackFrames: smartLoopCutLookback,
       outputSilent: outputSilentVideo,
       chargeCheck,
+      // An editing node's cut: its kept original, conformed (editing-source.ts).
+      source: "editing",
     })
     await setJobProgress(job, ctx.jobId, 80)
     const durationSec = await trimOutputLengthSec(slc.videoPath)
@@ -1187,7 +1214,8 @@ const handleTranscodeVideo: HandlerFn = async function handleTranscodeVideo(job,
   const workDir = await createWorkDir("transcode")
   const inputPath = join(workDir, "input.mp4")
   const outputPath = join(workDir, "output.mp4")
-  await downloadFile(videoUrl, inputPath)
+  // Its kept original when the run may read one, conformed (editing-source.ts).
+  await downloadEditingSource(videoUrl, inputPath)
   await setJobProgress(job, ctx.jobId, 30)
 
   if (isDefault) {

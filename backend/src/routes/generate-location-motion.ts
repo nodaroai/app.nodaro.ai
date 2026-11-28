@@ -139,6 +139,7 @@ export async function generateLocationMotionRoutes(app: FastifyInstance) {
           force_private: true,
           user_id: userId,
           status: "pending",
+          job_type: "generate-location-motion",
           input_data: {
             ...withResolvedModel(buildJobInputData(parsed.data, "generate-location-motion"), "generate-location-motion"),
             prompt,

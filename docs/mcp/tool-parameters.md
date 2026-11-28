@@ -800,8 +800,8 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | `example` | integer |  | The example (1-based, as get_trend lists its examples; default 1) whose pictures fill optional slots left out, as slots says. Leave out if the trend has none. At least 1. |
 | `details` | string |  | The user's own words; mention a slot as {slot:&lt;key>}. At most 1000 characters. |
 | `preview` | boolean |  | true = a 4 s preview (when the trend's previewSec is 4). |
-| `resolution` | string |  | One of get_trend's resolutions; default its first. One of `480p`, `720p`, `1080p`. |
-| `draft` | boolean |  | true = a 480p draft that full_quality can finish at 1080p (a nodaro-pulse trend has none). Default false: plain. |
+| `resolution` | string |  | One of get_trend's resolutions (with its deliveredResolution, the size delivered); default its first. One of `480p`, `720p`, `1080p`, `4k`. |
+| `draft` | boolean |  | true = a 480p draft that full_quality can finish at 1080p, whatever resolutions lists (a nodaro-pulse or Flash trend has none). Default false: plain. |
 | `preview_job_id` | string |  | For a full run: the job id of the user's own preview of this trend; it may carry the preview's settings over. |
 
 ## `estimate_use_case`
@@ -2844,8 +2844,8 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | `example` | integer |  | The example (1-based, as get_trend lists its examples; default 1) whose pictures fill optional slots left out, as slots says. Leave out if the trend has none. At least 1. |
 | `details` | string |  | The user's own words; mention a slot as {slot:&lt;key>}. At most 1000 characters. |
 | `preview` | boolean |  | true = a 4 s preview (when the trend's previewSec is 4). |
-| `resolution` | string |  | One of get_trend's resolutions; default its first. One of `480p`, `720p`, `1080p`. |
-| `draft` | boolean |  | true = a 480p draft that full_quality can finish at 1080p (a nodaro-pulse trend has none). Default false: plain. |
+| `resolution` | string |  | One of get_trend's resolutions (with its deliveredResolution, the size delivered); default its first. One of `480p`, `720p`, `1080p`, `4k`. |
+| `draft` | boolean |  | true = a 480p draft that full_quality can finish at 1080p, whatever resolutions lists (a nodaro-pulse or Flash trend has none). Default false: plain. |
 | `preview_job_id` | string |  | For a full run: the job id of the user's own preview of this trend; it may carry the preview's settings over. |
 | `session_id` | string |  | A generation session; accepted, not yet applied (runs are not filed into sessions yet). At least 1 character. |
 | `confirm` | boolean |  | true ONLY after the user accepted the quoted credits in this conversation. |
@@ -3760,7 +3760,7 @@ Needs `workflows:execute` · Nodaro Cloud only.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `video_url` | string (URL) | yes | The source clip, 4–30 s (where offered: 2–30 s, or up to 10 min with a part). |
+| `video_url` | string (URL) | yes | The source clip, 4–30 s (where offered: 2–30 s, longer whole, or up to 10 min with a part). |
 | `roles` | object[] | yes | At most 15 roles, any kinds (name each place if several); 30 images sent. At least one role with images, a reference, a pre_prompt or post_prompt — or, on a nodaro-prism Flex run where the engine takes style-only runs, an art_style alone (restyles the whole clip). |
 | `roles[].kind` | string | yes | One of `person`, `pet`, `product`, `location`. |
 | `roles[].name` | string |  | Who in the video, e.g. "the woman that attacks". Unset: named by its first image (needs one). At most 200 characters. |
@@ -3797,7 +3797,7 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | `resolution` | string |  | The size delivered: nodaro-prism and nodaro-pulse: "720p" (default), "1080p" or "4k"; nodaro-prism-flash and nodaro-pulse-flash: "720p" (default) or "1080p". A size not offered is refused (resolution_not_offered, its offered naming the sizes offered). One of `480p`, `720p`, `1080p`, `4k`. |
 | `draft` | boolean |  | true = a 480p draft (nodaro-prism only) that full_quality can finish at 1080p. Default false: plain. |
 | `prepare_references` | boolean |  | Default true: prepare the reference pictures first. |
-| `quality` | string |  | Deprecated: use resolution + draft. "draft" means a 480p draft. Always `draft`. |
+| `quality` | string |  | How resolution is made: "economy" (default) one size below, then enlarged to it; "full" at the size itself, sharper, costs more. Quote each; where there is one way only, that way runs. "draft" (deprecated): a 480p draft. One of `full`, `economy`, `draft`. |
 | `session_id` | string |  | A generation session to file the result in. At least 1 character. |
 | `confirm` | boolean |  | true ONLY after the user accepted the quoted credits in this conversation. |
 | `check_intent` | boolean |  | Quote only: also check (free) if the prompt asks for something Video Remake does not do; a mismatch comes back as intent { code, meaning }. |

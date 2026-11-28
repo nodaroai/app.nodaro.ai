@@ -40,8 +40,9 @@ export const STORAGE_DELETE_RETRIES_TABLE = "storage_delete_retries"
  * union is the list. "retention" is the free-user reaper and the
  * canceled-user wipe (every file they take: job outputs, library items,
  * location images). "asset" and "media" are the user's own deletes that
- * checked job links on their first try; the retry asks those one more guard
- * (`lib/storage-delete-retries.ts`).
+ * checked job links on their first try, and "job-delete" the files a job
+ * deleted for good leaves (`lib/deleted-job-files.ts`), which checked them
+ * too; the retry asks those one more guard (`lib/storage-delete-retries.ts`).
  */
 export type DeleteSource =
   | "retention"
@@ -63,6 +64,7 @@ export type DeleteSource =
   | "cast-swap-depth-clip"
   | "preset-preview"
   | "job-cover"
+  | "job-delete"
 
 export interface FailedDelete {
   readonly key: string

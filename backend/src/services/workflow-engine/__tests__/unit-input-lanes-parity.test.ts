@@ -5,9 +5,10 @@ import { describe, expect, it, vi } from "vitest"
 import type { SimpleEdge, SimpleNode, NodeExecutionState } from "../types.js"
 
 /**
- * A node unit's JSON and many-wire inputs on the server's engine (decided
- * 2026-10-18): the fixture unit fixture-echo (and the JSON-only worker
- * fixture-map, a source), added through the server's one
+ * A node unit's JSON, many-wire and image inputs on the server's engine
+ * (decided 2026-10-18; the image lane 2026-11-27): the fixture unit
+ * fixture-echo (and the JSON-only worker fixture-map, a source, and the
+ * image-lane target fixture-slots), added through the server's one
  * door to the unit descriptors, resolved by the real resolver over every case
  * of tools/units/__fixtures__/unit-input-lanes-parity.json. The editor's half
  * (frontend/src/components/editor/workflow-editor/__tests__/unit-input-lanes-parity.test.ts)
@@ -21,8 +22,11 @@ vi.mock("../../../lib/unit-descriptors.js", async (importOriginal) => {
   // The JSON-only worker of unit-json-outputs.json, a source of JSON.
   const json = JSON.parse(read(new URL("../../../../../tools/units/__fixtures__/unit-json-outputs.json", import.meta.url), "utf8")).unit
   const map = { ...descriptor, type: json.type, label: json.label, outputType: json.outputType, outputs: json.outputs.map((o: { id: string }) => o.id), handles: { inputs: [], outputs: json.outputs } }
+  // The image lane's target: image inputs with no field (and one with a field), from the fixture's slotUnit.
+  const slot = JSON.parse(read(new URL("../../../../../tools/units/__fixtures__/unit-input-lanes-parity.json", import.meta.url), "utf8")).slotUnit
+  const slots = { ...descriptor, type: slot.type, label: slot.label, inputs: slot.inputs.map((i: { id: string }) => i.id), handles: { inputs: slot.inputs, outputs: [] } }
   type Unit = (typeof real.UNIT_NODE_DESCRIPTORS)[number]
-  const units = [...real.UNIT_NODE_DESCRIPTORS, descriptor as unknown as Unit, map as unknown as Unit]
+  const units = [...real.UNIT_NODE_DESCRIPTORS, descriptor as unknown as Unit, map as unknown as Unit, slots as unknown as Unit]
   const unitDescriptorOf = (t: string | undefined) => units.find((u) => u.type === t)
   return {
     ...real,

@@ -4,6 +4,7 @@ import { Link, useLocation } from "react-router-dom"
 import { ArrowLeft, ChevronLeft, ChevronRight, Download, Maximize2, Minimize2, X, Image as ImageIcon, Video, Music, Loader2, Copy, Check, Flag, Trash2, Heart } from "lucide-react"
 import { NodaroLogo } from "@/components/nodaro-logo"
 import { cn } from "@/lib/utils"
+import { isStoredVideoAddress, videoDownloadHref } from "@/lib/video-result-download"
 import { CachedImage } from "@/components/ui/cached-image"
 import { WaveformAudioPlayer } from "@/components/audio-player"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -253,9 +254,13 @@ export default function GalleryPage() {
   }, [items.length, hasMore, fetchNextPage])
 
   // Download handler (backend proxy streams with Content-Disposition: attachment)
+  // A video: its kept original when it has one (lib/video-result-download.ts), the same stream.
   const handleDownload = useCallback(() => {
     if (!selectedItem) return
-    window.open(`/v1/download?url=${encodeURIComponent(selectedItem.outputUrl)}`, "_blank")
+    const href = selectedItem.type === "video" && isStoredVideoAddress(selectedItem.outputUrl)
+      ? videoDownloadHref(selectedItem.outputUrl)
+      : `/v1/download?url=${encodeURIComponent(selectedItem.outputUrl)}`
+    window.open(href, "_blank")
   }, [selectedItem])
 
   // Fullscreen (separate overlay div, completely independent of Dialog)

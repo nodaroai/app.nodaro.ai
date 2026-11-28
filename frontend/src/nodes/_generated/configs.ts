@@ -6,6 +6,7 @@ import { ConfigPanel as unit_clip_pack } from "../clip-pack/config" // unit:clip
 import { ConfigPanel as unit_episode_chapters } from "../episode-chapters/config" // unit:episode-chapters
 import { ConfigPanel as unit_episode_trailer } from "../episode-trailer/config" // unit:episode-trailer
 import { ConfigPanel as unit_gif_to_video } from "../gif-to-video/config" // unit:gif-to-video
+import { ConfigPanel as unit_long_image } from "../long-image/config" // unit:long-image
 import { ConfigPanel as unit_remove_audio } from "../remove-audio/config" // unit:remove-audio
 import { ConfigPanel as unit_shot_cuts } from "../shot-cuts/config" // unit:shot-cuts
 import { ConfigPanel as unit_speaker_layout } from "../speaker-layout/config" // unit:speaker-layout
@@ -19,6 +20,7 @@ export const UNIT_CONFIGS: Readonly<Record<string, UnitConfigPanel>> = Object.as
   "episode-chapters": unit_episode_chapters, // unit:episode-chapters
   "episode-trailer": unit_episode_trailer, // unit:episode-trailer
   "gif-to-video": unit_gif_to_video, // unit:gif-to-video
+  "long-image": unit_long_image, // unit:long-image
   "remove-audio": unit_remove_audio, // unit:remove-audio
   "shot-cuts": unit_shot_cuts, // unit:shot-cuts
   "speaker-layout": unit_speaker_layout, // unit:speaker-layout

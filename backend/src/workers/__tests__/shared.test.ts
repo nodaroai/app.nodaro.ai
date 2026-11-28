@@ -114,6 +114,7 @@ vi.mock("@/lib/job-output-dimensions.js", () => ({
 vi.mock("@/ee/services/credits.js", () => ({
   CreditsService: {
     trySettleManagedCredits: mocks.mockManagedSettlement,
+    trySettleManagedCreditsOrReadLog: async (id: string) => ((await mocks.mockManagedSettlement(id)) ? { managed: true } : { managed: false, log: null }),
     commitCredits: mocks.mockCommitCredits,
     refundCredits: mocks.mockRefundCredits,
   },
@@ -132,6 +133,7 @@ vi.mock("@/lib/app-settings.js", () => ({
     featured_apps_limit: 20,
     apps_auto_scroll_seconds: 4, nodaro_provider_prefs: null,
   })),
+  settingsReadFailed: () => false,
 }))
 
 // Reached through a dynamic import by commitJobCreditsAtChargedPrice; its own

@@ -25,6 +25,7 @@ import { SwitchXAttribution } from "@/components/switchx-attribution"
 import { isInputWarningCode } from "@/lib/input-warning-codes"
 import type { SwitchXData } from "@/types/nodes"
 import { switchXMaxResolutionOf, switchXQuoteCreditId } from "@nodaro/render-rules"
+import { downloadVideoFile } from "@/lib/video-result-download"
 
 const isPickerType = (s: string) => VISUAL_PARAMETER_PICKER_NODE_TYPES.has(s)
 const ACCEPTS_VIDEO      = (t: string) => isValidSwitchXConnection("video", t, isPickerType)
@@ -197,7 +198,7 @@ function SwitchXNodeComponent({ id, data, selected }: NodeProps) {
             playsInline
           />
         )}
-        {unplayableVideo.unplayable && activeUrl && <VideoUnplayableNotice url={activeUrl} label={(nodeData.label as string | undefined) ?? ""} />}
+        {unplayableVideo.unplayable && activeUrl && <VideoUnplayableNotice url={activeUrl} />}
 
         {/* Required brand attribution (Beeble) — always visible on the result.
             developer.beeble.ai/docs/brand-attribution. */}
@@ -267,7 +268,7 @@ function SwitchXNodeComponent({ id, data, selected }: NodeProps) {
               type="button"
               className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
               aria-label={t("common.download")}
-              onClick={(e) => { e.stopPropagation(); const a = document.createElement('a'); a.href = `/v1/image-proxy?url=${encodeURIComponent(activeUrl!)}&download=1`; a.download = `${nodeData.label || 'switchx'}.mp4`; a.click() }}
+              onClick={(e) => { e.stopPropagation(); downloadVideoFile(activeUrl!) }}
             >
               <Download className="w-3.5 h-3.5" />
             </button>

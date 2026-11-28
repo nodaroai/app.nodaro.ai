@@ -80,7 +80,7 @@ export function SideBySideButton({ jobId }: { jobId: string }) {
   if (state.kind === "ready") {
     return (
       <Button asChild variant="outline" size="sm">
-        <a href={state.url} download={state.fileName} target="_blank" rel="noopener noreferrer">
+        <a /* download-site: a comparison clip made for an admin, not a result */ href={state.url} download={state.fileName} target="_blank" rel="noopener noreferrer">
           <Download className="h-4 w-4" /> Download side by side
         </a>
       </Button>

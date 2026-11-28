@@ -42,6 +42,15 @@ vi.mock("../content-restriction-bytes.js", () => ({
     return r
   }),
 }))
+// Storage's answer to "is this key stored?" (a video's other file: lib/video-original-keys.ts).
+const stored = vi.hoisted(() => ({ keys: new Set<string>(), failing: new Set<string>() }))
+vi.mock("../storage.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../storage.js")>()),
+  headR2Object: vi.fn(async (key: string) => {
+    if (stored.failing.has(key)) throw new Error("storage down")
+    return { exists: stored.keys.has(key) }
+  }),
+}))
 // The case's log (lib/rights-complaints.ts): what a restriction made from a case writes there.
 const caseLog = vi.hoisted(() => ({ events: [] as Array<[string, string, string, Record<string, unknown>]> }))
 vi.mock("../rights-complaints.js", () => ({
@@ -157,6 +166,8 @@ beforeEach(() => {
   caseLog.events.length = 0
   ownership.deny.clear()
   ownership.fail = false
+  stored.keys.clear()
+  stored.failing.clear()
   __resetRestrictedSetForTests()
   vi.useRealTimers()
   mem.assets.push({
@@ -184,6 +195,41 @@ describe("restrictAsset", () => {
       ["restrict_content", { p_asset_id: "a-1", p_job_id: null, p_keys: ["videos/a.mp4", "thumbs/a.jpg"], p_content_hash: "h1", p_source_url: "https://youtube.com/watch?v=x", p_owner_user_id: "u1", p_reason: "complaint CR-1", p_complaint_id: "c-1", p_admin_user_id: "admin" }],
     ])
     expect(r).toMatchObject({ assetId: "a-1", r2Keys: ["videos/a.mp4", "thumbs/a.jpg"], contentHash: "h1", reason: "complaint CR-1", complaintId: "c-1", restrictedBy: "admin", liftedAt: null })
+  })
+
+  it("a video's kept original goes with its preview's file, as the job's restriction takes both (only what storage holds)", async () => {
+    mem.assets[0]!.r2_key = `videos/${JOB}.mp4`
+    stored.keys.add(`videos/${JOB}-master.mov`)
+    await restrictAsset("a-1", { reason: "x", adminUserId: null })
+    expect((mem.rpcCalls[0]![1] as { p_keys: string[] }).p_keys).toEqual([`videos/${JOB}.mp4`, "thumbs/a.jpg", `videos/${JOB}-master.mov`])
+  })
+
+  it("a kept original's file takes its preview with it", async () => {
+    mem.assets[0]!.r2_key = `videos/${JOB}-master.mkv`
+    stored.keys.add(`videos/${JOB}.mp4`)
+    await restrictAsset("a-1", { reason: "x", adminUserId: null })
+    expect((mem.rpcCalls[0]![1] as { p_keys: string[] }).p_keys).toEqual([`videos/${JOB}-master.mkv`, "thumbs/a.jpg", `videos/${JOB}.mp4`])
+  })
+
+  it("an original whose presence cannot be read is restricted too; nothing is added for an image or a preview with no original", async () => {
+    mem.assets[0]!.r2_key = `videos/${JOB}.mp4`
+    stored.failing.add(`videos/${JOB}-master.webm`)
+    await restrictAsset("a-1", { reason: "x", adminUserId: null })
+    expect((mem.rpcCalls[0]![1] as { p_keys: string[] }).p_keys).toEqual([`videos/${JOB}.mp4`, "thumbs/a.jpg", `videos/${JOB}-master.webm`])
+    mem.rpcCalls.length = 0
+    mem.assets[0]!.restricted_at = null
+    stored.failing.clear()
+    mem.assets[0]!.r2_key = `images/${JOB}.png`
+    await restrictAsset("a-1", { reason: "x", adminUserId: null })
+    expect((mem.rpcCalls[0]![1] as { p_keys: string[] }).p_keys).toEqual([`images/${JOB}.png`, "thumbs/a.jpg"])
+  })
+
+  it("the restricted original answers as restricted at the byte proxies", async () => {
+    mem.assets[0]!.r2_key = `videos/${JOB}.mp4`
+    stored.keys.add(`videos/${JOB}-master.mov`)
+    await restrictAsset("a-1", { reason: "x", adminUserId: null })
+    __resetRestrictedSetForTests()
+    expect(await isRestrictedAddress(`https://cdn.example.test/videos/${JOB}-master.mov`)).toBe(true)
   })
 
   it("leaves out a thumbnail the owner cannot be shown to own, or whose ownership cannot be read: a saved file's metadata is the caller's", async () => {

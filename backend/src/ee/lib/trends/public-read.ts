@@ -62,6 +62,15 @@ export function sendPublicRead<T>(
 }
 
 /**
+ * Send a public read's answer that no cache may keep (a trend page whose sizes were read without the settings they
+ * depend on, sizes.ts): kept by no process here, the browser or the edge, so the next read asks again.
+ */
+export function sendUnkeptPublicRead<T>(reply: FastifyReply, body: T): T {
+  reply.header("Cache-Control", "no-store")
+  return body
+}
+
+/**
  * This many a minute to each read, per address for a guest and per account
  * when signed in. Keyed after the auth hook (`preHandler`) on who it resolved,
  * never on the raw Authorization header: these routes serve a request with an

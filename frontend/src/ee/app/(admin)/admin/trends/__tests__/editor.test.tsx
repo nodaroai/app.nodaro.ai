@@ -247,7 +247,7 @@ describe("the trend editor", { timeout: scaledTimeout(20_000) }, () => {
     const group = screen.getByRole("group", { name: "Prism reference audio" })
     for (const r of ["480p", "720p", "1080p"]) expect(within(group).getByRole("combobox", { name: r })).toHaveTextContent("Full mix")
     expect(
-      screen.getByText("What the engine hears in the reference video, per output resolution. The original audio always goes back on the result."),
+      screen.getByText("What the engine hears in the reference video, per size the video model makes it at (a run delivered one size larger reads the row of the size it is made at). The original audio always goes back on the result."),
     ).toBeInTheDocument()
     const at720 = within(group).getByRole("combobox", { name: "720p" })
     await user.click(at720)

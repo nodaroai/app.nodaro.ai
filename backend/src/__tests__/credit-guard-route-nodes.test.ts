@@ -105,7 +105,6 @@ const INLINE_GUARD_FILES = [
   "backend/src/routes/3d-scene.ts",
   "backend/src/routes/character-portrait-approval.ts",
   "backend/src/routes/creature-main-image-approval.ts",
-  "backend/src/routes/extend-video.ts",
   "backend/src/routes/location-main-image-approval.ts",
   "backend/src/routes/nodaro-exclusive.ts",
   "backend/src/routes/object-main-image-approval.ts",
