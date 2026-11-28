@@ -1,5 +1,20 @@
 # @nodaro/sdk
 
+## 2.83.0
+
+### Minor Changes
+
+- 7509e8e: Video Remake: a Quality choice beside `resolution`. `VideoRemakeParams.quality` takes `"economy"` (the default: rendered one size below, then upscaled to the size delivered) or `"full"` (rendered at the size delivered, no upscale step, costs more); the new `VideoRemakeQuality` type names the two. Call `estimate()` once per value to price each. For a request that names `quality`, `VideoRemakeEstimate` gains `quality` (how this quote is made), `qualityOffered` (both ways exist for this request) and `engineResolution` (economy: the size rendered before the upscale), and `VideoRemakeJobOutput` gains `quality` and, on an Economy run whose upscale was applied, `engineVideoUrl`, `engineWidth`, `engineHeight` and `engineResolution`: the video before the upscale. `VideoRemakeStyleChoice.quality` lists, per engine choice, the sizes where the choice exists. A request that names no `quality` is sent and answered exactly as before.
+- 7be220e: Trend runs can be asked for by the size they are delivered at. `TrendDetail` gains `deliveredResolution?: true`: where it is set, `resolutions` are the sizes a run of the trend is delivered at on this deployment (the same sizes `videoRemake.styleChoice()` lists for the trend's engine choice, e.g. `["720p", "1080p", "4k"]`), and a run's `resolution` names the size the video comes back at. `TrendResolution` adds `"4k"`, accepted only on such a trend. A completed `TrendRun`'s `resolution` is the size its video was delivered at. `draft: true` stays the Nodaro Prism 480p take whatever `resolutions` lists. New refusal: 409 `resolution_unavailable` (the size is offered but cannot be made for this run right now). Without `deliveredResolution` everything reads as before.
+- fb504f3: `trendRadar`: a candidate is now read on TikTok, Instagram and YouTube. A card adds `creatorsCapped` (a platform's search returned as many posts as it may, so the creator count is a floor), `platforms` (per platform `{ posts, creators, plays, capped, top }`, typed `TrendCandidatePlatforms` / `TrendCandidatePlatformStats`), `firstPostedAt` (the earliest post date seen) and `lastReadAt`; a reading adds `growthPct` (plays growth per day over the posts it and the previous reading both saw), which `dayChangePct` now reports when there is one; `candidates()` takes `sort: "plays"`; a post's `stillUrl` is a copy kept on the deployment's storage where the read could make one; `summary().lastRun` adds `stoppedEarly` (why a run stopped before reading every candidate it could afford); and `summary()` adds `reading` (typed `TrendRadarReadingCost`: the searches and credits one candidate's reading takes, the runner's balance, the highest daily search budget, and `deepSearchesMax` / `creditsPerDeepSearch` for the deeper count of a candidate whose search came back full), so the budget can be set in candidates per day.
+- 649debe: Video Remake can run a whole clip longer than 30 s, made in parts, where the deployment offers it. `videoRemake.styleChoice()` now answers `longClips` (`{ maxSourceSec }`, typed `VideoRemakeLongClips`; `null` or absent elsewhere): a whole run on Nodaro Prism with the Precise style then takes a source up to that length, with no new request field. New refusal codes: `long_clip_too_long` (a whole clip over `maxSourceSec`, on `VideoRemakePlanRolesRefusalCode`) and `long_clip_no_full_quality` (on `VideoRemakeFullQualityRefusalCode`). `VideoRemakeJobOutput` types `partial` (`VideoRemakePartial`: `deliveredSec`, `sourceSec`, `parts`, `reason`, `message`), present when such a clip was delivered only up to a part; `durationSec` is then the delivered length.
+
+### Patch Changes
+
+- Updated dependencies [3761931]
+- Updated dependencies [6f20a46]
+  - @nodaro/shared@3.78.0
+
 ## 2.82.0
 
 ### Minor Changes
