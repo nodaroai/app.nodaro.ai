@@ -1,5 +1,13 @@
 # @nodaro/prompts
 
+## 1.62.2
+
+### Patch Changes
+
+- 833fcda: A prompting doctrine and wizard capability lines for MAGI-2 (`magi-2`), written from the provider's contract: describe the subjects, action, camera and sound; dialogue in quotes is spoken; say how each reference is used.
+- Updated dependencies [833fcda]
+  - @nodaro/shared@3.77.0
+
 ## 1.62.1
 
 ### Patch Changes
