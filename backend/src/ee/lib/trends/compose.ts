@@ -747,7 +747,12 @@ export function composeTrendRun(
   const delivered = options.sizes?.delivered === true
   const offered: readonly TrendRunSize[] = delivered ? options.sizes!.sizes : trendResolutions(data)
   if (req.draft === true && (flash || !castSwapEngineHasDraft(engine))) {
-    throw new TrendRunError("draft_unsupported", "This trend has no draft: run it at 720p or 1080p.")
+    // Read the delivered way, the sizes this trend runs at here (4K among them); read the way the engine makes its sizes,
+    // the sentence it always was.
+    throw new TrendRunError(
+      "draft_unsupported",
+      delivered ? `This trend has no draft: run it at ${offered.map(trendSizeLabel).join(" or ")}.` : "This trend has no draft: run it at 720p or 1080p.",
+    )
   }
   if (req.draft === true && req.resolution !== undefined && req.resolution !== "480p") {
     throw new TrendRunError("validation_error", "Draft is only available at 480p.")

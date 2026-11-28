@@ -1156,6 +1156,20 @@ describe("composeTrendRun — the trend's sizes (sizes.ts)", () => {
     expect(codeOf(() => composeTrendRun(trend(version({ flash: true })), req({ draft: true }), { sizes: { delivered: true, sizes: ["720p", "1080p"] } })).code).toBe("draft_unsupported")
   })
 
+  it("a trend with no draft names the sizes it runs at here, 4K included where it is delivered", () => {
+    const messageOf = (fn: () => unknown): string => {
+      try {
+        fn()
+      } catch (e) {
+        return (e as Error).message
+      }
+      throw new Error("expected a refusal")
+    }
+    expect(messageOf(() => composeTrendRun(kling(), req({ draft: true }), { sizes: PULSE }))).toBe("This trend has no draft: run it at 720p or 1080p or 4K.")
+    // Read the way the engine makes its sizes, the sentence is the one it always was on Pulse.
+    expect(messageOf(() => composeTrendRun(kling(), req({ draft: true })))).toBe("This trend has no draft: run it at 720p or 1080p.")
+  })
+
   it("a request may carry 4K only where the engine reads trend runs by the size delivered (the schema of each way)", async () => {
     const { trendRunRequestSchemaDelivered } = await import("../schemas.js")
     expect(trendRunRequestSchema.safeParse({ slots: {}, resolution: "4k" }).success).toBe(false)
