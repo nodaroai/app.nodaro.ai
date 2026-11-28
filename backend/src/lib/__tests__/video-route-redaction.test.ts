@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { redactPrivateJobData } from "../public-job-data.js"
+import { redactPrivateJobData, withoutVideoRouteSecrets } from "../public-job-data.js"
 import { VIDEO_ROUTE_STAMP_KEY } from "../video-route-decision.js"
 import { ALTERNATE_ROUTE_KEY } from "../alternate-route-request.js"
 
@@ -20,6 +20,14 @@ describe("routing records never leave the server", () => {
       [ALTERNATE_ROUTE_KEY]: { state: "running", taskRef: "t" },
     },
   }
+
+  it("strips signed run and pricing tokens before a checkpoint is stored and again on public reads", () => {
+    const pro = { done: true, routeToken: "bound-secret", pricing: { feeBase: 3, route: { quote: "quote-secret" } } }
+    const safe = { pro: { done: true, pricing: { feeBase: 3 } } }
+    expect(withoutVideoRouteSecrets({ pro })).toEqual(safe)
+    expect(redactPrivateJobData({ output_data: { pro }, input_data: { ugcClipAdmission: { v: 2, route: { quote: "quote-secret" } } } })).toEqual({ output_data: safe, input_data: {} })
+    expect(pro.routeToken).toBe("bound-secret")
+  })
 
   it("drops them from a row, a list of rows and an envelope", () => {
     for (const value of [row, [row], { data: { job: row } }]) {

@@ -24,3 +24,21 @@ export function isOurCdnUrl(rawUrl: string, publicUrl: string, fallbackDomain: s
   }
   return false
 }
+
+/**
+ * The storage origin the deployment publishes to the browser (`/config.js`
+ * `storageOrigins`, print-surface-profile.ts `--storage-origins`, and the
+ * widget pages): the https origin of `publicUrl`, one `isOurCdnUrl` accepts.
+ * The app's video Download asks the server only about an address on it. The
+ * fallback host is deliberately not published (it stays accepted by the
+ * server, as before): an address on it keeps its old download.
+ */
+export function publishedStorageOrigins(publicUrl: string): string[] {
+  if (publicUrl === "") return []
+  try {
+    const parsed = new URL(publicUrl)
+    return parsed.protocol === "https:" ? [parsed.origin] : []
+  } catch {
+    return []
+  }
+}

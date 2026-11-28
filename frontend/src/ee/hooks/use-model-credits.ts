@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query"
 import { queryClient } from "@/lib/query-client"
 import { hasCredits } from "@/lib/edition"
-import { supportsExtendRender, resolveGvpAnchorWire } from "@nodaro/shared/models"
+import { supportsExtendRender, resolveGvpAnchorWire, isSeedance2Provider } from "@nodaro/shared/models"
 import { estimateSeedanceHdCredits, estimateVideoProCredits, type VideoProEstimateInput } from "@/lib/api"
 import { queryKeys } from "@/lib/query-keys"
 import type { GenerateVideoProNodeData } from "@/types/nodes"
@@ -21,22 +21,22 @@ export function useModelCredits(modelIdentifier: string | undefined, fallback: n
   return data ?? fallback
 }
 
-function videoProEstimateInput(data:GenerateVideoProNodeData):VideoProEstimateInput {
+function videoProEstimateInput(data:GenerateVideoProNodeData, hasOpeningVideo = false):VideoProEstimateInput {
   const provider=data.provider||"seedance-2"
-  return {provider,resolution:data.resolution||"720p",duration:data.duration??8,aspectRatio:data.aspectRatio,
+  return {provider,...(hasOpeningVideo ? { hasOpeningVideo: true } : {}),resolution:data.resolution||"720p",duration:data.duration??8,aspectRatio:data.aspectRatio,
     segmentMode:data.segmentMode,preferredSegmentSec:data.preferredSegmentSec,segmentDurations:data.segmentDurations,sourceSegmentDurations:data.sourceSegmentDurations,
     renderMethod:data.renderMethod==="keyframes"||!supportsExtendRender(provider)?"keyframes":"extend",anchorMode:resolveGvpAnchorWire(data.anchorMode,provider),
     contextTailSec:data.contextTailSec,planOnly:data.planOnly,generateAudio:data.generateAudio,
   }
 }
-const videoProEstimateKey=(data:GenerateVideoProNodeData)=>["credits","video-pro",videoProEstimateInput(data)] as const
-export function useVideoProCredits(data:GenerateVideoProNodeData) {
+const videoProEstimateKey=(data:GenerateVideoProNodeData, hasOpeningVideo: boolean)=>["credits","video-pro",videoProEstimateInput(data, hasOpeningVideo)] as const
+export function useVideoProCredits(data:GenerateVideoProNodeData, hasOpeningVideo = false) {
   // Nothing runs on a view-only canvas, so it asks no price.
   const readOnly=useReadOnlyCanvas()
-  return useQuery({queryKey:videoProEstimateKey(data),queryFn:()=>estimateVideoProCredits(videoProEstimateInput(data)),enabled:!readOnly&&hasCredits()&&data.segmentMode!==undefined,staleTime:30_000})
+  return useQuery({queryKey:videoProEstimateKey(data, hasOpeningVideo),queryFn:()=>estimateVideoProCredits(videoProEstimateInput(data, hasOpeningVideo)),enabled:!readOnly&&hasCredits()&&(data.segmentMode!==undefined||isSeedance2Provider(data.provider??"seedance-2")),staleTime:30_000})
 }
-export function getCachedVideoProCredits(data:GenerateVideoProNodeData):number|undefined {
-  return queryClient.getQueryData<{credits:number}>(videoProEstimateKey(data))?.credits
+export function getCachedVideoProCredits(data:GenerateVideoProNodeData, hasOpeningVideo = false):number|undefined {
+  return queryClient.getQueryData<{credits:number}>(videoProEstimateKey(data, hasOpeningVideo))?.credits
 }
 
 /**

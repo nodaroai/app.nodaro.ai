@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest"
-import { engineTakesPortion, engineTakesShortClips, loadedEngineTakesPortion } from "../video-remake-portion.js"
+import { engineLongClips, engineTakesPortion, engineTakesShortClips, loadedEngineLongClips, loadedEngineTakesPortion } from "../video-remake-portion.js"
 import { _resetPluginSupportsForTests, setPluginSupports } from "../private-plugins/supports-registry.js"
 
 /**
@@ -25,5 +25,25 @@ describe("video remake: part of the clip and short clips", () => {
     expect(engineTakesShortClips({ shortClips: false } as never)).toBe(false)
     expect(engineTakesShortClips({ portion: true } as never)).toBe(false)
     expect(engineTakesShortClips({ shortClips: true } as never)).toBe(true)
+  })
+})
+
+describe("video remake: long clips", () => {
+  afterEach(() => _resetPluginSupportsForTests())
+
+  it("are taken only by an engine that declares a finite maxSourceSec over 30 s, answered as a fresh record", () => {
+    for (const longClips of [undefined, null, true, 120, "120", {}, { maxSourceSec: "120" }, { maxSourceSec: 30 }, { maxSourceSec: -1 }, { maxSourceSec: Number.POSITIVE_INFINITY }, { maxSourceSec: Number.NaN }]) {
+      expect(engineLongClips({ longClips } as never), JSON.stringify(longClips)).toBeNull()
+    }
+    expect(engineLongClips(undefined)).toBeNull()
+    expect(engineLongClips({ portion: true } as never)).toBeNull()
+    const declared = { maxSourceSec: 120 }
+    const read = engineLongClips({ longClips: declared } as never)
+    expect(read).toEqual({ maxSourceSec: 120 })
+    expect(read).not.toBe(declared)
+    expect(engineLongClips({ longClips: { maxSourceSec: 30.5 } } as never)).toEqual({ maxSourceSec: 30.5 })
+    expect(loadedEngineLongClips()).toBeNull()
+    setPluginSupports({ castSwap: { longClips: { maxSourceSec: 120 } } as never })
+    expect(loadedEngineLongClips()).toEqual({ maxSourceSec: 120 })
   })
 })

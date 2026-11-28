@@ -32,6 +32,7 @@ export function ViewTopBar({ token, name, exported, showMadeWith = true }: ViewT
           </span>
           <a
             href={workflowViewExportPath(token)}
+            // download-site: the workflow's JSON copy
             download
             rel="nofollow"
             title={t("workflowView.downloadNote", { date: formatDate(exported.exportedAt, { dateStyle: "medium" }) })}

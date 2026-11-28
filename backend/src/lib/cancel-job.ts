@@ -18,6 +18,8 @@
  *     and the analysis child id if any. A use-case wrapper's hidden run is
  *     cancelled with it.
  */
+import { followedLane, finishesWhenStopped, stopsAtSegmentBoundary, unstartedSegmentJob, STOP_RULE_COLUMNS, STOP_RULE_COLUMNS_BEFORE_MIGRATION } from "./stop-rule.js"
+import { isMissingColumnError } from "./postgrest-errors.js"
 import { supabase } from "./supabase.js"
 import { tryRemoveFromQueue } from "./queue.js"
 import { IN_FLIGHT_JOB_STATUSES, isParkedJobStatus } from "./job-status.js"
@@ -425,11 +427,24 @@ async function meteredBillingEvidence(jobId: string): Promise<MeteredBillingEvid
 }
 
 export async function cancelOwnedJob(jobId: string, userId: string): Promise<CancelOwnedJobResult> {
-  const { data: job, error } = await supabase
+  const first = await supabase
     .from("jobs") // tenant-scope-ignore: ownership verified post-fetch (user_id mismatch → forbidden)
-    .select("id, status, user_id, input_data, provider, provider_task_id, reconcile_attempts, reconcile_last_error")
+    .select(`id, status, user_id, input_data, provider, reconcile_attempts, reconcile_last_error, ${STOP_RULE_COLUMNS}`)
     .eq("id", jobId)
     .single()
+  let job = first.data
+  let error = first.error
+  // A database that does not have the send marker yet is not a missing job: the
+  // cancel reads without it (no send is marked there, so nothing is lost).
+  if (error && isMissingColumnError(error)) {
+    const again = await supabase
+      .from("jobs") // tenant-scope-ignore: ownership verified post-fetch (user_id mismatch → forbidden)
+      .select(`id, status, user_id, input_data, provider, reconcile_attempts, reconcile_last_error, ${STOP_RULE_COLUMNS_BEFORE_MIGRATION}`)
+      .eq("id", jobId)
+      .single()
+    job = again.data ? { ...again.data, video_send_started_at: null } as unknown as typeof first.data : null
+    error = again.error
+  }
   if (error || !job) return { kind: "not_found" }
   if (job.user_id !== userId) return { kind: "forbidden" }
   if (!(CANCELLABLE_STATUSES as readonly string[]).includes(job.status)) {
@@ -464,6 +479,12 @@ export async function cancelOwnedJob(jobId: string, userId: string): Promise<Can
     return { kind: "cancelled", analysisJobId }
   }
 
+  const video = { ...job, job_type: job.job_type ?? input?.type, model: job.model ?? input?.provider }
+  if (stopsAtSegmentBoundary(video) && !unstartedSegmentJob(video)) {
+    await (await import("../workers/shared.js")).requestJobStop(jobId)
+    return { kind: "in_flight" }
+  }
+  if (finishesWhenStopped(video)) return { kind: "in_flight" }
   const inRecovery = ((job.reconcile_attempts as number | null) ?? 0) > 0
   // A background scrape stays cancellable while it runs, as it was in its
   // route: it saves its provider run only to re-attach after an interruption,
@@ -482,13 +503,15 @@ export async function cancelOwnedJob(jobId: string, userId: string): Promise<Can
 
   await tryRemoveFromQueue(jobId)
 
-  const { data: flipped, error: updateError } = await supabase
+  let flip = supabase
     .from("jobs")
     .update({ status: "cancelled" })
     .eq("id", jobId)
     .eq("user_id", userId)
     .in("status", [...FLIPPABLE_STATUSES])
-    .select("id")
+  if (unstartedSegmentJob(video)) flip = flip.in("status", ["queued", "pending"]).is("video_send_started_at", null).is("provider_task_id", null)
+  else if (followedLane(video)) flip = flip.is("provider_task_id", null).is("video_send_started_at", null)
+  const { data: flipped, error: updateError } = await flip.select("id")
   if (updateError) throw updateError
   if (!flipped || flipped.length === 0) {
     // Zero rows is now two different facts. Re-read once: a row that got PARKED
@@ -498,9 +521,14 @@ export async function cancelOwnedJob(jobId: string, userId: string): Promise<Can
     // the reviewer's SLA, which is the stranding D17 exists to prevent.
     const { data: after } = await supabase
       .from("jobs") // tenant-scope-ignore: same row, ownership verified above
-      .select("status")
+      .select(`status, ${STOP_RULE_COLUMNS}`)
       .eq("id", jobId)
       .single()
+    if (after && stopsAtSegmentBoundary(after) && after.status === "processing") {
+      await (await import("../workers/shared.js")).requestJobStop(jobId)
+      return { kind: "in_flight" }
+    }
+    if (after && finishesWhenStopped(after)) return { kind: "in_flight" }
     const status = (after as { status?: string } | null)?.status
     if (status && isParkedJobStatus(status)) {
       const { withdrawHeldJob } = await import("./job-policy-gate.js")

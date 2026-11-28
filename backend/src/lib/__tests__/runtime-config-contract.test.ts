@@ -15,7 +15,8 @@ import {
 } from "../../../../tools/build-runtime-config.mjs"
 import { config } from "../config.js"
 import { SURFACE_PROFILE_DEFAULT, __resetSurfaceProfileCacheForTests } from "../surface-profile.js"
-import { renderMediaOriginForRuntimeConfig, renderSurfaceProfileForRuntimeConfig } from "../surface-profile-runtime-config.js"
+import { renderMediaOriginForRuntimeConfig, renderStorageOriginsForRuntimeConfig, renderSurfaceProfileForRuntimeConfig } from "../surface-profile-runtime-config.js"
+import { isOurCdnUrl } from "../cdn-host.js"
 
 /**
  * /config.js is read by products outside this repo through the contract in
@@ -33,7 +34,7 @@ describe("the /config.js writer and the contract agree on every key", () => {
     expect(inputs.length).toBeGreaterThan(0)
     // "true" satisfies every flag and is a non-blank string for every URL; the surface needs a JSON object,
     // and a reader keeps a media origin only when it is one.
-    const inputValue = (name: string) => (name === "RUNTIME_SURFACE_PROFILE" ? "{}" : name === "RUNTIME_MEDIA_ORIGIN" ? "https://media.example.com" : name === "RUNTIME_FLOW_UI_ORIGIN" ? "https://flow.example.com" : name === "RUNTIME_LINK_ORIGIN" ? "https://app.example.com" : "true")
+    const inputValue = (name: string) => (name === "RUNTIME_SURFACE_PROFILE" ? "{}" : name === "RUNTIME_MEDIA_ORIGIN" ? "https://media.example.com" : name === "RUNTIME_STORAGE_ORIGINS" ? "https://cdn.example.com" : name === "RUNTIME_FLOW_UI_ORIGIN" ? "https://flow.example.com" : name === "RUNTIME_LINK_ORIGIN" ? "https://app.example.com" : "true")
     const env = Object.fromEntries(inputs.map((name) => [name, inputValue(name)]))
     const written = Object.keys(buildRuntimeConfig(env) as Record<string, unknown>).sort()
     expect(written).toEqual([...RUNTIME_CONFIG_KEYS].sort())
@@ -144,6 +145,25 @@ describe("the backend's surface projection reaches a reader whole", () => {
     __resetSurfaceProfileCacheForTests()
     const written = buildRuntimeConfig({ RUNTIME_MEDIA_ORIGIN: renderMediaOriginForRuntimeConfig() })
     expect(parseRuntimeConfig(written).mediaOrigin).toBe("https://media.acme.example")
+  })
+
+  it("the storage origin the backend prints is what a reader keeps, one the download routes accept, never the fallback host", () => {
+    const REAL_FALLBACK = config.R2_PUBLIC_FALLBACK_DOMAIN
+    try {
+      config.R2_PUBLIC_URL = "https://cdn.acme.example/bucket"
+      config.R2_PUBLIC_FALLBACK_DOMAIN = "pub-123.r2.dev"
+      const read = parseRuntimeConfig(buildRuntimeConfig({ RUNTIME_STORAGE_ORIGINS: renderStorageOriginsForRuntimeConfig() })).storageOrigins
+      // The fallback host stays accepted by the routes but is never published.
+      expect(read).toEqual(["https://cdn.acme.example"])
+      for (const origin of read!) expect(isOurCdnUrl(`${origin}/videos/a.mp4`, config.R2_PUBLIC_URL, config.R2_PUBLIC_FALLBACK_DOMAIN)).toBe(true)
+      // Storage on plain http (a local install): the routes accept none, and the reader gets no key.
+      config.R2_PUBLIC_URL = "http://localhost:3000/storage/nodaro-assets"
+      config.R2_PUBLIC_FALLBACK_DOMAIN = ""
+      expect(renderStorageOriginsForRuntimeConfig()).toBe("")
+      expect("storageOrigins" in parseRuntimeConfig(buildRuntimeConfig({ RUNTIME_STORAGE_ORIGINS: renderStorageOriginsForRuntimeConfig() }))).toBe(false)
+    } finally {
+      config.R2_PUBLIC_FALLBACK_DOMAIN = REAL_FALLBACK
+    }
   })
 
   it("a profile that sets none of the new keys: the reader adds only their defaults", () => {

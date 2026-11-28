@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { externalWalletConfig, reserveWallet, settleWallet, readWalletBalance, type WalletOperation } from "../external-wallet-client.js"
+import { externalWalletConfig, reserveWallet, settleWallet, syncWalletDebt, readWalletBalance, type WalletOperation } from "../external-wallet-client.js"
 
 const config = { url: "https://wallet.example.test", token: "test-only", provider: "sai", timeoutMs: 1000 }
 const operation: WalletOperation = { usage_log_id: "00000000-0000-4000-8000-000000000001", requester_id: "00000000-0000-4000-8000-000000000002",
@@ -58,6 +58,51 @@ describe("external wallet protocol", () => {
   it("preserves a fractional shared balance while charges remain whole credits", async () => {
     respond({ contract: 1, unit: "nodaro_credit", sso_subject: operation.sso_subject, available_credits: 0.0155 })
     expect(await readWalletBalance(config, operation.requester_id, operation.sso_subject)).toBe(0.0155)
+  })
+  it("requires the routed debt capability on a routed reserve even when the original amount matches", async () => {
+    for (const reply of [{ ...base }, { ...base, contract: 2 }]) {
+      respond({ ...reply, decision: "allow", reserved_credits: 30 })
+      await expect(reserveWallet(config, operation, true)).rejects.toThrow()
+    }
+    respond({ ...base, contract: 2, decision: "allow", reserved_credits: 30, capability: "routed_debt_v1" })
+    await reserveWallet(config, operation, true)
+    const request = vi.mocked(fetch).mock.calls[0]![1]!
+    expect(JSON.parse(request.body as string)).toMatchObject({ contract: 2, capability: "routed_debt_v1", action: "reserve" })
+    expect(request.headers).toMatchObject({ "Idempotency-Key": `${operation.usage_log_id}:reserve` })
+  })
+
+  const confirmation = { ...base, contract: 2, sso_provider: operation.provider, sso_subject: operation.sso_subject,
+    original_shortfall: 12, after_credits: 5, receipt: { id: "topup-installment-2", credits: 3 } }
+  const registered = { ...base, contract: 2, sso_provider: operation.provider, sso_subject: operation.sso_subject,
+    settled: true, actual_credits: 30, original_shortfall: 12, debt_registered: true }
+  it("captures the hold and registers the exact overage with the same terminal key on replay", async () => {
+    respond(registered)
+    await settleWallet(config, operation, 30, 12)
+    const request = vi.mocked(fetch).mock.calls[0]![1]!
+    expect(JSON.parse(request.body as string)).toMatchObject({ contract: 2, action: "settle", actual_credits: 30, original_shortfall: 12 })
+    expect(request.headers).toMatchObject({ "Idempotency-Key": `${operation.usage_log_id}:settle` })
+  })
+  it.each([{ contract: 1 }, { debt_registered: false }, { original_shortfall: 11 }, { sso_subject: "other" }])(
+    "requires confirmation of the matching overage before acknowledging capture %#", async patch => {
+      respond({ ...registered, ...patch })
+      await expect(settleWallet(config, operation, 30, 12)).rejects.toThrow()
+    })
+  it("reads a partial collection from the original obligation, including an unfunded wait", async () => {
+    respond(confirmation)
+    expect(await syncWalletDebt(config, operation, 12, 7)).toEqual(confirmation.receipt)
+    const body = JSON.parse(vi.mocked(fetch).mock.calls[0]![1]!.body as string)
+    expect(body).toMatchObject({ contract: 2, action: "sync_debt", original_shortfall: 12, after_credits: 5 })
+    respond({ ...confirmation, receipt: null })
+    expect(await syncWalletDebt(config, operation, 12, 7)).toBeNull()
+  })
+  it.each([
+    { contract: 1 }, { operation_id: operation.requester_id }, { sso_provider: "another" }, { sso_subject: "another" },
+    { after_credits: 0 }, { original_shortfall: 11 }, { receipt: { id: "", credits: 3 } },
+    { receipt: { id: "over", credits: 8 } }, { receipt: { id: "zero", credits: 0 } },
+    { receipt: { id: "fraction", credits: 2.5 } },
+  ])("rejects a conflicting debt confirmation %#", async change => {
+    respond({ ...confirmation, ...change })
+    await expect(syncWalletDebt(config, operation, 12, 7)).rejects.toMatchObject({ code: "external_wallet_unavailable" })
   })
   it("bounds response size", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("x".repeat(16385))))

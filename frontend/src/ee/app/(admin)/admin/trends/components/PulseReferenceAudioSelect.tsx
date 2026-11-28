@@ -36,7 +36,7 @@ import {
 import { PRISM_REFERENCE_AUDIO_MODE_HINTS, PRISM_REFERENCE_AUDIO_PITCH_HINT, PRISM_REFERENCE_AUDIO_PITCH_LABEL } from "./PrismReferenceAudioSelect"
 
 export const PULSE_REFERENCE_AUDIO_HINT =
-  "What the engine hears in the clip it is sent, per output resolution. Left as it is, it follows the Pulse audio: the full mix at +4 with the original audio, at 0 with Kling's audio. What the result carries is the Pulse audio's choice."
+  "What the engine hears in the clip it is sent, per size the video model makes it at (a run delivered one size larger reads the row of the size it is made at). Left as it is, it follows the Pulse audio: the full mix at +4 with the original audio, at 0 with Kling's audio. What the result carries is the Pulse audio's choice."
 
 /** Why every environment must take it. */
 const SHARED_BY = { setting: "this setting is shared by every environment", trend: "trends are shared by every environment" } as const

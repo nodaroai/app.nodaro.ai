@@ -1,5 +1,5 @@
 // @reads-none reads only the stills Remotion renders into its work dir
-import { remotionConcurrencyFor } from "./render-concurrency.js"
+import { remotionConcurrencyFor, renderFfmpegArgs } from "./render-concurrency.js"
 import type { Job } from "bullmq"
 import { readFile } from "node:fs/promises"
 import { join } from "node:path"
@@ -90,7 +90,8 @@ export async function processSceneRenderChild(job: Job, bundle: () => Promise<st
       let output = join(workDir, "output.mp4")
       await renderMedia({ serveUrl, composition, inputProps, codec: "h264", muted: true, outputLocation: output,
         puppeteerInstance: browser, chromiumOptions, browserExecutable, cancelSignal: cancellation.cancelSignal,
-        concurrency: remotionConcurrencyFor("3d-scene", config.REMOTION_CONCURRENCY), timeoutInMilliseconds: 120000, logLevel: "warn",
+        concurrency: remotionConcurrencyFor("3d-scene", config.REMOTION_CONCURRENCY), ffmpegOverride: renderFfmpegArgs,
+        timeoutInMilliseconds: 120000, logLevel: "warn",
         onProgress: ({ progress }) => { void job.updateProgress(Math.round(progress * 90)).catch(() => {}) } })
       controller.signal.throwIfAborted()
       if (child.shouldWatermark) {

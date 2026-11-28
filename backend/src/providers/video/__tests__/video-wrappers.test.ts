@@ -62,6 +62,8 @@ const mocks = vi.hoisted(() => {
   }
 })
 
+// The source doors read the url as given here (their own behaviour: editing-source.test.ts).
+vi.mock("../editing-source.js", async () => (await import("./editing-source-passthrough.js")).editingSourcePassthrough())
 vi.mock("../ffmpeg-utils.js", () => ({
   downloadFile: mocks.downloadFile,
   runFfmpeg: mocks.runFfmpeg,
@@ -968,6 +970,27 @@ describe("adjustVolume", () => {
 // 8) loop-video.ts
 // ===========================================================================
 
+describe("a step that stream-copies the picture it is given reads it as given; one that re-encodes reads a door (decided 2026-11-22)", () => {
+  it("Loop Video: a plain repeat reads as given; the duration mode and a smart cut before a repeat read the door", async () => {
+    const { downloadEditingSource } = await import("../editing-source.js")
+    await loopVideo({ videoUrl: "u", mode: "repeat", repeatCount: 2 })
+    expect(downloadEditingSource).not.toHaveBeenCalled()
+    expect(mocks.downloadFile).toHaveBeenCalledTimes(1)
+    await loopVideo({ videoUrl: "u", mode: "duration", targetDuration: 10 }).catch(() => undefined)
+    expect(downloadEditingSource).toHaveBeenCalledTimes(1)
+    await loopVideo({ videoUrl: "u", mode: "repeat", repeatCount: 2, smartLoopCutBeforeRepeat: true }).catch(() => undefined)
+    expect(downloadEditingSource).toHaveBeenCalledTimes(2)
+  })
+
+  it("Trim Video: a keyframe cut reads as given; a precise cut reads the door", async () => {
+    const { downloadEditingSource } = await import("../editing-source.js")
+    await trimVideo({ videoUrl: "u", startTime: 1, endTime: 2, losslessKeyframe: true }).catch(() => undefined)
+    expect(downloadEditingSource).not.toHaveBeenCalled()
+    await trimVideo({ videoUrl: "u", startTime: 1, endTime: 2 })
+    expect(downloadEditingSource).toHaveBeenCalledTimes(1)
+  })
+})
+
 describe("loopVideo", () => {
   it("repeat mode: writes a filelist with N copies and stream-copies", async () => {
     await loopVideo({
@@ -1055,8 +1078,9 @@ describe("loopVideo", () => {
       smartLoopCutBeforeRepeat: true, smartLoopCutLookback: 16,
     })
 
+    // Cut from the file Loop Video downloaded (its editing source), never a second download.
     expect(mocks.smartLoopCut).toHaveBeenCalledWith({
-      videoUrl: "u", lookbackFrames: 16,
+      videoUrl: "u", lookbackFrames: 16, inputPath: expect.stringContaining("input.mp4"),
     })
     const written = mocks.fsWriteFile.mock.calls[0][1] as string
     expect(written).toContain("smart-cut.mp4")

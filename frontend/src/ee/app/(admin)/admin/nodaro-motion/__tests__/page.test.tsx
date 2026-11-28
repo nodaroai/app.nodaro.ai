@@ -528,7 +528,7 @@ describe("Admin → Video Remake → Pulse reference audio", PAGE, () => {
 })
 
 describe("Admin → Video Remake → Prism reference audio", PAGE, () => {
-  const HINT = "What the engine hears in the reference video, per output resolution. The original audio always goes back on the result."
+  const HINT = "What the engine hears in the reference video, per size the video model makes it at (a run delivered one size larger reads the row of the size it is made at). The original audio always goes back on the result."
   const RESOLUTIONS = ["480p", "720p", "1080p"]
   const audioGroup = async (prism: HTMLElement) => within(prism).findByRole("group", { name: "Prism reference audio" })
   const pitchAt = (group: HTMLElement, r: string) => within(within(group).getByRole("group", { name: r })).getByRole("spinbutton", { name: "Pitch shift (semitones)" })

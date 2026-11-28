@@ -22,6 +22,7 @@ import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-di
 import { EditableNodeLabel } from "./editable-node-label"
 import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import type { FaceSwapData } from "@/types/nodes"
+import { downloadVideoFile } from "@/lib/video-result-download"
 
 const ACCEPTS_FACE  = (t: string) => isValidFaceSwapConnection("face",  t)
 const ACCEPTS_VIDEO = (t: string) => isValidFaceSwapConnection("video", t)
@@ -160,7 +161,7 @@ function FaceSwapNodeComponent({ id, data, selected }: NodeProps) {
             playsInline
           />
         )}
-        {unplayableVideo.unplayable && activeUrl && <VideoUnplayableNotice url={activeUrl} label={(nodeData.label as string | undefined) ?? ""} />}
+        {unplayableVideo.unplayable && activeUrl && <VideoUnplayableNotice url={activeUrl} />}
 
         {!activeUrl && status !== "running" && status !== "failed" && (
           <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-muted/10 text-muted-foreground h-[160px]">
@@ -223,7 +224,7 @@ function FaceSwapNodeComponent({ id, data, selected }: NodeProps) {
               type="button"
               className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
               aria-label={t("common.download")}
-              onClick={(e) => { e.stopPropagation(); const a = document.createElement('a'); a.href = `/v1/image-proxy?url=${encodeURIComponent(activeUrl!)}&download=1`; a.download = `${nodeData.label || 'video'}.mp4`; a.click() }}
+              onClick={(e) => { e.stopPropagation(); downloadVideoFile(activeUrl!) }}
             >
               <Download className="w-3.5 h-3.5" />
             </button>

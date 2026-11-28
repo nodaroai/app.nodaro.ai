@@ -44,12 +44,24 @@ describe("unitInputLanding", () => {
 })
 
 describe("unitInputLaneOf", () => {
-  it("many: true → many; accepts look → json; a field input → no lane (routed by source type)", () => {
+  it("many: true → many; accepts look → json; an image input with no field → image; a field input → no lane (routed by source type)", () => {
     expect(unitInputLaneOf({ id: "sources", accepts: ["video", "audio"], many: true })).toBe("many")
     expect(unitInputLaneOf({ id: "plan", accepts: ["look"] })).toBe("json")
     const fieldInput = { id: "in", accepts: ["video"], field: "videoUrl" }
     expect(unitInputLaneOf(fieldInput)).toBeUndefined()
-    expect(unitInputLaneOf({ id: "img", accepts: ["image"] })).toBeUndefined()
+    expect(unitInputLaneOf({ id: "img", accepts: ["image"] })).toBe("image")
+    // An image input with a field routes by its source's type, as before.
+    expect(unitInputLaneOf({ id: "image", accepts: ["image"], field: "imageUrl" })).toBeUndefined()
+    // Only a pictures-only input is the image lane.
+    expect(unitInputLaneOf({ id: "media", accepts: ["image", "video"] })).toBeUndefined()
+  })
+
+  it("the image lane lands as the JSON lane does: the URL, the last real wire winning, \"\" for a wire that carried nothing", () => {
+    const picture = (sourceNodeId: string, value: string) => ({ many: false, json: false, sourceNodeId, value, kind: undefined }) as const
+    expect(unitInputLanding(undefined, picture("a", "https://r2/a.png"))).toBe("https://r2/a.png")
+    expect(unitInputLanding("https://r2/a.png", picture("b", "https://r2/b.png"))).toBe("https://r2/b.png")
+    expect(unitInputLanding(undefined, picture("a", ""))).toBe("")
+    expect(unitInputLanding("https://r2/a.png", picture("b", ""))).toBe("https://r2/a.png")
   })
 })
 

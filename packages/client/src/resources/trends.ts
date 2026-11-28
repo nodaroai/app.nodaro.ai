@@ -36,8 +36,8 @@ import type { FirstRemakeOfferQuote, VideoRemakeEngine } from "./cast-swap.js"
  *   sent at all on a trend with none), `preview_unavailable` (the trend offers no
  *   preview), `invalid_slot_mention` (a `{slot:<key>}` in `details` naming no
  *   slot), `prompt_too_long` (shorten `details`), `draft_unsupported`
- *   (`draft: true` on a trend whose `engine` has no draft: Nodaro Pulse),
- *   `resolution_unsupported` (a `resolution` not in the trend's
+ *   (`draft: true` on a trend whose `engine` has no draft: Nodaro Pulse, or a
+ *   Flash trend), `resolution_unsupported` (a `resolution` not in the trend's
  *   `resolutions`), `too_many_images` (a Nodaro Pulse trend's run would send more
  *   than 10 pictures: send fewer per slot). The slot errors carry the
  *   slot's key as `slot` (in `NodaroError.details`), and `chip_not_offered`
@@ -48,6 +48,10 @@ import type { FirstRemakeOfferQuote, VideoRemakeEngine } from "./cast-swap.js"
  *   `sessionId` is not a session you may use.
  * - 409 `trend_unavailable` (`estimate()` / `run()`): the trend's setup is out
  *   of date — it cannot run until it is updated, so a retry gets the same answer.
+ * - 409 `resolution_unavailable` (`estimate()` / `run()`, a trend whose
+ *   {@link TrendDetail.deliveredResolution} is set): the size asked for is
+ *   offered but cannot be made for this run right now; choose a smaller one, or
+ *   try again later.
  * - 502 `engine_error` (`estimate()` / `run()`).
  * - 503 `engine_unsupported` (this platform version cannot run trends yet),
  *   `trend_unavailable` (`estimate()` / `run()`), `not_available` (this
@@ -105,7 +109,12 @@ export interface TrendChips {
 /** A chip's name: `body`, `outfit`, `hair`, `face`, `coat`, `shape` or `finish`. */
 export type TrendChipKey = keyof TrendChips
 
-export type TrendResolution = "480p" | "720p" | "1080p"
+/**
+ * A size a trend run may ask for. `"4k"` only on a trend whose
+ * {@link TrendDetail.deliveredResolution} is set (its `resolutions` are then
+ * the sizes a run is delivered at).
+ */
+export type TrendResolution = "480p" | "720p" | "1080p" | "4k"
 
 /**
  * The engine a trend runs on, by its public id ({@link VideoRemakeEngine}):
@@ -272,12 +281,23 @@ export interface TrendDetail extends TrendCard {
   /** Its name to show: "Nodaro Prism" or "Nodaro Pulse". Absent from an older server. */
   engineName?: string
   /**
-   * The resolutions a run may ask for, the default first. Nodaro Prism:
+   * The resolutions a run may ask for, the default first. Offer exactly these.
+   * With {@link deliveredResolution}: the sizes a run is delivered at for the
+   * trend's engine choice on this deployment, e.g. `["720p", "1080p", "4k"]`
+   * (the same sizes `client.videoRemake.styleChoice()` lists as its
+   * `resolutions` for that engine choice). Without it: Nodaro Prism
    * `["480p", "720p", "1080p"]`, where 480p is plain unless the run asks for a
-   * draft ({@link TrendRunRequest.draft}); Nodaro Pulse: `["720p", "1080p"]`,
-   * no draft. Offer exactly these.
+   * draft ({@link TrendRunRequest.draft}); Nodaro Pulse `["720p", "1080p"]`,
+   * no draft.
    */
   resolutions: TrendResolution[]
+  /**
+   * `true` when {@link resolutions} are the sizes a run is DELIVERED at: a
+   * run's `resolution` names the size the video comes back at, `"4k"` among
+   * them. Absent (and from an older server): the sizes as listed, read as
+   * before.
+   */
+  deliveredResolution?: true
   slots: TrendDetailSlot[]
   /**
    * Finished runs to show beside the original; may be empty (a trend with only
@@ -316,16 +336,18 @@ export interface TrendRunRequest {
   /** `true` runs a 4-second preview (only when the trend's `previewSec` is `4`). */
   preview?: boolean
   /**
-   * One of the trend's {@link TrendDetail.resolutions}; default its first
-   * (`"480p"` on Nodaro Prism, `"720p"` on Nodaro Pulse). Another answers 400
-   * `resolution_unsupported`.
+   * One of the trend's {@link TrendDetail.resolutions}; default its first.
+   * Another answers 400 `resolution_unsupported` (`"4k"` on a trend without
+   * {@link TrendDetail.deliveredResolution}: 400 `validation_error`). On a trend
+   * with `deliveredResolution`, the size the video is delivered at.
    */
   resolution?: TrendResolution
   /**
    * `true` makes a draft: a 480p run whose same take Full Quality can finish at
-   * 1080p (Nodaro Prism trends only). Default `false`: a plain run, at
-   * 480p too. `true` on a Nodaro Pulse trend answers 400
-   * `draft_unsupported`.
+   * 1080p (Nodaro Prism trends only, whatever {@link TrendDetail.resolutions}
+   * lists; leave `resolution` out or send `"480p"`, else 400
+   * `validation_error`). Default `false`: a plain run. `true` on a Nodaro Pulse
+   * or Flash trend answers 400 `draft_unsupported`.
    */
   draft?: boolean
   /**
@@ -454,6 +476,12 @@ export interface TrendRun {
   slots: TrendRunDisplaySlot[]
   details?: string
   preview: boolean
+  /**
+   * The size it asked for ({@link TrendRunRequest.resolution}, or the
+   * trend's default); once completed, the size its video was delivered at
+   * (on a trend with {@link TrendDetail.deliveredResolution}, a smaller one
+   * when the size asked for could not be finished).
+   */
   resolution: string
   draft: boolean
   /** The engine the run was made on. Absent (an older server) = `"nodaro-prism"`. */

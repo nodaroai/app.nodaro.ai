@@ -227,9 +227,9 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           openWorldHint: true,
         },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v5/job-image",
+        "ui/resourceUri": "ui://nodaro/widget/v6/job-image",
         ui: {
-          resourceUri: "ui://nodaro/widget/v5/job-image",
+          resourceUri: "ui://nodaro/widget/v6/job-image",
           visibility: ["model", "app"],
         },
       },
@@ -527,9 +527,9 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           openWorldHint: true,
         },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v5/job-image",
+        "ui/resourceUri": "ui://nodaro/widget/v6/job-image",
         ui: {
-          resourceUri: "ui://nodaro/widget/v5/job-image",
+          resourceUri: "ui://nodaro/widget/v6/job-image",
           visibility: ["model", "app"],
         },
       },
@@ -752,8 +752,8 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
       },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v5/job-image",
-        ui: { resourceUri: "ui://nodaro/widget/v5/job-image", visibility: ["model", "app"] },
+        "ui/resourceUri": "ui://nodaro/widget/v6/job-image",
+        ui: { resourceUri: "ui://nodaro/widget/v6/job-image", visibility: ["model", "app"] },
       },
     },
     async (args) => {
@@ -861,8 +861,8 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v5/job-image",
-        ui: { resourceUri: "ui://nodaro/widget/v5/job-image", visibility: ["model", "app"] },
+        "ui/resourceUri": "ui://nodaro/widget/v6/job-image",
+        ui: { resourceUri: "ui://nodaro/widget/v6/job-image", visibility: ["model", "app"] },
       },
     },
     async (args) => {
@@ -931,8 +931,8 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v5/job-image",
-        ui: { resourceUri: "ui://nodaro/widget/v5/job-image", visibility: ["model", "app"] },
+        "ui/resourceUri": "ui://nodaro/widget/v6/job-image",
+        ui: { resourceUri: "ui://nodaro/widget/v6/job-image", visibility: ["model", "app"] },
       },
     },
     async (args) => {
@@ -1011,8 +1011,8 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v5/job-image",
-        ui: { resourceUri: "ui://nodaro/widget/v5/job-image", visibility: ["model", "app"] },
+        "ui/resourceUri": "ui://nodaro/widget/v6/job-image",
+        ui: { resourceUri: "ui://nodaro/widget/v6/job-image", visibility: ["model", "app"] },
       },
     },
     async (args) => {
@@ -1123,8 +1123,8 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v5/job-image",
-        ui: { resourceUri: "ui://nodaro/widget/v5/job-image", visibility: ["model", "app"] },
+        "ui/resourceUri": "ui://nodaro/widget/v6/job-image",
+        ui: { resourceUri: "ui://nodaro/widget/v6/job-image", visibility: ["model", "app"] },
       },
     },
     async (args) => {

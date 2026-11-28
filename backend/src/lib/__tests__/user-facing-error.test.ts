@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest"
 import { LlmLaneError, LlmOutputTruncatedError, LlmStreamResponseError, outputCappedMessage } from "../llm-errors.js"
 import { providerDetailOf } from "../provider-error-detail.js"
 import { userFacingMessage } from "../user-facing-error.js"
+import { BOX_SHORTAGE_MESSAGE } from "../../providers/video/ffmpeg-shortage-retry.js"
 
 // A model-lane failure reached the person running a Video Analysis node as
 // "KIE.ai chat-completions gemini-3-flash failed (code 422): The channel is
@@ -85,5 +86,41 @@ describe("llm-client throws typed lane errors", () => {
       const src = readFileSync(file, "utf8")
       expect(src, file).not.toMatch(/throw new Error\(\s*`KIE\.ai/)
     }
+  })
+})
+
+// On 2026-11-25 the container ran out of threads, and the jobs it failed told
+// their owners "ffmpeg failed: spawn ffmpeg EAGAIN" and "Error while opening
+// encoder - maybe incorrect parameters such as bit_rate, rate, width or
+// height": the system's words, and a hint that the file was at fault.
+describe("a failure the server's passing shortage caused", () => {
+  const refusedStart = () => Object.assign(new Error("ffmpeg failed: spawn ffmpeg EAGAIN"), { notStarted: true as const, resourceShortage: true as const })
+  const encoder = () =>
+    Object.assign(new Error("ffmpeg failed: Error while opening encoder - maybe incorrect parameters such as bit_rate, rate, width or height."), {
+      killed: false,
+      resourceShortage: true as const,
+    })
+
+  it("reads as the server being busy, never as the program's words for it", () => {
+    for (const err of [refusedStart(), encoder()]) {
+      const message = userFacingMessage(err, "Unknown error")
+      expect(message).toBe(BOX_SHORTAGE_MESSAGE)
+      expect(message).not.toMatch(/ffmpeg|EAGAIN|encoder|bit_rate/i)
+    }
+  })
+
+  it("is found on what the failure was caused by", () => {
+    expect(userFacingMessage(new Error("Could not burn the captions", { cause: encoder() }), "Unknown error")).toBe(BOX_SHORTAGE_MESSAGE)
+  })
+
+  it("says to try again, and names no credit amount", () => {
+    expect(BOX_SHORTAGE_MESSAGE).toMatch(/try again/)
+    expect(BOX_SHORTAGE_MESSAGE).not.toMatch(/credit/i)
+  })
+
+  it("any other failure keeps its own message", () => {
+    expect(userFacingMessage(new Error("ffmpeg failed: Invalid data found when processing input"), "Unknown error")).toBe(
+      "ffmpeg failed: Invalid data found when processing input",
+    )
   })
 })

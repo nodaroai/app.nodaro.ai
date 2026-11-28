@@ -212,9 +212,10 @@ Because the pro engine generates one segment at a time and checkpoints after eac
 
 `POST /v1/generate-video-pro/:jobId/stop` (also: the SDK's `client.videoPro.stop(jobId)`, the CLI's `nodaro video-pro stop <jobId>`, or the `stop_video_pro` MCP tool).
 
-- The segment currently generating is **abandoned and still billed** — the provider keeps rendering it either way; nothing after it starts.
-- Everything completed so far is stitched into the job's **final video**: the job completes normally with the shorter result (`output_data.pro.stopped = true`, `stoppedAtSegment`, `billedSegments`).
-- The charge is the standard commit formula over the **dispatched** segments (completed + the abandoned one); everything reserved beyond that is refunded. Stopping before the first segment finishes delivers nothing and charges only the fee plus the abandoned first segment; a job that never started is cancelled with a full refund.
+- The active segment finishes and joins the completed portion. The run starts no further segments.
+- The completed portion is stitched into the final video. The job records its stopping point in `output_data.pro`.
+- If the normal stitch fails, the run tries a simple cut between clips and waives the assembly fee. If the simple cut also fails, the first completed clip plays on the node and **Download separate clips** lets you play or download every delivered segment in order. The service retries assembly in the background. A successful repair replaces the primary video, keeps the separate clips, and costs no additional credits.
+- Stopping before any video starts releases the video reservation. A stopped run charges for the video it delivers. A continuation uses the original run’s route and charges for the selected segments it successfully regenerates.
 
 ### Continue (regenerate from a segment)
 
@@ -233,7 +234,7 @@ reserve ≈ 110 (fee) + refPerSec × (K × T + D)      (summed, charged once, ro
 
 where **K** is the number of regenerated segments, **D** the sum of their planned lengths, and **T** the Continuation context setting. Every regenerated segment — the first included — bills at the reference rate, because each re-seeds off the previous footage (the kept prefix for the first one). `fromSegment = 1` degenerates to the fresh-run formula over the same fixed lengths. At commit, only regenerated segments that actually completed are charged; a continuation that produced nothing new refunds in full.
 
-**Worked example (720p, `seedance-2`, the 60s / 5-segment plan above).** Stopped after segment 3 with segment 4 in flight: the delivered video covers segments 1–3, billed for 4 dispatched segments — 4576 credits<!-- credits: (generate-video-pro + seedance-2:8s:720p@1.75 + seedance-2:8s:720p-ref@5.25) -->, the rest of the 5584-credit<!-- credits: (generate-video-pro + seedance-2:8s:720p@1.875 + seedance-2:8s:720p-ref@6.875) --> reserve refunded. Continuing from segment 4 reserves 2035 credits<!-- credits: (generate-video-pro + seedance-2:8s:720p-ref@3.5) --> for the two regenerated segments.
+**Example.** In a five-segment run stopped while segment four is rendering, that segment finishes. The delivered video covers segments one through four, and Resume starts at segment five.
 
 ## Smart cut
 
@@ -325,11 +326,11 @@ reserve = feeBase + Σ segmentPrice(provider, resolution, dᵢ) + anchorBudget
 | 60s | multi | 5 | 62s | 5584<!-- credits: (generate-video-pro + seedance-2:8s:720p@1.875 + seedance-2:8s:720p-ref@6.875) --> |
 | 120s | multi | 9 | 123s | 10327<!-- credits: (generate-video-pro + seedance-2:8s:720p@1.875 + seedance-2:8s:720p-ref@15.5) --> |
 
-**60-second example, in full.** A 60-second request splits into 5 segments (14s, 12s, 12s, 12s, 12s — totaling 62s). Reserved at job start: 5584 credits<!-- credits: (generate-video-pro + seedance-2:8s:720p@1.875 + seedance-2:8s:720p-ref@6.875) -->. If all 5 segments complete, the commit re-prices the first segment at its actual length (14s, not the reserved 15s cap): 5539 credits<!-- credits: (generate-video-pro + seedance-2:8s:720p@1.75 + seedance-2:8s:720p-ref@7) --> — the difference is refunded. Credits are only ever refunded at commit, never charged above the reservation.
+**60-second example, in full.** A 60-second request splits into 5 segments (14s, 12s, 12s, 12s, 12s — totaling 62s). Reserved at job start: 5584 credits<!-- credits: (generate-video-pro + seedance-2:8s:720p@1.875 + seedance-2:8s:720p-ref@6.875) -->. If all 5 segments complete, the commit re-prices the first segment at its actual length (14s, not the reserved 15s cap): 5539 credits<!-- credits: (generate-video-pro + seedance-2:8s:720p@1.75 + seedance-2:8s:720p-ref@7) --> — the difference is refunded. This example uses the standard price schedule. On a deployment with a selected video route, the run strip shows its reservation and the delivered segments settle at the reported actual charge.
 
 ### Partial delivery
 
-If a run is interrupted before every planned segment finishes, the segments that completed are kept and billed — the delivered video ends at the last successfully generated segment, shorter than requested, rather than failing outright. Credits reserved for segments that never ran are refunded. An individual segment's generation attempt that fails and is retried internally is never billed for the retry itself — only segments that make it into the final stitched video count toward the charge.
+If a run is interrupted before every planned segment finishes, the segments that completed are kept and billed — the delivered video ends at the last successfully generated segment, shorter than requested, rather than failing outright. Credits reserved for segments that never ran are refunded. A run that delivers no video releases the reservation. Under standard segment pricing, only the delivered segments count toward the video charge. On a route priced by actual usage, the charge for a delivered video includes each successfully billed generation take, including a take superseded by a quality retry. Failed generation attempts incur no video charge.
 
 ### Interruption recovery
 

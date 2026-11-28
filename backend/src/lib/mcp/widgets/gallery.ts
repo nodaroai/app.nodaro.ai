@@ -9,7 +9,8 @@
  * DOM-construction safety: `document.createElement` + `textContent` +
  * `setAttribute` only.
  */
-import { uiProtocolShim } from "./_common.js"
+import { downloadLinkShim, uiProtocolShim } from "./_common.js"
+import { mcpLaneAddresses } from "../../mcp-lane-addresses.js"
 
 const GALLERY_CSS = `
   :root { color-scheme: light dark; }
@@ -355,12 +356,14 @@ const GALLERY_CSS = `
   }
 `
 
-export function buildGalleryWidgetTemplate(): string {
+/** `pagesBase`: the app host whose download route a Download opens (downloadLinkShim). */
+export function buildGalleryWidgetTemplate(pagesBase: string = mcpLaneAddresses().pagesBase): string {
   return `<!DOCTYPE html>
 <html><head>
 <meta charset="UTF-8" />
 <style>${GALLERY_CSS}</style>
 ${uiProtocolShim()}
+${downloadLinkShim(pagesBase)}
 </head>
 <body>
 <div id="root"><div class="empty">Loading…</div></div>
@@ -744,7 +747,8 @@ ${uiProtocolShim()}
         dlBtn.addEventListener('click', function(ev) {
           ev.stopPropagation();
           if (window.NodaroMCP && window.NodaroMCP.openLink) {
-            window.NodaroMCP.openLink(item.assetUrl);
+            // A video result: the original file kept beside it when there is one (downloadLinkShim).
+            window.NodaroMCP.openLink(window.resultDownloadUrl(item.assetUrl));
           }
         });
         overlay.appendChild(dlBtn);
@@ -1154,7 +1158,7 @@ ${uiProtocolShim()}
       }));
       actionsRight.appendChild(makeIconBtn('Download', 'tpl-download-icon', function() {
         if (window.NodaroMCP && window.NodaroMCP.openLink) {
-          window.NodaroMCP.openLink(item.assetUrl);
+          window.NodaroMCP.openLink(window.resultDownloadUrl(item.assetUrl));
         }
       }));
       actionsRight.appendChild(makeIconBtn('Recreate', 'tpl-icon-recreate', function() {

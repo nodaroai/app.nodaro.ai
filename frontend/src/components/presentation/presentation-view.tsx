@@ -41,6 +41,7 @@ import { spendableCredits } from "@/lib/spendable-credits"
 import { useBillingSurface } from "@/hooks/use-billing-surface"
 import { useAuth, refreshAuth, setAuthFromTokens } from "@/hooks/use-auth"
 import { useWorkflowStore, type PresentationViewMode, type PresentationSettings } from "@/hooks/use-workflow-store"
+import { useRepairedVideoStates } from "@/hooks/use-repaired-video"
 import { usePresentationStore } from "@/hooks/use-presentation-store"
 import type { WorkflowNode, PresentationDisplay, GeneratedResult } from "@/types/nodes"
 import {
@@ -253,7 +254,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
   const presEdges = usePresentationStore((s) => s.edges)
   const presName = usePresentationStore((s) => s.workflowName)
   const presStatus = usePresentationStore((s) => s.executionStatus)
-  const presNodeStates = usePresentationStore((s) => s.nodeStates)
+  const presNodeStates = useRepairedVideoStates(usePresentationStore((s) => s.nodeStates))
   const presRun = usePresentationStore((s) => s.run)
   const presInputValues = usePresentationStore((s) => s.inputValues)
   const presUpdateInput = usePresentationStore((s) => s.updateInputValue)
@@ -1293,6 +1294,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
           elementSize={elementSize}
           fieldBadges={fieldBadges}
           actions={nodeActions}
+          clipOutput={runOutput}
           preview={anyOutputIsPreview(node.type, nodeData, runOutput, listResults)}
         />
       )
@@ -1327,6 +1329,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
                 elementSize={elementSize}
                 fieldBadges={i === 0 ? fieldBadges : undefined}
                 actions={resultActions}
+                clipOutput={(runOutput?.listResultStamps as unknown[] | undefined)?.[i] ?? (resultUrl === runOutput?.videoUrl ? runOutput : undefined)}
                 preview={outputIsPreview(node.type, nodeData, runOutput, resultUrl)}
               />
             )
@@ -1349,6 +1352,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
         elementSize={elementSize}
         fieldBadges={fieldBadges}
         actions={nodeActions}
+        clipOutput={runOutput}
         preview={outputIsPreview(node.type, nodeData, runOutput)}
       />
     )

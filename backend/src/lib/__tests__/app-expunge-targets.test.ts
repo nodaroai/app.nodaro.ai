@@ -738,6 +738,7 @@ describe("collectAppExpungeTargets — paging", () => {
 const JOB_PATCH = {
   input_data: {},
   output_data: null,
+  video_assembly_recovery: null,
   held_output_data: null,
   restricted_output_data: null,
   error_message: null,

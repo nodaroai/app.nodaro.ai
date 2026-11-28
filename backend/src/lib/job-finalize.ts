@@ -28,6 +28,7 @@ import { UNIT_NODE_DESCRIPTORS } from "./unit-descriptors.js"
 import { composeSet, unitsWith } from "./unit-compose.js"
 import { AUDIO_TYPES, IMAGE_TYPES, VIDEO_TYPES, type FinalizeJobType, type ProviderFinalizeResult } from "./job-finalize-types.js"
 import { assertExtraImageSets, libraryImagesOf, storeExtraImageSets, storeWithAttempts, type DroppedExtraImages, type ExtraImageSet, type StoredExtraImages } from "./job-finalize-store.js"
+import { isRoutedJobRow } from "./video-route-ledger.js"
 import { DISCARD_AFTER_MISSED_BLOCK, DISCARD_STATUSES, discardUnfinishedStores, storeLedger } from "./job-finalize-discard.js"
 
 // The job types, the provider result and the extra-image declarations live in their own modules; callers import them from here.
@@ -245,12 +246,13 @@ export const NOT_GENERIC_RECOVERABLE: ReadonlySet<string> = composeSet("NOT_GENE
  * writing a second copy.
  */
 export async function loadUsageLogId(jobId: string): Promise<string | null> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("usage_logs")
     .select("id")
     .eq("job_id", jobId)
     .eq("status", "reserved")
     .limit(1)
+  if (error) throw new Error(`Job ${jobId}: could not verify its open reservation: ${error.message}`)
   return (data?.[0] as { id: string } | undefined)?.id ?? null
 }
 
@@ -423,6 +425,14 @@ export interface FinalizeInput {
    *  result, unless it asked for a format, and every extra image). Absent: 1,
    *  exactly as before. A failed attempt stores and counts nothing. */
   storeAttempts?: number
+  /** An IMAGE job whose result's file type no request decides (a model that
+   *  does not state what it returns: Long Image's tall picture): stored as
+   *  what its bytes are (`storeFormattedImages`, lib/image-output-store.ts),
+   *  as a job `imageStoredAsItsBytes` names is. The caller that knows its
+   *  model says so here, on every path that delivers the job (its worker and
+   *  its recovery), so no central list names the model. Absent: decided by
+   *  `imageStoredAsItsBytes(input_data)`, exactly as before. */
+  storeAsItsBytes?: boolean
   /** Credits for work NOT reflected in the provider's USD cost (e.g. a
    *  successful loop-trim add-on). Passed through to commitJobCredits so the
    *  provider-cost reconciliation doesn't refund it. Defaults to none. */
@@ -578,9 +588,10 @@ export async function finalizeJobWithMedia(
   }
   const attempts = input.storeAttempts ?? 1
   try {
-    if (IMAGE_TYPES.has(jobType) && imageStoredAsItsBytes(job.input_data)) {
-      // A run that asked for JPEG, WebP, a GIF or an SVG, or of a model whose
-      // format follows its size (Kling Image 4.0): stored as what its bytes
+    if (IMAGE_TYPES.has(jobType) && (input.storeAsItsBytes === true || imageStoredAsItsBytes(job.input_data))) {
+      // A run that asked for JPEG, WebP, a GIF or an SVG, of a model whose
+      // format follows its size (Kling Image 4.0), or whose caller says its
+      // file type is not stated (`storeAsItsBytes`): stored as what its bytes
       // are, an SVG made safe first (a refused one fails the job with a
       // refund, lib/image-output-store.ts), with a PNG still of a GIF or SVG.
       const isSet = typeof job.input_data?.setHoldCreditId === "string"
@@ -742,7 +753,7 @@ export async function finalizeJobWithMedia(
   // plugin settles or releases it, or the sweep does.
   const deferred = usageLogId !== null && isDeferredSettlementJob(job)
   const deferredFields = deferred && usageLogId !== null
-    ? await deferredCompletionFields({ usageLogId, commit: commitReplay, providerCost: result.cost ?? null, workflowExecutionId: job.workflow_execution_id, rule: storedDeferRule(job.input_data) })
+    ? await deferredCompletionFields({ jobId, usageLogId, commit: commitReplay, providerCost: result.cost ?? null, workflowExecutionId: job.workflow_execution_id, rule: storedDeferRule(job.input_data) })
     : {}
   const outcome = await markJobCompletedDetailed(
     jobId,
@@ -759,6 +770,7 @@ export async function finalizeJobWithMedia(
       // they are ordinary `jobs` columns, NOT settlement inputs, so they must
       // never appear in HELD_COMMIT_REPLAY_KEYS or the commitReplay below.
       ...relayFieldsFrom(result),
+      ...(usageLogId !== null && isRoutedJobRow(job.input_data) && { video_route_addons_base: input.extraNonProviderCredits ?? 0 }),
       ...deferredFields,
     },
     // THE hold-eligible funnel: this is the only completion whose tail

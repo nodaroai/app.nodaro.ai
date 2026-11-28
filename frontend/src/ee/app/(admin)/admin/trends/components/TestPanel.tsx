@@ -15,6 +15,13 @@
 // resolution, draft and details, to make another run close to it — the run is
 // started with Run test as always, against the saved draft. "Delete" removes a
 // run and its media after a confirmation (not while it is running).
+//
+// The sizes: the ones the saved draft's engine makes (480p, 720p, 1080p on
+// Prism; 720p, 1080p on Pulse), a draft only at Prism's 480p, as before; where
+// this environment's engine reads trend runs by the size delivered, the
+// server's `runSizes` instead (the sizes a run is delivered at, 4K among them),
+// and Draft a switch of its own: the engine's 480p take whatever the sizes, so
+// the size buttons step aside while it is on.
 
 import { useRef, useState } from "react"
 import { Copy, Eye, Link2, ListChecks, Loader2, Maximize2, Play, Sparkles, Trash2, X } from "lucide-react"
@@ -50,6 +57,7 @@ import type {
   TrendChipKey,
   TrendChoice,
   TrendResolution,
+  TrendRunSize,
   TrendTestRunRequest,
 } from "@/lib/api"
 import {
@@ -85,27 +93,40 @@ interface Props {
   readonly previewInput?: PreviewClipStatus
   /** The SAVED draft's engine: its resolutions are offered, and a draft only where it has one. */
   readonly engine: AdminTrendEngine
+  /** The SAVED draft runs on its engine's Flash choice: no draft. */
+  readonly flash?: boolean
+  /**
+   * The sizes a test run may ask for where this environment's engine reads trend runs by the size delivered
+   * (the server's `runSizes`); absent: the sizes the saved draft's engine makes, as before.
+   */
+  readonly runSizes?: { readonly resolutions: readonly TrendRunSize[]; readonly delivered: true }
   /** Unsaved edits: a run would not test them, so it waits for a save. */
   readonly dirty: boolean
   readonly promotingId: string | null
   readonly onPromote: (jobId: string) => void
 }
 
-export function TestPanel({ trendId, slots, hasPreview, previewInput, engine, dirty, promotingId, onPromote }: Props) {
-  const resolutions: readonly TrendResolution[] = CAST_SWAP_RESOLUTIONS_BY_ENGINE[engine]
-  const hasDraft = castSwapEngineHasDraft(engine)
+/** A size in words: "4K" for "4k". */
+const sizeLabel = (size: string): string => (size === "4k" ? "4K" : size)
+
+export function TestPanel({ trendId, slots, hasPreview, previewInput, engine, flash, runSizes, dirty, promotingId, onPromote }: Props) {
+  const delivered = runSizes?.delivered === true && runSizes.resolutions.length > 0
+  const resolutions: readonly TrendRunSize[] = delivered ? runSizes!.resolutions : (CAST_SWAP_RESOLUTIONS_BY_ENGINE[engine] as readonly TrendResolution[])
+  const hasDraft = castSwapEngineHasDraft(engine) && flash !== true
   const start = useStartTrendTestRun(trendId)
   const runs = useTrendTestRuns(trendId)
   const [images, setImages] = useState<Record<string, string[]>>({})
   const [chips, setChips] = useState<Record<string, ChipChoices>>({})
   const [uploadingKey, setUploadingKey] = useState<string | null>(null)
   const [preview, setPreview] = useState(true)
-  const [picked, setResolution] = useState<TrendResolution>(resolutions[0]!)
+  const [picked, setResolution] = useState<TrendRunSize>(resolutions[0]!)
   // A resolution the saved engine does not render (it changed since) falls back to its default.
   const resolution = resolutions.includes(picked) ? picked : resolutions[0]!
-  // A Prism 480p test runs plain, like a user's default run; the switch makes it a draft.
+  // A Prism 480p test runs plain, like a user's default run; the switch makes it a draft. Read by the size delivered,
+  // the draft is the engine's 480p take whatever size is picked.
   const [draft, setDraft] = useState(false)
-  const draftable = hasDraft && resolution === "480p"
+  const draftable = hasDraft && (delivered || resolution === "480p")
+  const draftOn = draftable && draft
   const [details, setDetails] = useState("")
   const [promptOf, setPromptOf] = useState<{ jobId: string; runMode: AdminTrendPromptMode } | null>(null)
   const [stepsOf, setStepsOf] = useState<string | null>(null)
@@ -128,7 +149,7 @@ export function TestPanel({ trendId, slots, hasPreview, previewInput, engine, di
     setImages(nextImages)
     setChips(nextChips)
     setPreview(r.preview)
-    if ((resolutions as readonly string[]).includes(r.resolution)) setResolution(r.resolution as TrendResolution)
+    if ((resolutions as readonly string[]).includes(r.resolution)) setResolution(r.resolution as TrendRunSize)
     setDraft(r.draft)
     setDetails(r.details ?? "")
     const gone = r.slots.filter((x) => !slots.some((s) => s.key === x.key)).map((x) => x.label || x.key)
@@ -192,7 +213,8 @@ export function TestPanel({ trendId, slots, hasPreview, previewInput, engine, di
           .filter(([, entry]) => Object.keys(entry).length > 0),
       ),
       preview: hasPreview && preview,
-      resolution,
+      // A draft read by the size delivered sends no size: it is the engine's 480p take.
+      ...(delivered && draftOn ? {} : { resolution }),
       ...(draftable ? { draft } : {}),
       ...(details.trim() ? { details: details.trim() } : {}),
     }
@@ -301,19 +323,27 @@ export function TestPanel({ trendId, slots, hasPreview, previewInput, engine, di
                   type="button"
                   size="sm"
                   className="min-h-9"
-                  variant={resolution === r ? "default" : "outline"}
-                  aria-pressed={resolution === r}
+                  variant={resolution === r && !(delivered && draftOn) ? "default" : "outline"}
+                  aria-pressed={resolution === r && !(delivered && draftOn)}
+                  disabled={delivered && draftOn}
                   onClick={() => setResolution(r)}
                 >
-                  {r}
+                  {sizeLabel(r)}
                 </Button>
               ))}
             </div>
             {hasDraft && (
               <label className={cn("flex min-h-9 items-center gap-2", !draftable && "opacity-50")}>
-                <Switch aria-label="Draft" checked={draftable && draft} disabled={!draftable} onCheckedChange={setDraft} />
-                Draft
+                <Switch aria-label="Draft" checked={draftOn} disabled={!draftable} onCheckedChange={setDraft} />
+                {delivered ? "Draft (480p)" : "Draft"}
               </label>
+            )}
+            {delivered && (
+              <span className="basis-full text-xs text-muted-foreground" data-run-sizes="delivered">
+                {draftOn
+                  ? "A draft is the engine's own 480p take, whatever size is picked; Full Quality can finish it at 1080p."
+                  : "The sizes a run is delivered at in this environment, as people see them."}
+              </span>
             )}
           </div>
           <label className="flex flex-col gap-1 text-sm">
@@ -478,7 +508,7 @@ function RunCard({
           <span>v{run.trend.version}</span>
           <span>{run.preview ? "preview" : "full"}</span>
           <span>
-            {run.resolution}
+            {sizeLabel(run.resolution)}
             {run.draft ? " draft" : ""}
           </span>
           {castSwapEngineFrom(run.engine) === "kling-4" && <span>{run.engineName ?? "Nodaro Pulse"} (Kling 4)</span>}

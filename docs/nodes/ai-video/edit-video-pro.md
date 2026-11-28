@@ -64,6 +64,8 @@ The bridge always renders at the largest resolution tier the selected provider s
 
 ## Credit pricing
 
+The Run strip quotes the selected model and span against the connected source. When the deployment routes this model for Edit Video Pro, the reservation includes the quoted bridge segments and the edit fee. A delivered segment settles at its actual charge. The following examples use the standard price schedule.
+
 ```
 credits ≈ 110 + refRate(resolution) × (bridgeSeconds + referenceSeconds)   (one charge, rounded up)
 ```
@@ -92,7 +94,8 @@ The two 10-second spans on the same 20-second source land on different totals de
 - **Output frame rate is 24 fps.**
 - **Kept footage is re-encoded, not stream-copied.** The untouched footage before and after the replaced span is cut with a high-quality encode (crf 18) and joined to the generated bridge with the same splice encode the platform's other stitch operations use — the delivered file is a single consistently-encoded video, not a byte-identical copy of the original spliced with new content.
 - **Free-tier output carries the standard watermark**, the same as every other video-output node.
-- **Any failure or cancellation is a full refund, including the flat fee.** Unlike Generate Video Pro's multi-segment runs (which can keep and bill for whatever completed before an interruption), Edit Video Pro either delivers the fully stitched result or refunds the entire reservation — there's no partial delivery of a half-replaced span.
+- **Stop before the first bridge segment starts** releases the reservation. Once a segment has started, Stop lets it finish and delivers the completed portion without starting another segment.
+- If the normal assembly fails, the run waives the assembly fee and tries simple cuts. If both assemblies fail, **Download separate clips** lets you play or download the delivered clips in order, with the first playable immediately. Background assembly can restore the edit with its retained source footage. The separate clips remain available and the repair costs no additional credits. A run that delivers no video releases its reservation.
 - **Runs survive worker restarts.** Progress checkpoints after every bridge segment; if the processing worker restarts mid-run (for example during a platform deploy), the run resumes automatically from the checkpoint instead of failing — already-generated bridge segments are never re-generated. Only a run that stalls again after its automatic resume is failed and refunded.
 
 ## Best practices

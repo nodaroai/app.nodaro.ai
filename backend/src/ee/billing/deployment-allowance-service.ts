@@ -51,6 +51,7 @@
  * numbers can be rendered. A read-then-reserve race overshoots by a bounded
  * amount that the RPC, not this file, refuses.
  */
+import { retryCreditTransaction } from "./credit-transaction-retry.js"
 import { supabase } from "../../lib/supabase.js"
 import { deploymentPayerActive, deploymentPayerId } from "../../lib/deployment-payer.js"
 import type {
@@ -427,14 +428,14 @@ export async function grantAllowance(params: {
    *  precisely so that this module, its one caller, states it every time. */
   credentialId?: string | null
 }): Promise<AllowanceWriteResult> {
-  const { error } = await supabase.rpc("grant_deployment_allowance", {
+  const { error } = await retryCreditTransaction(() => supabase.rpc("grant_deployment_allowance", {
     p_user_id: params.userId,
     p_credits: params.credits,
     p_actor_id: params.actorId,
     p_kind: params.kind,
     p_note: params.note,
     p_credential_id: params.credentialId ?? null,
-  })
+  }))
   if (error) {
     const classified = classifyGrantError(error.message ?? "")
     console.error(`[deployment-allowance] grant refused (${classified.code}):`, classified.message)

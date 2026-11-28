@@ -1112,3 +1112,54 @@ describe("a trend made on a Flash choice (decided 2026-11-22)", () => {
     expect(trendVersionDataSchema.safeParse({ ...version(), flash: "yes" }).success).toBe(false)
   })
 })
+
+describe("composeTrendRun — the trend's sizes (sizes.ts)", () => {
+  const PRISM = { delivered: true, sizes: ["720p", "1080p", "4k"] } as const
+  const PULSE = { delivered: true, sizes: ["720p", "1080p", "4k"] } as const
+  const kling = () => trend(version({ engine: "kling-4" }))
+
+  it("sizes the engine makes (left out, or not delivered) compose exactly as before", () => {
+    for (const r of [req(), req({ resolution: "720p" }), req({ draft: true }), req({ preview: true })]) {
+      const before = composeTrendRun(trend(), r)
+      expect(composeTrendRun(trend(), r, { sizes: { delivered: false, sizes: ["480p", "720p", "1080p"] } })).toEqual(before)
+      expect(before.body.trendRun).toEqual({ display: before.display })
+    }
+  })
+
+  it("sizes delivered: the first one by default, the one asked for, each with the marker and draft false", () => {
+    expect(composeTrendRun(trend(), req(), { sizes: PRISM }).body).toMatchObject({ resolution: "720p", draft: false, trendRun: { delivered: true } })
+    expect(composeTrendRun(trend(), req({ resolution: "4k" }), { sizes: PRISM }).body).toMatchObject({ resolution: "4k", draft: false, trendRun: { delivered: true } })
+    expect(composeTrendRun(kling(), req({ resolution: "1080p" }), { sizes: PULSE }).body).toMatchObject({ engine: "kling-4", resolution: "1080p", draft: false, trendRun: { delivered: true } })
+  })
+
+  it("sizes delivered: one not listed is refused, naming the sizes listed", () => {
+    const e = codeOf(() => composeTrendRun(trend(), req({ resolution: "480p" }), { sizes: PRISM }))
+    expect(e.code).toBe("resolution_unsupported")
+    try {
+      composeTrendRun(trend(), req({ resolution: "480p" }), { sizes: PRISM })
+    } catch (err) {
+      expect((err as TrendRunError).message).toBe("This trend runs at 720p or 1080p or 4K, not 480p.")
+    }
+    expect(codeOf(() => composeTrendRun(kling(), req({ resolution: "480p" }), { sizes: PULSE })).code).toBe("resolution_unsupported")
+  })
+
+  it("sizes delivered: a draft is the engine's own 480p take, sent as before without the marker; above 480p a validation error", () => {
+    for (const r of [req({ draft: true }), req({ draft: true, resolution: "480p" })]) {
+      const { body } = composeTrendRun(trend(), r, { sizes: PRISM })
+      expect(body).toMatchObject({ resolution: "480p", draft: true })
+      expect(body.trendRun).not.toHaveProperty("delivered")
+      // Exactly the body the engine was sent before (the draft was always read by the size it makes).
+      expect(body).toEqual(composeTrendRun(trend(), r).body)
+    }
+    expect(codeOf(() => composeTrendRun(trend(), req({ draft: true, resolution: "720p" }), { sizes: PRISM })).code).toBe("validation_error")
+    expect(codeOf(() => composeTrendRun(kling(), req({ draft: true }), { sizes: PULSE })).code).toBe("draft_unsupported")
+    expect(codeOf(() => composeTrendRun(trend(version({ flash: true })), req({ draft: true }), { sizes: { delivered: true, sizes: ["720p", "1080p"] } })).code).toBe("draft_unsupported")
+  })
+
+  it("a request may carry 4K only where the engine reads trend runs by the size delivered (the schema of each way)", async () => {
+    const { trendRunRequestSchemaDelivered } = await import("../schemas.js")
+    expect(trendRunRequestSchema.safeParse({ slots: {}, resolution: "4k" }).success).toBe(false)
+    expect(trendRunRequestSchemaDelivered.safeParse({ slots: {}, resolution: "4k" }).success).toBe(true)
+    expect(trendRunRequestSchemaDelivered.safeParse({ slots: {}, resolution: "8k" }).success).toBe(false)
+  })
+})

@@ -310,6 +310,14 @@ export async function generateCharacterMotionRoutes(app: FastifyInstance) {
       //    character motions must never leak to the public gallery,
       //    regardless of what the caller sends in `forcePrivate`.
       // ───────────────────────────────────────────────────────────────────
+      // Resolve aspect ratio: motions default to 9:16 (full-body vertical clip).
+      // Explicit > node override > default.
+      const aspectRatio = resolveCharacterAspectRatio({
+        explicit: parsed.data.aspectRatio,
+        nodeOverride: parsed.data.characterNodeAspectRatio,
+        assetType: "motions",
+      })
+
       const mcpClient = extractMcpClient(req.body)
       const { data: job, error } = await insertJob(req, {
           workflow_id: extractWorkflowId(req.body),
@@ -317,7 +325,8 @@ export async function generateCharacterMotionRoutes(app: FastifyInstance) {
           force_private: true,
           user_id: userId,
           status: "pending",
-          input_data: { ...withResolvedModel(buildJobInputData(parsed.data, "generate-character-motion"), "generate-character-motion"), prompt },
+          job_type: "generate-character-motion",
+          input_data: { ...withResolvedModel(buildJobInputData(parsed.data, "generate-character-motion"), "generate-character-motion"), sourceImageUrl: resolvedSourceImageUrl, aspectRatio, prompt },
           ...(mcpClient ? { mcp_client: mcpClient } : {}),
         })
 
@@ -339,14 +348,6 @@ export async function generateCharacterMotionRoutes(app: FastifyInstance) {
       //    characters.motions[] entry (Task 1 migration gives motions the
       //    richer shape with motionDescription).
       // ───────────────────────────────────────────────────────────────────
-      // Resolve aspect ratio: motions default to 9:16 (full-body vertical clip).
-      // Explicit > node override > default.
-      const aspectRatio = resolveCharacterAspectRatio({
-        explicit: parsed.data.aspectRatio,
-        nodeOverride: parsed.data.characterNodeAspectRatio,
-        assetType: "motions",
-      })
-
       await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("generate-character-motion", {
         jobId: job.id,
         prompt,

@@ -313,6 +313,7 @@ function ImageOverlayNodeComponent({ id, data, selected }: NodeProps) {
                     {nodeData.overlayVariants.map((v) => (
                       <a
                         key={v.id}
+                        // download-site: an image result
                         href={`/v1/image-proxy?url=${encodeURIComponent(v.url)}&download=1`}
                         download={`${nodeData.label || "overlay"}-${v.id}.${nodeData.outputFormat ?? "png"}`}
                         className="px-1.5 py-0.5 rounded-md bg-black/55 hover:bg-cta backdrop-blur-sm border border-white/10 text-white text-[11px]"
@@ -370,6 +371,7 @@ function ImageOverlayNodeComponent({ id, data, selected }: NodeProps) {
                     onClick={(e) => {
                       e.stopPropagation()
                       const a = document.createElement("a")
+                      // download-site: an image result
                       a.href = `/v1/image-proxy?url=${encodeURIComponent(activeUrl!)}&download=1`
                       a.download = `${nodeData.label || "overlay"}.${nodeData.outputFormat ?? "png"}`
                       a.click()

@@ -12,6 +12,7 @@ import { Plus, Inbox, Play, PenLine, Loader2, Square } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth, refreshAuth, setAuthFromTokens } from "@/hooks/use-auth"
 import { useAppRunnerStore } from "@/hooks/use-app-runner-store"
+import { useRepairedVideoStates } from "@/hooks/use-repaired-video"
 import { usePresentationStore } from "@/hooks/use-presentation-store"
 import { useUserCredits, getCachedCredits, prefetchModelCredits, isModelUnpriced } from "@/ee/hooks/queries/use-credits-queries"
 import { useLiveRunFigure } from "@/hooks/use-live-run-estimate"
@@ -112,7 +113,7 @@ export function MobileAppShell({
   // ---- Stores ----
   const presNodes = usePresentationStore((s) => s.nodes)
   const presEdges = usePresentationStore((s) => s.edges)
-  const presNodeStates = usePresentationStore((s) => s.nodeStates)
+  const presNodeStates = useRepairedVideoStates(usePresentationStore((s) => s.nodeStates))
   const presInputValues = usePresentationStore((s) => s.inputValues)
   const presUpdateInput = usePresentationStore((s) => s.updateInputValue)
   const presRun = usePresentationStore((s) => s.run)
@@ -829,6 +830,7 @@ export function MobileAppShell({
           iterationCompleted={iterationCompleted}
           elementSize={elementSize}
           fieldBadges={fieldBadges}
+          clipOutput={runOutput}
           preview={anyOutputIsPreview(node.type, nodeData, runOutput, listResults)}
         />
       )
@@ -850,6 +852,7 @@ export function MobileAppShell({
               onOpenMedia={handleOpenMedia}
               elementSize={elementSize}
               fieldBadges={i === 0 ? fieldBadges : undefined}
+              clipOutput={(runOutput?.listResultStamps as unknown[] | undefined)?.[i] ?? (resultUrl === runOutput?.videoUrl ? runOutput : undefined)}
               preview={outputIsPreview(node.type, nodeData, runOutput, resultUrl)}
             />
           ))}
@@ -870,6 +873,7 @@ export function MobileAppShell({
         progress={progress}
         elementSize={elementSize}
         fieldBadges={fieldBadges}
+        clipOutput={runOutput}
         preview={outputIsPreview(node.type, nodeData, runOutput)}
       />
     )

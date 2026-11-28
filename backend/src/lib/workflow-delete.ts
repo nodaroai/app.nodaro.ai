@@ -9,6 +9,7 @@ import { readCoversInScope, type CoverScope } from "./job-cover/cover-release.js
 import { releaseCoversOfJobs } from "./job-cover/cover-store.js"
 import { hasCredits } from "./config.js"
 import type { DeleteScopeForRelease } from "./deferred-child-delete.js"
+import { removeDeletedJobsRecordedFiles } from "./deleted-job-files.js"
 
 interface WorkflowDeleteLogger {
   warn(fields: Record<string, unknown>, message: string): void
@@ -75,8 +76,10 @@ export function _resetStoredBytesReportForTests(): void {
 }
 
 /**
- * Atomically delete an owner-scoped workflow while retaining the server-only
- * R2 cleanup manifest that its cascading job delete would otherwise erase.
+ * Atomically delete an owner-scoped workflow (or project, or job) while
+ * retaining what its cascading job delete would otherwise erase: the
+ * server-only R2 cleanup manifest of private Recast bases, and the files the
+ * deleted jobs' server-only records held (lib/deleted-job-files.ts).
  * The private URLs never leave this backend helper or enter owner-readable
  * jobs JSON. R2 deletion is deliberately best-effort after the durable delete:
  * a storage outage must not resurrect a workflow the user already destroyed.
@@ -157,6 +160,16 @@ async function deleteWithPrivateMedia(args: {
   // 2026-11-25, migration 708): given back to each job's own owner now that the
   // delete really happened. Never throws.
   await giveBackDeletedJobsStoredBytes(data, args.logger)
+
+  // The files those records held (a kept original, a raw clip), as the same
+  // delete answered them (migration 736): removed now unless something still
+  // uses them, giving nothing back — their bytes came back just above. Never
+  // throws; a file storage does not confirm gone goes to the retry pass.
+  try {
+    await removeDeletedJobsRecordedFiles(data, { logger: args.logger, scope: args.scope })
+  } catch (err) {
+    args.logger?.warn({ ...args.scope, err: err instanceof Error ? err.message : String(err) }, "the deleted jobs' recorded files were not removed; they stay in storage")
+  }
 
   const keys = new Set<string>()
   let skipped = 0

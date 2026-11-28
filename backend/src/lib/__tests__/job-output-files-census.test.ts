@@ -124,6 +124,8 @@ const OUTSIDE_A_JOB_FAMILY: Readonly<Record<string, string>> = {
     `${NOT_A_JOB} (the preview input clip's cut of the trend's stored face mask, \`trends/<trendId>/<uuid>.mp4\`: the trend owns it, never a job)`,
   "lib/audio-soundtrack.ts :: args.key":
     `${CACHE} (a Kling 4.0 soundtrack clip, \`uploads/video/<userId>/soundtrack-<digest>.mp4\`, keyed by the audio, frame and length it is made of: a quote and its run, or a run done again, read one copy)`,
+  "ee/lib/trend-radar/stills.ts :: stillKey(post)":
+    `${NOT_A_JOB} (a Trend Radar post's still, \`trend-radar/stills/<hash of the post link>.jpg\`, kept for the admin review page because the platform's own still link expires: the radar owns it, never a job; one copy per post, reused by every later read)`,
   "lib/character-lora.ts :: key": `${NOT_A_JOB} (a character's LoRA training zip)`,
   "lib/large-upload-storage.ts :: key": `${UPLOAD} (the large-upload lane's multipart object, \`uploads/<kind>s/<uuid>.<ext>\`)`,
   "lib/media-import.ts :: r2Key": UPLOAD,
@@ -274,7 +276,7 @@ const IN_FAMILY_BUILT_ELSEWHERE: Readonly<Record<string, { key: (jobId: string) 
     key: (j) => `videos/${originalVideoObjectId(j)}.mov`,
     why: "a video result's kept original, `videos/<jobId>-master.<ext>` (`originalId = originalVideoObjectId(opts.jobId)`): the job's family, beside its preview at the job's own slot",
   },
-  "lib/private-plugins/toolkit.ts :: jobFileObjectId(getJobId(), \"combine\")": {
+  "lib/private-plugins/toolkit.ts :: assemblyIntermediateId() ?? jobFileObjectId(getJobId(), \"combine\")": {
     key: (j) => `videos/${jobFileObjectId(j, "combine")}.mp4`,
     why: "the toolkit's combine-videos result, keyed by the RUNNING job (`getJobId()`, the job whose handler called the toolkit); outside a job no job owns it and the id is random",
   },
@@ -510,7 +512,7 @@ describe("temporary provider uploads (decided 2026-10-09)", () => {
     expect(Object.keys(SCRATCH_CALL_SITES).filter((s) => !sites.includes(s))).toEqual([])
   })
 
-  it("only the video worker opens a job context, and it empties the scratch folder when the job ends", () => {
+  it("every worker opening a job context empties its scratch folder when it ends", () => {
     const opened: string[] = []
     for (const path of sourceFiles(BACKEND_SRC)) {
       const file = relative(BACKEND_SRC, path).split("\\").join("/")
@@ -520,8 +522,8 @@ describe("temporary provider uploads (decided 2026-10-09)", () => {
     // Another worker running handlers in a job context would write scratch
     // that only the video worker's `finally` empties: wire `discardJobScratch`
     // there before adding it here.
-    expect(opened).toEqual(["workers/video-worker.ts"])
-    expect(readFileSync(join(BACKEND_SRC, "workers", "video-worker.ts"), "utf8")).toMatch(/\bdiscardJobScratch\(/)
+    expect(opened).toEqual(["lib/video-assembly-recovery.ts", "workers/video-worker.ts"])
+    for (const file of opened) expect(readFileSync(join(BACKEND_SRC, file), "utf8")).toMatch(/\bdiscardJobScratch\(/)
   })
 
   it("no exception above excuses a staging copy: one must go through the scratch writers", () => {

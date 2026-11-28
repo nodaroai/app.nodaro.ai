@@ -1,5 +1,7 @@
+import { videoRequestAsRun } from "../../lib/video-request-norm.js"
 // @registry-enumerates lists every quotable node unit (unitQuotableTypes) in the 400 for an unknown type and in the route's OpenAPI description
 import { adjustmentsForRun } from "../../lib/driving-audio-measure.js"
+import type { AlternateRouteJobType } from "../../lib/alternate-route-request.js"
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { nodeRunRoute } from "@nodaro/shared/nodes"
@@ -12,18 +14,28 @@ import { unitQuotableTypes, unitQuoteOf } from "../../lib/unit-quotes.js"
 import type { RoutePricing as RegisteredPricing } from "../../middleware/credit-guard.js"
 import { deniedRunModels, runNodeRefusal, type RoutePricing } from "../../middleware/credit-guard.js"
 import { callerBodyOf } from "../../middleware/server-only-body-keys.js"
-import { handlePriceNotConfigured, markedUpCredits, reservedCreditsFor } from "../lib/credit-guard-impl.js"
+import { handlePriceNotConfigured, markedUpCredits, reservedCreditsFor, routedAddonCredits } from "../lib/credit-guard-impl.js"
 import { textToVideoBody, textToVideoPricing } from "../../routes/text-to-video.js"
-import { generateVideoBody, generateVideoPricing } from "../../routes/generate-video.js"
+import { dispatchesVoicedVideo, generateVideoBody, generateVideoPricing } from "../../routes/generate-video.js"
 import { videoToVideoBody, videoToVideoPricing } from "../../routes/video-to-video.js"
 import { videoUpscaleBody, videoUpscalePricing } from "../../routes/video-upscale.js"
 import { editImageBody, editImagePricing } from "../../routes/edit-image.js"
 import { aiAvatarBody, aiAvatarPricing } from "../../routes/ai-avatar.js"
 import { cinematicAvatarBody, cinematicAvatarPricing } from "../../routes/cinematic-avatar.js"
 import { switchXBody, switchXPricing } from "../../routes/switchx.js"
+import { extendVideoBody, extendVideoPricing } from "../../routes/extend-video.js"
 import { lipSyncBody, lipSyncPricing } from "../../routes/lip-sync.js"
 
 const ROUTE = "/v1/quote"
+
+/** The quotable node types whose run can take the alternate route, and the job type (the service) their run holds. */
+const ROUTED_QUOTE_JOB_TYPES: Readonly<Record<string, AlternateRouteJobType>> = {
+  "generate-video": "image-to-video",
+  "text-to-video": "text-to-video",
+  "lip-sync": "lip-sync",
+  "video-to-video": "text-to-video",
+  "extend-video": "extend-video",
+}
 
 /** A node type a quote can price: its run route's OWN body schema and pricing chain. */
 export interface QuotableNode {
@@ -57,6 +69,7 @@ export const QUOTABLE_NODE_TYPES: Readonly<Record<string, QuotableNode>> = {
   // Lip Sync: a model priced by its audio's length on the audio measured as the run measures it;
   // LatentSync's hold, charged what its run used, is the most it costs (`settles_to_actual`).
   "lip-sync": { schema: () => lipSyncBody, pricing: lipSyncPricing },
+  "extend-video": { schema: () => extendVideoBody, pricing: extendVideoPricing },
 }
 
 /**
@@ -262,8 +275,27 @@ export function registerNodeQuote(app: FastifyInstance): void {
     }
     try {
       const identifier = entry.pricing.modelResolver(req)
-      const reserve = await reservedCreditsFor(req, identifier, entry.pricing.opts)
-      return { data: await quoteFrom(identifier, reserve, withEntryNotes(req.priceNotes ?? EMPTY_PRICE_NOTES, entry.notes), adjustmentsForRun(req.videoNorm?.adjustments ?? [], req.drivingAudio)) }
+      // A model the admin routed to the alternate route is quoted as its run
+      // would be held: the route's quote for THIS request (its measured clips
+      // included), never the listed row (ee/billing/video-route-admission.ts).
+      // Loaded only for a quote of a type that can be routed (kept off this route's cold start).
+      const runInput = videoRequestAsRun(req.body as Record<string, unknown>, req.videoNorm)
+      const routedJobType = type === "generate-video" && dispatchesVoicedVideo(runInput) ? "voiced-video" : ROUTED_QUOTE_JOB_TYPES[type]
+      const { quoteRoutedVideo, routedFinalizeCredits } = routedJobType || type === "video-upscale"
+        ? await import("../billing/video-route-admission.js")
+        : { quoteRoutedVideo: async () => null, routedFinalizeCredits: async () => null }
+      const routed = routedJobType
+        ? await quoteRoutedVideo({ priceId: identifier, jobType: routedJobType, input: { ...runInput, ...(req.videoNorm?.duration !== undefined ? { duration: req.videoNorm.duration } : {}), ...(req.videoNorm?.resolution ? { resolution: req.videoNorm.resolution } : {}), ...(req.refVideoDurationsSec ? { refVideoDurationsSec: req.refVideoDurationsSec } : {}) } })
+        : null
+      // The run's own pricing step runs first either way, as the run's guard runs it (it notes the add-ons).
+      const defaultReserve = await reservedCreditsFor(req, identifier, entry.pricing.opts)
+      // A routed draft's finalize (resolved by the run's own pre-check) is quoted on its route, as its hold is.
+      const routedFinalize = type === "video-upscale" && req.seedanceDraftFinalize ? await routedFinalizeCredits(req.seedanceDraftFinalize) : null
+      const reserve = routedFinalize ?? (routed !== null ? routed + (await routedAddonCredits(req, identifier)) : defaultReserve)
+      const notes = withEntryNotes(req.priceNotes ?? EMPTY_PRICE_NOTES, entry.notes)
+      // The default supplier's expected settlement is meaningless on a different route.
+      const routeNotes = routed !== null || routedFinalize !== null ? { ...notes, expectedBase: undefined } : notes
+      return { data: await quoteFrom(identifier, reserve, routeNotes, adjustmentsForRun(req.videoNorm?.adjustments ?? [], req.drivingAudio)) }
     } catch (err) {
       if (handlePriceNotConfigured(err, reply, ROUTE)) return reply
       throw err

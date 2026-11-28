@@ -52,6 +52,7 @@ if (edition === "cloud") {
     houseModels: {} as never,
     // Alternate routes are asked only inside a video run; no tool registers on them.
     alternateRoutes: {} as never,
+    videoAssemblyRecovery: {} as never,
   }
   const engines: Required<{ [K in keyof PluginEngines]: never }> = { scene3d: engine, surround: engine, smartCut: engine }
   publishStandInPluginServices(services)

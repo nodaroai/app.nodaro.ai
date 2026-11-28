@@ -81,8 +81,9 @@ function bucketWrite(b: Buffer, key: string, conditional?: { ifMatch?: string; i
 }
 
 import sharp from "sharp"
+import { scaledTimeout } from "../../../../tools/vitest/ci-limits.mjs"
 import { discardEndedSetImages } from "../image-set-storage.js"
-import { discardUndeliveredImages, imageStoredAsItsBytes, requestedImageFormat, sniffImageFormat, storeFormattedImages } from "../image-output-store.js"
+import { discardUndeliveredImages, imageStoredAsItsBytes, requestedImageFormat, sniffImageFormat, storeFormattedImages, WEBP_MAX_SIDE } from "../image-output-store.js"
 import { SVG_REFUSED_MESSAGE } from "../svg-sanitize.js"
 import { isDeterministicJobError } from "../deterministic-job-error.js"
 import { isPostProcessingError } from "../post-processing-error.js"
@@ -255,6 +256,48 @@ describe("a set is stored one picture at a time, and a file over the cap is made
     const [stored] = uploads()[0]!
     const meta = await sharp(stored).metadata()
     expect([meta.format, meta.width, meta.height, meta.hasAlpha]).toEqual(["webp", 256, 256, true])
+  })
+
+  it("an opaque picture over the cap with a side past what a WebP holds (a whole page in one picture) is stored as the JPEG it is re-encoded to, every pixel kept", async () => {
+    const tall = await sharp({ create: { width: 64, height: WEBP_MAX_SIDE + 117, channels: 3, background: "#e8e0d0" } }).png({ compressionLevel: 0 }).toBuffer()
+    mocks.imageCap.bytes = tall.length - 1
+    serve(tall)
+    const out = await storeFormattedImages({ sourceUrls: ["https://kie/long.png"], jobId: JOB, userId: "u1", watermark: false })
+    expect(out).toMatchObject({ format: "jpeg", mimeType: "image/jpeg", urls: [`https://cdn.test/images/${JOB}.jpg`] })
+    const meta = await sharp(uploads()[0]![0]).metadata()
+    expect([meta.format, meta.width, meta.height]).toEqual(["jpeg", 64, WEBP_MAX_SIDE + 117])
+  })
+
+  // Watermarking a 33,000-pixel-tall picture is real image work: it is given room on a slow host.
+  it("a free account's such picture keeps its watermark and its size, past 32,767 pixels too", { timeout: scaledTimeout(30_000) }, async () => {
+    const tall = await sharp({ create: { width: 64, height: 33000, channels: 3, background: "#ffffff" } }).png({ compressionLevel: 0 }).toBuffer()
+    mocks.imageCap.bytes = tall.length - 1
+    serve(tall)
+    const out = await storeFormattedImages({ sourceUrls: ["https://kie/long.png"], jobId: JOB, userId: "u1", watermark: true })
+    expect(out.format).toBe("jpeg")
+    const meta = await sharp(uploads()[0]![0]).metadata()
+    expect([meta.format, meta.width, meta.height]).toEqual(["jpeg", 64, 33000])
+  })
+
+  it("a picture with an alpha channel it does not use (opaque everywhere) is treated as opaque: the JPEG, every pixel kept", async () => {
+    const tall = await sharp({ create: { width: 48, height: WEBP_MAX_SIDE + 50, channels: 4, background: { r: 200, g: 180, b: 160, alpha: 1 } } }).png({ compressionLevel: 0 }).toBuffer()
+    expect((await sharp(tall).metadata()).hasAlpha).toBe(true)
+    mocks.imageCap.bytes = tall.length - 1
+    serve(tall)
+    const out = await storeFormattedImages({ sourceUrls: ["https://kie/long.png"], jobId: JOB, userId: "u1", watermark: false })
+    expect(out.format).toBe("jpeg")
+    const meta = await sharp(uploads()[0]![0]).metadata()
+    expect([meta.format, meta.width, meta.height]).toEqual(["jpeg", 48, WEBP_MAX_SIDE + 50])
+  })
+
+  it("a see-through picture over the cap with a side past what a WebP holds is scaled to fit one, its shape and its alpha kept", async () => {
+    const tall = await sharp({ create: { width: 40, height: WEBP_MAX_SIDE * 2, channels: 4, background: { r: 10, g: 200, b: 30, alpha: 0.5 } } }).png({ compressionLevel: 0 }).toBuffer()
+    mocks.imageCap.bytes = tall.length - 1
+    serve(tall)
+    const out = await storeFormattedImages({ sourceUrls: ["https://kie/long.png"], jobId: JOB, userId: "u1", watermark: false })
+    expect(out.format).toBe("webp")
+    const meta = await sharp(uploads()[0]![0]).metadata()
+    expect([meta.format, meta.width, meta.height, meta.hasAlpha]).toEqual(["webp", 20, WEBP_MAX_SIDE, true])
   })
 
   it("a file under the cap is stored byte for byte", async () => {

@@ -11,6 +11,7 @@
  * and which audio a Suno Separate run separates. In-repo workspace package under the root license;
  * never published to npm.
  */
+export { deliveredVideoClips, videoRepairSource, savedVideoSources, repairedCanvasTake, replacementVideoUrl, type DeliveredVideoClip, type VideoRepair, type VideoRepairSource } from "./pro-video-delivery"
 // A Teleport pair passes on exactly what entered it: both engines and the canvas read the bypassed graph.
 export {
   bypassTeleports,
@@ -1108,6 +1109,46 @@ export {
   type LayerSplitSize,
   type LayerSplitTier,
 } from "./layer-split"
+// Long Image's modes, sizes, picture inputs and credit ids (route, payload, worker, panel, Run, price.ee.ts).
+export {
+  LONG_IMAGE_DEFAULT_LENGTH,
+  LONG_IMAGE_DEFAULT_MODE,
+  LONG_IMAGE_DEFAULT_RESOLUTION,
+  LONG_IMAGE_LENGTHS,
+  LONG_IMAGE_MAX_PRODUCT_IMAGES,
+  LONG_IMAGE_MODES,
+  LONG_IMAGE_PRODUCT_INPUTS,
+  LONG_IMAGE_PROMPT_MAX,
+  LONG_IMAGE_RESOLUTIONS,
+  LONG_IMAGE_STYLE_INPUT,
+  LONG_IMAGE_STYLE_NAME,
+  LONG_IMAGE_SUBJECT_INPUT,
+  LONG_IMAGE_SUBJECT_NAME,
+  LONG_IMAGE_TEXT_AT,
+  longImageCreditId,
+  longImageCreditIds,
+  longImageDataCreditId,
+  longImageInputImages,
+  longImageLength,
+  longImageMode,
+  longImageMostInputImages,
+  longImagePictureInputs,
+  longImageProblem,
+  longImageProductName,
+  longImagePrompt,
+  longImageResolution,
+  longImageRun,
+  longImageRunCreditId,
+  longImageSentProducts,
+  longImageWiredCreditId,
+  longImageWiredPictures,
+  type LongImageLength,
+  type LongImageMode,
+  type LongImagePictures,
+  type LongImageRequest,
+  type LongImageResolution,
+  type LongImageRun,
+} from "./long-image"
 // Suno Speech's modes, limits and the allow-listed provider input (route, payload, worker, panel, Run).
 export {
   DEFAULT_SUNO_SPEECH_MODE,

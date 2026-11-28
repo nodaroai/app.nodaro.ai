@@ -5,13 +5,16 @@
  * ladder or a proxy chain stops at once instead of spawning again.
  */
 import { spawn, type ChildProcess } from "node:child_process"
+import { BOX_SHORTAGE_MESSAGE, isResourceShortage, spawnShowsShortage } from "./ffmpeg-shortage-retry.js"
+import { retryOnBoxShortage } from "./box-shortage.js"
 
-export type YtDlpHaltReason = "aborted" | "out_of_time" | "refused" | "too_much_output"
+export type YtDlpHaltReason = "aborted" | "out_of_time" | "refused" | "too_much_output" | "server_busy"
 
 /**
  * A run that must not be tried again on another client or proxy: the caller
  * aborted, the time ran out, yt-dlp's length/live filter refused the video,
- * or it printed far more than any answer is.
+ * it printed far more than any answer is, or the server could not start it
+ * at all (no process was free, and waiting did not help).
  */
 export class YtDlpHaltError extends Error {
   constructor(
@@ -63,6 +66,51 @@ function signalGroup(pid: number, signal: NodeJS.Signals): boolean {
   }
 }
 
+/** A run with no wall-clock limit of its own may spend this long being started again; the run itself is not held to it. */
+const START_AGAIN_BUDGET_MS = 8 * 60_000
+
+/** A spawn's own error, marked when the system refused the start for want of a process: the run never began. */
+const startFailure = (err: Error): Error =>
+  spawnShowsShortage(err as NodeJS.ErrnoException) ? Object.assign(err, { resourceShortage: true as const }) : err
+
+/**
+ * A yt-dlp the system refused to START — no process was free, the box's
+ * passing shortage (2026-11-25: `spawn yt-dlp EAGAIN` on every proxy attempt
+ * of a download, inside one second) — is started again after a wait, like an
+ * ffmpeg launch (`box-shortage.ts`). Nothing ran, so nothing is done twice.
+ * `budgetMs` bounds the waiting as a launch's kill budget does; `once` is
+ * handed what is left of it and what has passed, for the run's own limits.
+ *
+ * A wait that gives up HALTS the run: the next client or proxy would be
+ * refused the same way, and the person reads that the server is busy, not the
+ * system's words for it.
+ */
+async function startAgainWhenRefused<T>(
+  limits: YtDlpRunLimits,
+  budgetMs: number,
+  once: (leftMs: number, passedMs: number) => Promise<T>,
+): Promise<T> {
+  const startedAt = Date.now()
+  try {
+    return await retryOnBoxShortage((leftMs) => once(leftMs, Date.now() - startedAt), {
+      limitMs: budgetMs,
+      label: "yt-dlp",
+      ...(limits.signal ? { signal: limits.signal } : {}),
+    })
+  } catch (err) {
+    if (err instanceof YtDlpHaltError) throw err
+    // The abort that ended a wait is the halt yt-dlp itself raises.
+    if (limits.signal?.aborted) throw new YtDlpHaltError("yt-dlp aborted", "aborted")
+    if (!isResourceShortage(err)) throw err
+    console.error(`[yt-dlp] could not be started, no process was free: ${err instanceof Error ? err.message : String(err)}`)
+    throw Object.assign(new YtDlpHaltError(BOX_SHORTAGE_MESSAGE, "server_busy"), { resourceShortage: true as const, cause: err })
+  }
+}
+
+/** What is left of a wall-clock limit after `passedMs`; none stays none. */
+const leftOf = (totalMs: number | undefined, passedMs: number): number | undefined =>
+  totalMs === undefined ? undefined : Math.max(1, totalMs - passedMs)
+
 /** The limits a run is held to by its caller. */
 export interface YtDlpRunLimits {
   /** Replaces the child's environment (the hardened lane passes a minimal one). */
@@ -93,6 +141,17 @@ export const CAPTURE_MAX_BYTES = 8 * 1024 * 1024
  * `totalTimeoutMs` and `signal` halt it. Output past `maxBytes` halts it too.
  */
 export function runYtDlpCaptureWith(
+  bin: string,
+  args: readonly string[],
+  opts: YtDlpRunLimits & { timeoutMs: number; maxBytes?: number },
+): Promise<string> {
+  // A capture never outlasts its own `timeoutMs`, the waits to be started included.
+  return startAgainWhenRefused(opts, opts.timeoutMs, (leftMs, passedMs) =>
+    captureOnce(bin, args, { ...opts, timeoutMs: Math.min(opts.timeoutMs, leftMs), totalTimeoutMs: leftOf(opts.totalTimeoutMs, passedMs) }),
+  )
+}
+
+function captureOnce(
   bin: string,
   args: readonly string[],
   opts: YtDlpRunLimits & { timeoutMs: number; maxBytes?: number },
@@ -130,7 +189,7 @@ export function runYtDlpCaptureWith(
     proc.stderr?.on("data", (chunk: Buffer) => {
       stderr = (stderr + chunk.toString()).slice(-64 * 1024)
     })
-    proc.on("error", (err) => finish(() => reject(err)))
+    proc.on("error", (err) => finish(() => reject(startFailure(err))))
     proc.on("close", (code) => finish(() => (code === 0 ? resolve(stdout) : reject(exitError(code, stderr)))))
   })
 }
@@ -156,6 +215,12 @@ export interface YtDlpExitError extends Error {
  * message and `trimAudio` reads `.stderr`.
  */
 export function runYtDlpToEndWith(bin: string, args: readonly string[], opts: YtDlpRunLimits = {}): Promise<void> {
+  return startAgainWhenRefused(opts, opts.totalTimeoutMs ?? START_AGAIN_BUDGET_MS, (_leftMs, passedMs) =>
+    toEndOnce(bin, args, { ...opts, totalTimeoutMs: leftOf(opts.totalTimeoutMs, passedMs) }),
+  )
+}
+
+function toEndOnce(bin: string, args: readonly string[], opts: YtDlpRunLimits): Promise<void> {
   if (opts.signal?.aborted) return Promise.reject(new YtDlpHaltError("yt-dlp aborted", "aborted"))
   return new Promise<void>((resolve, reject) => {
     const proc = spawnYtDlpProcess(bin, args, opts.env)
@@ -186,7 +251,7 @@ export function runYtDlpToEndWith(bin: string, args: readonly string[], opts: Yt
     proc.stderr?.on("data", (chunk: Buffer) => {
       stderr = (stderr + chunk.toString()).slice(-64 * 1024)
     })
-    proc.on("error", (err) => finish(() => reject(err)))
+    proc.on("error", (err) => finish(() => reject(startFailure(err))))
     proc.on("close", (code) =>
       finish(() => {
         if (code === 0) return resolve()
@@ -203,6 +268,17 @@ export function runYtDlpToEndWith(bin: string, args: readonly string[], opts: Yt
  * ordinary failure), and the caller's limits (a halt).
  */
 export function spawnYtDlpDownloadWith(
+  bin: string,
+  args: readonly string[],
+  onProgress: ((pct: number) => void) | undefined,
+  opts: YtDlpRunLimits & { idleTimeoutMs: number },
+): Promise<void> {
+  return startAgainWhenRefused(opts, opts.totalTimeoutMs ?? START_AGAIN_BUDGET_MS, (_leftMs, passedMs) =>
+    downloadOnce(bin, args, onProgress, { ...opts, totalTimeoutMs: leftOf(opts.totalTimeoutMs, passedMs) }),
+  )
+}
+
+function downloadOnce(
   bin: string,
   args: readonly string[],
   onProgress: ((pct: number) => void) | undefined,
@@ -254,7 +330,7 @@ export function spawnYtDlpDownloadWith(
       kick()
       stderrBuf = (stderrBuf + chunk.toString()).slice(-64 * 1024)
     })
-    proc.on("error", (err) => finish(() => reject(err)))
+    proc.on("error", (err) => finish(() => reject(startFailure(err))))
     proc.on("close", (code) => finish(() => (code === 0 ? resolve() : reject(exitError(code, stderrBuf)))))
   })
 }

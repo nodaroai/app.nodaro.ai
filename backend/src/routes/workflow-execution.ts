@@ -7,6 +7,8 @@ import { executionOutcome } from "@nodaro/shared/workflow"
  * GET  /v1/workflows/:id/executions — List executions for a workflow
  */
 
+import { stopRuleSelect } from "../lib/video-route-schema.js"
+import { STOP_RULE_COLUMNS, finishesWhenStopped, stopsAtSegmentBoundary, followedLane, type StopRuleRow } from "../lib/stop-rule.js"
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { assertCanvasExecutionAllowed, SequenceExecutionRequiredError } from "@nodaro/shared/pipeline"
@@ -1466,10 +1468,11 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
 
     // Fallback: check if it's a standalone job (single-node execution)
     if (error || !execution) {
+      const jobSelect = await stopRuleSelect(`id, status, provider, ${STOP_RULE_COLUMNS}`)
       const { data: job, error: jobError } = await supabase
         // trash-read: cancelling stops work: a deleted job still running can be stopped.
         .from("jobs")
-        .select("id, status, provider")
+        .select(jobSelect)
         .eq("id", parsed.data.id)
         .eq("user_id", req.userId)
         .single()
@@ -1501,11 +1504,15 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       // own status filter would flip zero rows and report success anyway.
       // A use-case wrapper goes there too: only that helper also stops the
       // hidden run the wrapper owns.
-      if (isParkedJobStatus(job.status as string) || job.provider === "use-case") {
+      if (isParkedJobStatus(job.status as string) || job.provider === "use-case" || stopsAtSegmentBoundary(job)) {
         const withdrawal = await cancelOwnedJob(parsed.data.id, req.userId)
         if (withdrawal.kind === "cancelled") invalidateBalanceCache(req.userId)
-        return { success: true }
+        return withdrawal.kind === "in_flight" ? { success: true, inFlight: true } : { success: true }
       }
+
+      // The stop rule (lib/stop-rule.ts): a followed video run whose task already
+      // started finishes in the owner's library and is charged — not cancelled.
+      if (finishesWhenStopped(job as StopRuleRow)) return { success: true, inFlight: true }
 
       // Try to remove from BullMQ queue before marking cancelled
       tryRemoveFromQueue(parsed.data.id).catch(() => {})
@@ -1514,13 +1521,15 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       // between the status read above and this write must NOT be trampled
       // `completed → cancelled` after its credits committed. Refund only
       // when WE flipped the row (mirrors the child-job branch below).
-      const { data: cancelledRows } = await supabase
+      let single = supabase
         .from("jobs")
         .update({ status: "cancelled" })
         .eq("id", parsed.data.id)
         .eq("user_id", req.userId)
         .in("status", ["pending", "queued", "processing", "running"])
-        .select("id")
+      // A followed run is cancelled only while no task exists (a free cancel).
+      if (followedLane(job as StopRuleRow)) single = single.is("provider_task_id", null).is("video_send_started_at", null)
+      const { data: cancelledRows } = await single.select("id")
 
       if (cancelledRows && cancelledRows.length > 0) {
         // Out of its concurrency lane (a waiting job must not stay at the head
@@ -1594,10 +1603,11 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     if (targetStatus === "cancelled") {
       const userId = req.userId
       void (async () => {
+        const runJobsSelect = await stopRuleSelect(`id, provider, ${STOP_RULE_COLUMNS}`)
         const { data: activeJobs } = await supabase
           // trash-read: cancelling an execution stops all its running jobs.
           .from("jobs")
-          .select("id, provider")
+          .select(runJobsSelect)
           .eq("workflow_execution_id", parsed.data.id)
           // The execution is the caller's (checked above); so are its jobs.
           // Another user's row naming it is not cancelled or refunded here.
@@ -1614,26 +1624,53 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
             console.error(`[cancel] use-case wrapper ${id}:`, err),
           )
         }
-        const bulk = (activeJobs ?? []).filter((j) => j.provider !== USE_CASE_WRAPPER_PROVIDER && !wrappers.includes(j.id as string))
+        // The stop rule (lib/stop-rule.ts): a followed video run whose task already
+        // started is left running — it finishes in the library and is charged.
+        const proJobs = (activeJobs ?? []).filter(stopsAtSegmentBoundary)
+        // One job's cancel failing never leaves the others of the run uncancelled.
+        for (const job of proJobs) {
+          await cancelOwnedJob(job.id, userId).catch((err: unknown) => console.error(`[cancel] segmented video job ${job.id}:`, err))
+        }
+        const bulk = (activeJobs ?? []).filter((j) => !stopsAtSegmentBoundary(j) && j.provider !== USE_CASE_WRAPPER_PROVIDER && !wrappers.includes(j.id as string) && !finishesWhenStopped(j as StopRuleRow))
         if (wrappers.length > 0 && bulk.length === 0) invalidateBalanceCache(userId)
 
         if (bulk.length > 0) {
           const jobIds = bulk.map((j) => j.id)
           await Promise.allSettled(jobIds.map((jid) => tryRemoveFromQueue(jid)))
-          await supabase
-            .from("jobs")
-            .update({ status: "cancelled" })
-            .in("id", jobIds)
-            // CAS: only cancel jobs still live. A worker can complete (and commit)
-            // a job in the window between the SELECT above and this UPDATE; without
-            // this guard the UPDATE would flip that completed+committed row to
-            // "cancelled" (user charged, output detached from its terminal status).
-            .in("status", ["pending", "queued", "processing"])
+          // A followed run (no task yet when read) is cancelled only while it still has none.
+          const followedIds = bulk.filter((j) => followedLane(j as StopRuleRow)).map((j) => j.id)
+          const otherIds = jobIds.filter((jid) => !followedIds.includes(jid))
+          if (otherIds.length > 0) {
+            await supabase
+              .from("jobs")
+              .update({ status: "cancelled" })
+              .in("id", otherIds)
+              // CAS: only cancel jobs still live. A worker can complete (and commit)
+              // a job in the window between the SELECT above and this UPDATE; without
+              // this guard the UPDATE would flip that completed+committed row to
+              // "cancelled" (user charged, output detached from its terminal status).
+              .in("status", ["pending", "queued", "processing"])
+          }
+          // A followed run is cancelled only while it still has no task; one whose
+          // task was saved in between keeps running and keeps its hold.
+          const followedFlipped: string[] = []
+          if (followedIds.length > 0) {
+            const { data } = await supabase
+              .from("jobs")
+              .update({ status: "cancelled" })
+              .in("id", followedIds)
+              .in("status", ["pending", "queued", "processing"])
+              .is("provider_task_id", null).is("video_send_started_at", null)
+              .select("id")
+            for (const r of (data ?? []) as Array<{ id: string }>) followedFlipped.push(r.id)
+          }
+          const refundable = [...otherIds, ...followedFlipped]
           // Its queued children leave their lanes again, now that they are
           // cancelled (a pickup between the removal and the flip could have
           // parked one once more). A processing child's lease is its worker's.
           await Promise.all(jobIds.map((jid) => withdrawFromLane(jid)))
-          await refundReservedCreditsForJobs(jobIds)
+          // A run left running (its task started in between) keeps its hold, which its own settle charges.
+          if (refundable.length > 0) await refundReservedCreditsForJobs(refundable)
           invalidateBalanceCache(userId)
         }
       })().catch(() => {})

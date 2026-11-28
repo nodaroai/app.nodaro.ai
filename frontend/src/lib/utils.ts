@@ -24,6 +24,7 @@ export function downloadTextFile(text: string, filename: string) {
   const url = URL.createObjectURL(blob)
   const a = document.createElement("a")
   a.href = url
+  // download-site: a file this page made (a JSON or text export), no stored result
   a.download = filename
   a.click()
   URL.revokeObjectURL(url)

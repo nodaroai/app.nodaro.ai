@@ -55,7 +55,7 @@ export interface SavedDefaultRequest {
   readonly body: Readonly<Record<string, unknown>>
 }
 
-export type AlternateRouteState = "claimed" | "running" | "resubmitting" | "fell-back"
+export type AlternateRouteState = "claimed" | "running" | "resubmitting" | "fell-back" | "failed"
 
 export interface AlternateRouteRecord {
   readonly state: AlternateRouteState
@@ -68,6 +68,15 @@ export interface AlternateRouteRecord {
   /** When the route's task first read done with no result file (alerted once). */
   readonly doneWithoutResultAt?: number
   readonly fallback?: SavedDefaultRequest
+  /**
+   * The run was routed by the admin's policy (a `__videoRoute` decision): it
+   * never falls back, and the recovery never resends the default request.
+   */
+  readonly routed?: true
+  /** A routed run's `start` attempts so far (at most 2: one retry of a create that made nothing). */
+  readonly attempt?: number
+  /** Which send of the job the record belongs to (1 when absent). */
+  readonly send?: number
 }
 
 /**
@@ -103,7 +112,7 @@ function savedDefaultRequestOf(v: unknown): SavedDefaultRequest | undefined {
   return { taskModel, modelKey, body: body as Record<string, unknown> }
 }
 
-const STATES: ReadonlySet<string> = new Set<AlternateRouteState>(["claimed", "running", "resubmitting", "fell-back"])
+const STATES: ReadonlySet<string> = new Set<AlternateRouteState>(["claimed", "running", "resubmitting", "fell-back", "failed"])
 
 /** The route's record on a job's `input_data`, or undefined when there is none (or it is not one). */
 export function alternateRouteRecordOf(inputData: unknown): AlternateRouteRecord | undefined {
@@ -121,6 +130,9 @@ export function alternateRouteRecordOf(inputData: unknown): AlternateRouteRecord
     ...(typeof r.message === "string" ? { message: r.message } : {}),
     ...(typeof r.doneWithoutResultAt === "number" && Number.isFinite(r.doneWithoutResultAt) ? { doneWithoutResultAt: r.doneWithoutResultAt } : {}),
     ...(fallback ? { fallback } : {}),
+    ...(r.routed === true ? { routed: true as const } : {}),
+    ...(typeof r.attempt === "number" && Number.isInteger(r.attempt) && r.attempt > 0 ? { attempt: r.attempt } : {}),
+    ...(typeof r.send === "number" && Number.isInteger(r.send) && r.send > 0 ? { send: r.send } : {}),
   }
 }
 

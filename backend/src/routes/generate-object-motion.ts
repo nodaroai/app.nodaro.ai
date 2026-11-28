@@ -200,6 +200,7 @@ export async function generateObjectMotionRoutes(app: FastifyInstance) {
           force_private: true,
           user_id: userId,
           status: "pending",
+          job_type: "generate-object-motion",
           input_data: {
             ...withResolvedModel(buildJobInputData(parsed.data, "generate-object-motion"), "generate-object-motion"),
             prompt,

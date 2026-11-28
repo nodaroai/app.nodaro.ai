@@ -104,6 +104,11 @@ vi.mock("node:fs", async (importOriginal) => {
 vi.mock("@/ee/billing/edit-video-pro-credits.js", () => ({
   computeEditVideoProPricing: mockComputeEditVideoProPricing,
 }))
+// The routed pricing the member adds when the admin routed the model (not routed here).
+const mockRoutedEditVideoProPricing = vi.fn(async () => undefined as unknown)
+vi.mock("@/ee/billing/video-route-admission.js", () => ({
+  routedEditVideoProPricing: mockRoutedEditVideoProPricing,
+}))
 // Same shim for the Voice Changer Pro pricing member.
 const mockComputeVoiceChangerProPricing = vi.fn()
 vi.mock("@/ee/billing/voice-changer-pro-credits.js", () => ({
@@ -355,6 +360,12 @@ describe("toolkit.ts — edit-video-pro members", () => {
 
       expect(mockComputeEditVideoProPricing).toHaveBeenCalledWith(args)
       expect(result).toBe(pricingResult)
+
+      // Routed for Edit Video Pro: the same plan, with the route's pricing beside it.
+      const route = { quote: "q", segmentChargedCredits: [90], feeChargedCredits: 4, reserveChargedCredits: 94 }
+      mockRoutedEditVideoProPricing.mockResolvedValueOnce(route)
+      expect(await tk.http.computeEditVideoProPricing(args)).toEqual({ ...pricingResult, route })
+      expect(mockRoutedEditVideoProPricing).toHaveBeenLastCalledWith("kie", pricingResult)
     })
   })
 

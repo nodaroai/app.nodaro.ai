@@ -603,7 +603,8 @@ describe("retryFailedStorageDeletes", () => {
   describe("a failed delete that checked job links: a job made after the failure that links the file keeps it (decided 2026-10-09)", () => {
     // The user's own deletes that checked job links on their first try record
     // "asset" (the library delete, and the media delete through it) or "media"
-    // (the media delete's row-less branch, media-process). Their first-try
+    // (the media delete's row-less branch, media-process), and a job deleted for
+    // good records "job-delete" for its recorded files. Their first-try
     // rules differ — the library delete held a file one of the user's jobs
     // linked, the media delete did not (the job being wiped still names the
     // url) — so the retry asks one rule of both: only a job created AFTER the
@@ -614,7 +615,7 @@ describe("retryFailedStorageDeletes", () => {
     const FILE_URL = `https://cdn.example.com/${FILE}`
     const recordOf = (source: string, url: string | null = FILE_URL) => row(0, FILE, url, null, RECORDED_AT, source)
 
-    describe.each(["asset", "media"])("source %s", (source) => {
+    describe.each(["asset", "media", "job-delete"])("source %s", (source) => {
       it("keeps the file and drops the record when such a job links it: no lookup in storage, no delete, no blanking", async () => {
         h.state.selectAnswers = [{ data: [recordOf(source)], error: null }]
         h.urlsLinkedByJobsSince.mockResolvedValue(new Set([FILE_URL]))
@@ -684,7 +685,7 @@ describe("retryFailedStorageDeletes", () => {
     // before, even were a later job to link the file. Read off the
     // `DeleteSource` union, so a new path is covered (and unguarded) by default.
     const union = readFileSync(new URL("../storage-delete.ts", import.meta.url), "utf8").match(/export type DeleteSource =([\s\S]*?)\n\n/)
-    const unguarded = [...(union?.[1] ?? "").matchAll(/"([^"]+)"/g)].map((m) => m[1]!).filter((s) => s !== "asset" && s !== "media")
+    const unguarded = [...(union?.[1] ?? "").matchAll(/"([^"]+)"/g)].map((m) => m[1]!).filter((s) => s !== "asset" && s !== "media" && s !== "job-delete")
 
     it("the union lists the retention reapers' source and the other paths", () => {
       expect(unguarded).toContain("retention")

@@ -15,6 +15,8 @@ const { mockOrchestrationQueueAdd, mockTryRemoveFromQueue, mockCheckIsAdmin, moc
 // The app_settings version read unreadable: the TTL-only behaviour, and no
 // extra `from()` call in the mocked sequence (the version itself:
 // lib/__tests__/app-settings-cross-process.test.ts, ee/lib/__tests__/app-settings-config-caches.test.ts).
+// The database has the routed-video columns (probed once per process in production: lib/video-route-schema.ts).
+vi.mock("../../lib/video-route-schema.js", () => ({ videoRouteSchemaReady: async () => true, stopRuleSelect: async (select: string) => select }))
 vi.mock("@/lib/app-settings-version.js", () => ({
   appSettingsVersion: async () => null,
   appSettingsChangedSince: async () => false,
@@ -1583,6 +1585,59 @@ describe("POST /v1/workflow-executions/:id/cancel", () => {
     expect(mockSettleActual).not.toHaveBeenCalled() // never committed (whole or otherwise) at the cancel
     expect(mockRefundCredits).not.toHaveBeenCalledWith("metered-log")
     expect(mockAppReport).toHaveBeenCalledWith(expect.objectContaining({ kind: "metered-hold-unsettled-on-cancel", jobId: METERED_JOB }))
+  })
+
+  it("bulk cancel (a Stop, an app run's cancel): a Seedance 2.x child whose task started is left running and keeps its hold", async () => {
+    const STARTED = "00000000-0000-4000-8000-000000000091"
+    const UNSTARTED = "00000000-0000-4000-8000-000000000092"
+    const OTHER = "00000000-0000-4000-8000-000000000093"
+    const holds = [
+      { id: "started-log", job_id: STARTED, action: "seedance-2-5:8s:720p" },
+      { id: "unstarted-log", job_id: UNSTARTED, action: "seedance-2-5:8s:720p" },
+      { id: "other-log", job_id: OTHER, action: "nano-banana" },
+    ]
+    const flipped: Array<{ ids: unknown[]; noTaskOnly: boolean }> = []
+    vi.mocked(supabase.from).mockImplementation(((table: string) => {
+      if (table === "workflow_executions") {
+        return {
+          select: () => ({ eq: () => ({ eq: () => ({ single: async () => ({ data: { id: TEST_EXEC_ID, status: "running" }, error: null }) }) }) }),
+          update: () => ({ eq: async () => ({ data: null, error: null }) }),
+        }
+      }
+      if (table === "usage_logs") {
+        return { select: () => ({ in: (_c: string, ids: string[]) => ({ eq: async () => ({ data: holds.filter((x) => ids.includes(x.job_id)), error: null }) }), eq: () => ({ eq: async () => ({ data: holds, error: null }) }) }) }
+      }
+      return {
+        select: () => ({
+          eq: () => ({
+            eq: () => ({ in: async () => ({ data: [
+              { id: STARTED, provider: "kie", job_type: "image-to-video", provider_task_id: "kie-task-1", model: "seedance-2-5" },
+              { id: UNSTARTED, provider: "kie", job_type: "image-to-video", provider_task_id: null, model: "seedance-2-5" },
+              { id: OTHER, provider: "kie", job_type: "generate-image", provider_task_id: "kie-task-2", model: "nano-banana" },
+            ], error: null }) }),
+            maybeSingle: async () => ({ data: { reconcile_attempts: 0, reconcile_last_error: null, provider_call_started_at: null }, error: null }),
+          }),
+          in: async () => ({ data: [], error: null }),
+        }),
+        update: () => ({
+          in: (_c: string, ids: unknown[]) => ({
+            in: () => {
+              const done = { then: (ok: (v: unknown) => unknown) => (flipped.push({ ids, noTaskOnly: false }), Promise.resolve({ data: null, error: null }).then(ok)) }
+              return Object.assign(done, { is: () => ({ is: () => ({ select: async () => (flipped.push({ ids, noTaskOnly: true }), { data: ids.map((id) => ({ id })), error: null }) }) }) })
+            },
+          }),
+        }),
+      }
+    }) as never)
+
+    const res = await authedPost(`/v1/workflow-executions/${TEST_EXEC_ID}/cancel`)
+    expect(res.statusCode).toBe(200)
+    await vi.waitFor(() => expect(flipped.length).toBeGreaterThan(0))
+    await vi.waitFor(() => expect(mockRefundCredits).toHaveBeenCalledWith("unstarted-log"))
+    // The started one is never flipped or refunded; the unstarted one only while it has no task.
+    expect(flipped.flatMap((f) => f.ids)).not.toContain(STARTED)
+    expect(flipped).toContainEqual({ ids: [UNSTARTED], noTaskOnly: true })
+    expect(mockRefundCredits).not.toHaveBeenCalledWith("started-log")
   })
 
   // ── concurrency lanes ──────────────────────────────────────────────────

@@ -59,6 +59,11 @@ import {
 } from "../../../lib/cast-swap-pulse-reference-audio.js"
 import { engineTakesPromptWording } from "../../../lib/nodaro-motion-prompt-wording.js"
 import { prismReferenceAudioByResolutionOf, prismReferenceAudioWire, prismRunResolution } from "../../../lib/cast-swap-prism-reference-audio.js"
+import {
+  VIDEO_REMAKE_DELIVERED_SIZES,
+  engineDeliversTrendResolution,
+  loadedEngineDeliversTrendResolution,
+} from "../../../lib/video-remake-delivered-resolution.js"
 import type { ComposedTrendRun, TrendRunDisplay, TrendRunDisplaySlot } from "./compose.js"
 import {
   CAST_SWAP_ENGINE_WHEN_OMITTED,
@@ -281,6 +286,19 @@ function runError(row: RunJobRow, audience: RunAudience): TrendRun["error"] {
   return { code, message: RUN_FAILED_MESSAGE, ...(fullQualityTry && wasRefused(row) ? { refused: true as const } : {}) }
 }
 
+/**
+ * A run's size: a completed run's, as its result says it was delivered (a run read by the size delivered may
+ * deliver the size its engine made, when the step up did not finish), else the size it asked for (absent: 480p, the
+ * runs from before sizes). A completed run read by the size its engine makes records the same size in both, so
+ * every such run reads as it always did.
+ */
+function runResolutionOf(status: string, input: Rec, output: unknown): string {
+  const asked = str(input.resolution) ?? "480p"
+  if (status !== "completed" || !isRec(output)) return asked
+  const made = str(output.resolution)
+  return made !== null && (VIDEO_REMAKE_DELIVERED_SIZES as readonly string[]).includes(made) ? made : asked
+}
+
 /** A Cast Swap job row → `TrendRun`, or null when it is not a trend run. */
 export function toTrendRun(
   raw: RunJobRow,
@@ -305,6 +323,7 @@ export function toTrendRun(
       : null
   const details = str(input.details)
   const fqRow = fq && mayHaveFullQuality(input) ? redactPrivateJobData(fq) : null
+  const resolution = runResolutionOf(row.status, input, row.output_data)
   return {
     jobId: row.id,
     status: row.status,
@@ -317,7 +336,7 @@ export function toTrendRun(
     slots: displaySlots(input.slots),
     ...(details ? { details } : {}),
     preview: input.preview === true,
-    resolution: str(input.resolution) ?? "480p",
+    resolution,
     draft,
     // A Flash run is named by its choice (its stored `engine`).
     engine: videoRemakeFlashEngineFrom(input.engine) ?? nodaroMotionEngineOf(runEngineOf(input)),
@@ -460,7 +479,9 @@ export async function toTrendRuns(
  * every slot kind the trend uses, fixed references when the trend has some,
  * face masking when the trend masks (and what its masks cover,
  * `faceMaskTargets`, and a depth mode, `sourceModes`), a trend pre prompt when it has one, the trend's video
- * engine, and the requested resolution.
+ * engine, and the requested resolution: a size the engine makes (`castSwap.resolutions`), or, on a body that
+ * names the size delivered (`trendRun.delivered`, sizes.ts), an engine that reads trend runs that way (the engine
+ * itself refuses a size it does not deliver).
  */
 export function engineSupports(composed: ComposedTrendRun): boolean {
   const cs = getPluginSupports().castSwap
@@ -484,7 +505,8 @@ export function engineSupports(composed: ComposedTrendRun): boolean {
   // A role that keeps its own face: an engine from before the Face chip ignores `face` and would hide that face with
   // nothing in its place, so the run is refused rather than sent (never stripped).
   if (composed.needs.roleFace && !engineTakesRoleFace(cs)) return false
-  return cs.resolutions.includes(composed.body.resolution)
+  if (composed.body.trendRun.delivered === true) return engineDeliversTrendResolution(cs)
+  return (cs.resolutions as readonly string[]).includes(composed.body.resolution)
 }
 
 /**
@@ -1026,6 +1048,24 @@ const PUBLIC_400: Readonly<Record<string, string>> = {
   role_name_required: "A role of this trend has no name.",
 }
 
+/**
+ * The engine's 400 codes the public routes answer under one of their own: a size the engine does not deliver for the
+ * trend's engine choice here (a run read by the size delivered) is the trend's `resolution_unsupported`. Only from an
+ * engine that reads trend runs that way (`engineDeliversTrendResolution`): any other engine's refusal reads as before.
+ */
+const RENAMED_400: Readonly<Record<string, keyof typeof PUBLIC_400>> = {
+  resolution_not_offered: "resolution_unsupported",
+}
+
+/**
+ * The engine's 409 codes the public routes keep, each with the platform's own fixed text, from an engine that reads
+ * trend runs by the size delivered (as RENAMED_400). Any other 409 is `trend_run_rejected`.
+ */
+const PUBLIC_409: Readonly<Record<string, string>> = {
+  // A size delivered that cannot be made for this run right now (a run read by the size delivered).
+  resolution_unavailable: "This size can't be made for this trend right now. Choose a smaller size, or try again later.",
+}
+
 /** The engine's 400 codes it may carry on an issue rather than on the envelope, kept by the public routes. */
 const ISSUE_CARRIED_400: ReadonlySet<string> = new Set(["role_face_with_stored_mask", "roles_keep_everything"])
 
@@ -1051,10 +1091,13 @@ export const TREND_RUN_REJECTED = { code: "trend_run_rejected", message: "This t
  *
  *   402                      as given (credits, a workspace cap: the caller's own account)
  *   400 allowlisted code     that code, fixed text (PUBLIC_400)
+ *   400 resolution_not_offered  400 resolution_unsupported, fixed text (RENAMED_400; an engine that reads trend
+ *                            runs by the size delivered, else trend_run_rejected as before)
  *   400 any other            400 trend_run_rejected
  *   401                      unauthorized
  *   403                      forbidden
  *   404                      not_found (the engine's only 404 is the session)
+ *   409 allowlisted code     that code, fixed text (PUBLIC_409: resolution_unavailable; such an engine only)
  *   413                      storage_limit_exceeded
  *   422 job_blocked          job_blocked, fixed text
  *   429                      rate_limited
@@ -1069,11 +1112,14 @@ export function publicRefusal(reply: FastifyReply, res: { statusCode: number; bo
   const code = error ? str(error.code) : null
   const send = (status: number, c: string, message: string) => reply.status(status).send({ error: { code: c, message } })
   const status = res.statusCode
+  // The size refusals of an engine that reads trend runs by the size delivered; any other engine's, as before.
+  const sizes = loadedEngineDeliversTrendResolution()
 
   if (error && status === 402) return reply.status(402).send(body)
   if (error && status >= 400 && status < 500) {
     if (status === 400) {
       if (code && Object.hasOwn(PUBLIC_400, code)) return send(400, code, PUBLIC_400[code]!)
+      if (sizes && code && Object.hasOwn(RENAMED_400, code)) return send(400, RENAMED_400[code]!, PUBLIC_400[RENAMED_400[code]!]!)
       // A code the engine carries on an issue (`issues[i].params.code`, or `issues[i].code`) instead of the envelope.
       const carried = issueCodeOf(error.issues)
       if (carried) return send(400, carried, PUBLIC_400[carried]!)
@@ -1082,6 +1128,7 @@ export function publicRefusal(reply: FastifyReply, res: { statusCode: number; bo
     if (status === 401) return send(401, "unauthorized", "Authentication required")
     if (status === 403) return send(403, "forbidden", "This run is not available to your account.")
     if (status === 404) return send(404, "not_found", "Session not found")
+    if (sizes && status === 409 && code && Object.hasOwn(PUBLIC_409, code)) return send(409, code, PUBLIC_409[code]!)
     if (status === 413) return send(413, "storage_limit_exceeded", "Your storage is full. Free some space and try again.")
     if (status === 422 && code === "job_blocked") return send(422, "job_blocked", "This run was blocked by the job policy.")
     if (status === 429) return send(429, "rate_limited", "Too many requests. Try again shortly.")

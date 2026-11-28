@@ -141,14 +141,25 @@ describe("resolveSeedanceDraftFinalize — refusals", () => {
     expect(await resolveSeedanceDraftFinalize({ userId: USER, sourceJobId: DRAFT_ID })).toMatchObject({ ok: false, code: "draft_not_finalizable" })
   })
 
-  it("a draft the alternate route made is refused: its reference is the route's own, never sent to the default upstream", async () => {
-    db.rows = [draftRow({ provider_kind: "alternate-route", provider_task_id: "alt:route-task-1" })]
-    const r = await resolveSeedanceDraftFinalize({ userId: USER, taskId: "alt:route-task-1" })
-    expect(r).toMatchObject({ ok: false, status: 409, code: "draft_not_finalizable" })
-    expect((r as { message: string }).message).toMatch(/another route/)
-    // Even when its kind was moved on, an `alt:` reference is never a default-upstream task.
-    db.rows = [draftRow({ provider_kind: "kie-video", provider_task_id: "alt:route-task-1" })]
-    expect(await resolveSeedanceDraftFinalize({ userId: USER, sourceJobId: DRAFT_ID })).toMatchObject({ ok: false, code: "draft_not_finalizable" })
+  it("a draft the alternate route made is finalized on its route where one can, and refused where none can — never sent to the default upstream", async () => {
+    const { setPluginServices, _resetPluginServicesForTests } = await import("../private-plugins/services-registry.js")
+    const v1 = { accepts: () => null, start: async () => ({ taskRef: "t" }), poll: async () => ({ state: "running" as const }) }
+    try {
+      // This process's route predates per-model routing: refused, saying so.
+      setPluginServices({ alternateRoutes: v1 })
+      db.rows = [draftRow({ provider_kind: "alternate-route", provider_task_id: "alt:route-task-1" })]
+      const r = await resolveSeedanceDraftFinalize({ userId: USER, taskId: "alt:route-task-1" })
+      expect(r).toMatchObject({ ok: false, status: 409, code: "draft_not_finalizable" })
+      expect((r as { message: string }).message).toMatch(/another route/)
+      // A route that routes per model: the plan names the draft's own route reference.
+      setPluginServices({ alternateRoutes: { ...v1, prices: () => [] } })
+      expect(await resolveSeedanceDraftFinalize({ userId: USER, taskId: "alt:route-task-1" })).toMatchObject({ ok: true, draftTaskId: "alt:route-task-1" })
+      // A route claim with no reference saved is never a draft to finalize.
+      db.rows = [draftRow({ provider_kind: "alternate-route", provider_task_id: "alt:claimed" })]
+      expect(await resolveSeedanceDraftFinalize({ userId: USER, sourceJobId: DRAFT_ID })).toMatchObject({ ok: false, code: "draft_not_finalizable" })
+    } finally {
+      _resetPluginServicesForTests()
+    }
   })
 
   it("a draft with no recorded provider task is refused, without blaming a relay", async () => {

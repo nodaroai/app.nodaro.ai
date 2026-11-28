@@ -2,7 +2,7 @@
  * App-run widget — live status header + gallery-style outputs grid for
  * `run_app` executions.
  *
- * Static template registered at `ui://nodaro/widget/v5/app-run`. The host
+ * Static template registered at `ui://nodaro/widget/v6/app-run`. The host
  * delivers per-call data via:
  *   - `ui/notifications/tool-result` — initial { executionId, slug, name }
  *
@@ -17,7 +17,8 @@
  * DOM-construction safety: `document.createElement` + `textContent` +
  * `setAttribute` only.
  */
-import { uiProtocolShim } from "./_common.js"
+import { downloadLinkShim, uiProtocolShim } from "./_common.js"
+import { mcpLaneAddresses } from "../../mcp-lane-addresses.js"
 
 const APP_RUN_CSS = `
   :root { color-scheme: light dark; }
@@ -275,12 +276,14 @@ const APP_RUN_CSS = `
   }
 `
 
-export function buildAppRunWidgetTemplate(): string {
+/** `pagesBase`: the app host whose download route a Download opens (downloadLinkShim). */
+export function buildAppRunWidgetTemplate(pagesBase: string = mcpLaneAddresses().pagesBase): string {
   return `<!DOCTYPE html>
 <html><head>
 <meta charset="UTF-8" />
 <style>${APP_RUN_CSS}</style>
 ${uiProtocolShim()}
+${downloadLinkShim(pagesBase)}
 </head>
 <body>
 <div id="root"><div class="empty">Starting…</div></div>
@@ -630,7 +633,8 @@ ${uiProtocolShim()}
       dlBtn.addEventListener('click', function(ev) {
         ev.stopPropagation();
         if (window.NodaroMCP && window.NodaroMCP.openLink) {
-          window.NodaroMCP.openLink(item.assetUrl);
+          // A video result: the original file kept beside it when there is one (downloadLinkShim).
+          window.NodaroMCP.openLink(window.resultDownloadUrl(item.assetUrl));
         }
       });
       overlay.appendChild(dlBtn);
@@ -869,7 +873,8 @@ ${uiProtocolShim()}
       }));
       actionsRight.appendChild(makeIconBtn('Download', 'tpl-download-icon', function() {
         if (window.NodaroMCP && window.NodaroMCP.openLink) {
-          window.NodaroMCP.openLink(item.assetUrl);
+          // A video result: the original file kept beside it when there is one (downloadLinkShim).
+          window.NodaroMCP.openLink(window.resultDownloadUrl(item.assetUrl));
         }
       }));
       actionsRight.appendChild(makeIconBtn('Recreate', 'tpl-icon-recreate', function() {

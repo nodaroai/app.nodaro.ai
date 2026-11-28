@@ -85,6 +85,7 @@ function warmCloudImpl(load: () => Promise<unknown>): void {
 }
 
 export interface CreditReservation {
+  routedRunToken?: string
   usageLogId: string
   creditsReserved: number
   watermark: boolean
@@ -122,6 +123,15 @@ export interface StorageSnapshot {
 }
 
 export interface CreditGuardOpts {
+  /** The owning route validates its body before routed affordability probes.
+   * Passing this inward keeps billing independent of the route registry. */
+  routedVideoInput?: (body: unknown, req: FastifyRequest) => {
+    input: Record<string, unknown>
+    jobType: import("../lib/alternate-route-request.js").AlternateRouteJobType
+  } | null
+
+  /** Already charged routed credits; takes precedence over the base-credit hook. */
+  computeChargedCredits?: (parsedBody: unknown, req: FastifyRequest) => number | undefined | Promise<number | undefined>
   /** Returns BASE credits (pre-markup) from the parsed body. When supplied,
    *  bypasses the model_pricing lookup for cost only — isEnabled and
    *  tierRestriction still come from the DB row. May be sync or async.
@@ -643,6 +653,9 @@ export async function reserveCreditsForJobOnce(
 
 /** Options of {@link reserveCreditsForJob}. */
 export interface ReserveCreditsForJobOptions {
+  /** Reuse the same job reservation after a lost HTTP response. */
+  readonly oncePerJob?: boolean
+  readonly routedRun?: { token: string; env: string }
   /**
    * On a failed reservation, leave the job and its holds to the caller instead
    * of refunding (errors swallowed) and deleting it here. For a caller that
@@ -741,15 +754,8 @@ export async function reserveCreditsForJob(
   }
   if (!hasCredits()) return undefined
   const impl = await import("../ee/lib/credit-guard-impl.js")
-  if (opts?.holdCredits !== undefined) {
-    return impl.reserveCreditsForJobImpl(req, reply, jobId, modelIdentifier, {
-      holdCredits: opts.holdCredits,
-      ...(opts.retainJobOnFailure ? { retainJobOnFailure: true } : {}),
-    })
-  }
-  return opts?.retainJobOnFailure
-    ? impl.reserveCreditsForJobImpl(req, reply, jobId, modelIdentifier, { retainJobOnFailure: true })
-    : impl.reserveCreditsForJobImpl(req, reply, jobId, modelIdentifier)
+  return impl.reserveCreditsForJobImpl(req, reply, jobId, modelIdentifier, opts)
+
 }
 
 /**

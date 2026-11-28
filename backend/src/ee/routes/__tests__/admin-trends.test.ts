@@ -4472,3 +4472,110 @@ describe("a trend's Face chip: held until every environment's platform and engin
     })
   })
 })
+
+// ── a test run's sizes ─────────────────────────────────────────────────────
+
+describe("a test run's sizes", () => {
+  /** An engine that runs both engines and both Flash choices. */
+  const RUNS_ALL = { ...CAST_SWAP_ALL, engines: ["nodaro-prism", "nodaro-pulse", "nodaro-prism-flash", "nodaro-pulse-flash"], flashChoices: true }
+  const DELIVERED = {
+    "nodaro-prism": [{ size: "720p", from: "480p", native: true }, { size: "1080p", from: "720p", native: true }, { size: "4k", from: "1080p" }],
+    "nodaro-pulse": [{ size: "720p", native: true }, { size: "1080p", from: "720p", native: true }, { size: "4k", from: "1080p" }],
+    "nodaro-prism-flash": [{ size: "720p", from: "480p", native: true }, { size: "1080p", from: "720p" }],
+    "nodaro-pulse-flash": [{ size: "720p", native: true }, { size: "1080p", from: "720p" }],
+  }
+  /** Engines that do not read a trend run by the size delivered: each must answer exactly as before. */
+  const OLD: Record<string, Record<string, unknown>> = {
+    "no flag": RUNS_ALL,
+    "delivered sizes on direct runs only": { ...RUNS_ALL, deliveredResolution: true, deliveredResolutions: DELIVERED, upscaleChoice: true, preciseUpscale: true },
+    "the trend flag without delivered sizes": { ...RUNS_ALL, trendDeliveredResolution: true, preciseUpscale: true },
+  }
+  const DRAFTS: Record<string, Partial<TrendVersionData>> = {
+    prism: {},
+    pulse: { engine: "kling-4" },
+    "prism-flash": { flash: true },
+    "pulse-flash": { engine: "kling-4", flash: true },
+  }
+  const REQUESTS: Record<string, Record<string, unknown>> = {
+    "no size": {},
+    "480p": { resolution: "480p" },
+    "1080p": { resolution: "1080p" },
+    "4k": { resolution: "4k" },
+    draft: { draft: true },
+    "draft at 720p": { draft: true, resolution: "720p" },
+    preview: { preview: true },
+  }
+
+  /** The draft page's keys and every test run's answer and body, for each kind of draft, on the engine set. */
+  async function observeAdmin(castSwap: Record<string, unknown>): Promise<Record<string, unknown>> {
+    setPluginSupports({ castSwap: structuredClone(castSwap) as never })
+    const out: Record<string, unknown> = {}
+    for (const [kind, over] of Object.entries(DRAFTS)) {
+      mem.trends = []
+      seed({}, draftData(over))
+      const page = await call("GET", `/v1/admin/trends/${T1}`)
+      const runs: Record<string, unknown> = {}
+      for (const [name, extra] of Object.entries(REQUESTS)) {
+        engine.calls = []
+        const res = await call("POST", `/v1/admin/trends/${T1}/test-runs`, { slots: { lead: { images: ["https://u.example/me.png"] } }, ...extra })
+        runs[name] = { status: res.statusCode, body: res.json(), sent: engine.calls.map((c) => c.body) }
+      }
+      out[kind] = { page: { status: page.statusCode, keys: Object.keys(page.json().data ?? {}).sort() }, runs }
+    }
+    return out
+  }
+
+  it("without an engine that reads trend runs by the size delivered: as before (recorded)", async () => {
+    expect(await observeAdmin(OLD["no flag"]!)).toMatchSnapshot()
+  })
+
+  for (const [name, castSwap] of Object.entries(OLD)) {
+    if (name === "no flag") continue
+    it(`${name}: the same page and test runs as an engine with no flag`, async () => {
+      const before = await observeAdmin(OLD["no flag"]!)
+      expect(await observeAdmin(castSwap)).toEqual(before)
+    })
+  }
+
+  describe("an engine that reads trend runs by the size delivered", () => {
+    const DELIVERS = { ...RUNS_ALL, deliveredResolution: true, deliveredResolutions: DELIVERED, upscaleChoice: true, preciseUpscale: true, trendDeliveredResolution: true }
+    const slots = { lead: { images: ["https://u.example/me.png"] } }
+
+    it("the draft's page lists the saved draft's sizes delivered, for its engine choice", async () => {
+      setPluginSupports({ castSwap: structuredClone(DELIVERS) as never })
+      const want: Record<string, string[]> = {
+        prism: ["720p", "1080p", "4k"],
+        pulse: ["720p", "1080p", "4k"],
+        "prism-flash": ["720p", "1080p"],
+        "pulse-flash": ["720p", "1080p"],
+      }
+      for (const [kind, over] of Object.entries(DRAFTS)) {
+        mem.trends = []
+        seed({}, draftData(over))
+        const page = await call("GET", `/v1/admin/trends/${T1}`)
+        expect(page.statusCode).toBe(200)
+        expect(page.json().data.runSizes, kind).toEqual({ resolutions: want[kind], delivered: true })
+      }
+    })
+
+    it("a test run is sent the size delivered with the marker; a draft as before; a size not listed is refused", async () => {
+      setPluginSupports({ castSwap: structuredClone(DELIVERS) as never })
+      seed({}, draftData())
+      const run = await call("POST", `/v1/admin/trends/${T1}/test-runs`, { slots, resolution: "4k" })
+      expect(run.statusCode).toBe(202)
+      expect(engine.calls[0]!.body).toMatchObject({ resolution: "4k", draft: false, trendRun: { delivered: true } })
+
+      engine.calls = []
+      const draft = await call("POST", `/v1/admin/trends/${T1}/test-runs`, { slots, draft: true })
+      expect(draft.statusCode).toBe(202)
+      expect(engine.calls[0]!.body).toMatchObject({ resolution: "480p", draft: true })
+      expect(engine.calls[0]!.body.trendRun).not.toHaveProperty("delivered")
+
+      engine.calls = []
+      const unlisted = await call("POST", `/v1/admin/trends/${T1}/test-runs`, { slots, resolution: "480p" })
+      expect(unlisted.statusCode).toBe(400)
+      expect(unlisted.json().error.code).toBe("resolution_unsupported")
+      expect(engine.calls).toHaveLength(0)
+    })
+  })
+})

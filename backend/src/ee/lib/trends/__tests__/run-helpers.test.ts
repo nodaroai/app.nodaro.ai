@@ -245,6 +245,16 @@ describe("prismReferenceAudio on the wire", () => {
     }
   })
 
+  it("a body read by the size delivered keeps the whole per-size object, keyed by the size the engine makes (the engine picks the row)", () => {
+    setPluginSupports({ castSwap: { ...BASE, prismReferenceAudioPerResolution: true, prismReferenceAudioPitch: true, deliveredResolution: true, trendDeliveredResolution: true } })
+    for (const resolution of ["720p", "1080p", "4k"] as const) {
+      const c = prism(MIXED, { resolution, draft: false })
+      c.body.trendRun = { ...c.body.trendRun, delivered: true }
+      withoutUnsupportedFields(c)
+      expect(c.body.prismReferenceAudio, resolution).toEqual({ "720p": { mode: "none" }, "1080p": { mode: "voice", semitones: 4 } })
+    }
+  })
+
   it("adds nothing to a body without it", () => {
     for (const castSwap of [{ ...BASE, prismReferenceAudio: true }, { ...BASE, prismReferenceAudioPerResolution: true }]) {
       setPluginSupports({ castSwap })
@@ -639,5 +649,65 @@ describe.each(Object.keys(DECLARED) as (keyof typeof DECLARED)[])("Video Remake 
       engineName: "Nodaro Prism",
       fullQualityUntil: null,
     })
+  })
+})
+
+describe("a trend run read by the size delivered", () => {
+  beforeEach(() => _resetPluginSupportsForTests())
+  const BASE = { roleKinds: [], fixedReferences: true, fullQuality: true, resolutions: ["480p" as const, "720p" as const, "1080p" as const], trendRun: true, faceMasking: true }
+  const marked = (resolution: "720p" | "4k") => {
+    const c = composed(false)
+    c.body.resolution = resolution
+    c.body.draft = false
+    c.body.trendRun = { ...c.body.trendRun, delivered: true }
+    return c
+  }
+
+  it("engineSupports: a marked body needs an engine that reads trend runs so, never the engine's own sizes", () => {
+    setPluginSupports({ castSwap: BASE })
+    expect(engineSupports(marked("720p"))).toBe(false)
+    setPluginSupports({ castSwap: { ...BASE, deliveredResolution: true } })
+    expect(engineSupports(marked("720p"))).toBe(false)
+    setPluginSupports({ castSwap: { ...BASE, trendDeliveredResolution: true } })
+    expect(engineSupports(marked("720p"))).toBe(false)
+    setPluginSupports({ castSwap: { ...BASE, deliveredResolution: true, trendDeliveredResolution: true } })
+    expect(engineSupports(marked("720p"))).toBe(true)
+    // 4K is no size the engine makes: read by the size delivered, the engine itself says whether it delivers it.
+    expect(engineSupports(marked("4k"))).toBe(true)
+    // A body without the marker (a draft) is held to the engine's own sizes, as before.
+    const draft = composed(false)
+    expect(engineSupports(draft)).toBe(true)
+    setPluginSupports({ castSwap: { ...BASE, resolutions: ["720p"], deliveredResolution: true, trendDeliveredResolution: true } })
+    expect(engineSupports(draft)).toBe(false)
+  })
+
+  it("toTrendRun: a completed run reads the size its result was delivered at, any other run the size it asked for", () => {
+    const NO_RUN_CREDITS = new Map() as unknown as RunCredits
+    const row = (status: string, input: Record<string, unknown>, output: Record<string, unknown>): RunJobRow => ({
+      id: "j-1",
+      status,
+      progress: 100,
+      input_data: { type: "cast-swap", trend: { id: "t", slug: "s", version: 1, name: "N" }, engine: "nodaro-prism", ...input },
+      output_data: { videoUrl: "https://cdn.example/out.mp4", ...output },
+      error_message: null,
+      error_hint: null,
+      created_at: "2026-11-27T10:00:00.000Z",
+      started_at: null,
+      completed_at: status === "completed" ? "2026-11-27T10:01:00.000Z" : null,
+      usage_log_id: null,
+    })
+    const sizeOf = (r: RunJobRow) => toTrendRun(r, undefined, NO_RUN_CREDITS)!.resolution
+    // A run whose step up did not finish delivers the size its engine made.
+    expect(sizeOf(row("completed", { resolution: "720p" }, { resolution: "480p" }))).toBe("480p")
+    expect(sizeOf(row("completed", { resolution: "4k" }, { resolution: "4k" }))).toBe("4k")
+    // Still running, or failed: the size asked for.
+    expect(sizeOf(row("processing", { resolution: "4k" }, { resolution: "1080p" }))).toBe("4k")
+    expect(sizeOf(row("failed", { resolution: "720p" }, {}))).toBe("720p")
+    // A run read by the size the engine makes records the same size in both: as it always read.
+    expect(sizeOf(row("completed", { resolution: "1080p" }, { resolution: "1080p" }))).toBe("1080p")
+    // A result with no size, or none of the contract's: the size asked for (absent: 480p, the runs from before sizes).
+    expect(sizeOf(row("completed", { resolution: "720p" }, {}))).toBe("720p")
+    expect(sizeOf(row("completed", { resolution: "720p" }, { resolution: "huge" }))).toBe("720p")
+    expect(sizeOf(row("completed", {}, {}))).toBe("480p")
   })
 })

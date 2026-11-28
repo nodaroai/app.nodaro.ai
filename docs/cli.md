@@ -328,14 +328,16 @@ nodaro recast status <recastId> [--json]                # poll status + any pend
 # Trends — ready-made Video Remake recipes: fill a trend's slots with your own pictures (Cloud edition)
 nodaro trends list [--search <text>] [--tag <tag>] [--favorites] [--locale <l>] [--limit <n>] [--cursor <c>] [--json]
 nodaro trends get <slug> [--locale <l>] [--json]          # its slots (key, kind, required), examples, preview, engine, resolutions
-nodaro trends estimate <slug> --slot <key>=<url>[,<url>] [--slot ...] [--choice <key>.<chip>=new|original] [--example <n>] [--details "…"] [--preview] [--resolution 480p|720p|1080p] [--draft] [--json]
+nodaro trends estimate <slug> --slot <key>=<url>[,<url>] [--slot ...] [--choice <key>.<chip>=new|original] [--example <n>] [--details "…"] [--preview] [--resolution 480p|720p|1080p|4k] [--draft] [--json]
 #   free quote: "about N credits (up to M held while it runs)". --slot is repeatable (1-3 pictures per slot;
 #   pictures are split where a new http(s) URL starts, so a URL holding commas stays whole; a slot key is
 #   1-32 of a-z, 0-9 and _, checked before anything is sent);
 #   --choice keeps a trait of the clip (original) or makes it anew from your pictures (new): a person's
 #   body / outfit / hair / face, a pet's body / coat, a product's shape / finish. --resolution is one the trend offers
-#   (`trends get`); default its first: 480p, or 720p on a Nodaro Pulse trend. A run is plain unless you pass
-#   --draft: a 480p draft (Nodaro Prism only) that Full Quality can finish at 1080p. --no-draft is still accepted.
+#   (`trends get`); default its first: 480p, or 720p on a Nodaro Pulse trend. Where `trends get` shows
+#   deliveredResolution, its resolutions are the sizes a run is delivered at (4k among them) and --resolution
+#   names the size you receive. A run is plain unless you pass --draft: a 480p draft (Nodaro Prism only,
+#   whatever sizes the trend lists) that Full Quality can finish at 1080p. --no-draft is still accepted.
 nodaro trends run <slug> [the estimate flags] [--session <id>] [--idempotency-key <key>] [--json]
 #   SPENDS CREDITS — run `estimate` first; prints the job id (follow it with `nodaro jobs get <id>`).
 #   --session is accepted but not yet applied: trend runs are not filed into sessions yet

@@ -4,6 +4,8 @@ import {
   KIE_CREDIT_USD,
   KLING_IMAGE_4_INPUT_ITEM_KIE_HUNDREDTHS,
   KLING_IMAGE_4_KIE_HUNDREDTHS,
+  LONG_IMAGE_INPUT_IMAGE_KIE_HUNDREDTHS,
+  LONG_IMAGE_KIE_HUNDREDTHS,
   MINIMAX_H3_IMAGE_KIE_HUNDREDTHS,
   MINIMAX_H3_IMAGE_REFERENCE_KIE_HUNDREDTHS,
   SEEDREAM_5_5_INPUT_IMAGE_KIE_HUNDREDTHS,
@@ -23,6 +25,7 @@ import {
   klingImage4Resolution,
   seedream55Resolution,
 } from "@nodaro/shared/model-catalog"
+import { longImageLength, longImageResolution, type LongImageMode } from "@nodaro/render-rules"
 
 /**
  * What KIE bills for one picture, recorded as the job's provider cost
@@ -125,5 +128,16 @@ export function klingImage4CostUsd(resolution: string | number | undefined, inpu
   const items = Math.max(0, Math.trunc(inputItems))
   const images = Math.max(1, Math.trunc(imagesReturned))
   const hundredths = (KLING_IMAGE_4_KIE_HUNDREDTHS[klingImage4Resolution(resolution)] + KLING_IMAGE_4_INPUT_ITEM_KIE_HUNDREDTHS * items) * images
+  return (hundredths / 100) * KIE_CREDIT_USD
+}
+
+/**
+ * Kling 4.0's long image (the Long Image node): the listed figure for its mode,
+ * its page length (a product page) and its size, plus each picture sent.
+ */
+export function longImageCostUsd(mode: LongImageMode, length: unknown, resolution: unknown, inputImages: number): number {
+  const size = longImageResolution(resolution)
+  const picture = mode === "ecommerce" ? LONG_IMAGE_KIE_HUNDREDTHS.ecommerce[longImageLength(length)][size] : LONG_IMAGE_KIE_HUNDREDTHS.webpage[size]
+  const hundredths = picture + LONG_IMAGE_INPUT_IMAGE_KIE_HUNDREDTHS * Math.max(0, Math.trunc(inputImages))
   return (hundredths / 100) * KIE_CREDIT_USD
 }

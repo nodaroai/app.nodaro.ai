@@ -74,6 +74,7 @@ function rowStampOf(result: ExecuteNodeResult): RunResultRowStamp {
   const o = result.output
   return {
     ...(result.jobId ? { jobId: result.jobId } : {}),
+    ...(o.unassembledClips ? { unassembledClips: o.unassembledClips, clipJobId: result.jobId } : {}),
     ...(typeof o.thumbnailUrl === "string" && o.thumbnailUrl ? { thumbnailUrl: o.thumbnailUrl } : {}),
     ...(o.quality ? { quality: o.quality } : {}),
     ...(o.clipKey ? { clipKey: o.clipKey } : {}),

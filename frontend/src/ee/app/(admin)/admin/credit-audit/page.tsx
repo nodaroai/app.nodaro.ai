@@ -208,6 +208,7 @@ export default function AdminCreditAudit() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
     a.href = url
+    // download-site: a file this page made (a JSON or text export), no stored result
     a.download = `credit-audit-${result.mode}-${result.timestamp?.slice(0, 10) ?? "export"}.json`
     a.click()
     URL.revokeObjectURL(url)

@@ -3,9 +3,13 @@
  * 2026-10-18; tools/units/README.md). A JSON input (accepts "look") keeps the
  * wired value as a string. A many-wire media input (`many: true`) keeps one
  * row per upstream node, in the order of the workflow's edge list, each with
- * the upstream node's id (what Audio Sync's `sources` does by hand). Both
- * engines' resolvers call this, so a unit's payload.ts and its exec.ts read
- * the same `unitInputs`. Pure.
+ * the upstream node's id (what Audio Sync's `sources` does by hand). An image
+ * input that names no data field (decided 2026-11-27) keeps its wired picture's
+ * URL, by its own id, as a JSON input keeps its string: a unit with several
+ * image inputs (Long Image's product, style and subject pictures) tells them
+ * apart, where an input routed by its source's type would put every picture in
+ * one place. Both engines' resolvers call this, so a unit's payload.ts and its
+ * exec.ts read the same `unitInputs`. Pure.
  */
 import { PARAMETER_NODE_TYPES } from "@nodaro/shared/catalogs"
 
@@ -16,17 +20,18 @@ export interface UnitSourceRow {
   readonly kind: "video" | "audio"
 }
 
-/** What a unit input lands as: a JSON input's string, or a many-wire input's rows. */
+/** What a unit input lands as: a JSON input's string, an image input's URL, or a many-wire input's rows. */
 export type UnitInputValue = string | readonly UnitSourceRow[]
 
 /** The lane an input's wires land in. */
-export type UnitInputLane = "many" | "json"
+export type UnitInputLane = "many" | "json" | "image"
 
 /** The part of a unit input handle the lanes read (both kits' UnitInputHandle satisfy it). */
 interface LaneInput {
   readonly id: string
   readonly accepts: ReadonlyArray<string>
   readonly many?: true
+  readonly field?: string
 }
 
 /** The part of a unit definition / descriptor the lanes read. */
@@ -47,13 +52,16 @@ export function unitInputHandleIn<H extends LaneInput>(unit: LaneUnit<H> | undef
 
 /**
  * The lane an input's wires land in: "many" for an input that takes every
- * wire, "json" for a JSON input; undefined for any other input (it has a data
- * field, or is routed by its source's type). The validator lets neither lane
- * declare a field, and a JSON input accepts nothing but "look".
+ * wire, "json" for a JSON input, "image" for an image input that names no
+ * data field; undefined for any other input (it has a data field, and is
+ * routed by its source's type). The validator lets no lane declare a field,
+ * a JSON input accepts nothing but "look" and an image lane nothing but
+ * "image". The image lane lands as the JSON lane does (`unitInputLanding`).
  */
 export function unitInputLaneOf(h: LaneInput): UnitInputLane | undefined {
   if (h.many === true) return "many"
-  return h.accepts.includes("look") ? "json" : undefined
+  if (h.accepts.includes("look")) return "json"
+  return h.field === undefined && h.accepts.length > 0 && h.accepts.every((k) => k === "image") ? "image" : undefined
 }
 
 /**
@@ -75,10 +83,11 @@ export function unitLaneTakesSource(sourceType: string | undefined, textSources:
  *   as `[]` when it has no row yet). The `kind ?? "video"` default is for a
  *   caller that passes no kind (it could not tell the media): it is read as
  *   video, the pricier chain, so a run is never under-quoted.
- * - json: the wired string; of two real wires the last wins. A wired input
- *   whose upstream produced nothing records "" so the unit refuses the run
- *   (as Edit Plan's `offsets` does), never reads it as unwired — but an empty
- *   wire never erases a real value another wire landed.
+ * - json, and image (a picture's URL): the wired string; of two real wires
+ *   the last wins. A wired input whose upstream produced nothing records ""
+ *   so the unit refuses the run (as Edit Plan's `offsets` does), never reads
+ *   it as unwired — but an empty wire never erases a real value another wire
+ *   landed.
  */
 export function unitInputLanding(
   current: UnitInputValue | undefined,

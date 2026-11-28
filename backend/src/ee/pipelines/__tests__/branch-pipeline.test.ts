@@ -5,7 +5,7 @@
  * table, mirroring the style of fork.test.ts.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest"
 import { OWNER_ID, VICTIM_JOB_ID, ownerUrl, useStorageHost, victimUrl, withStorageOwnerTables } from "../../../test/storage-owner-tables.js"
 
 // ---------------------------------------------------------------------------
@@ -264,6 +264,12 @@ function makeStagesUpTo(count: number): Stage[] {
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
+
+beforeAll(async () => {
+  // The credits module branchPipeline loads on first use, loaded outside any test's time limit (a cold load of it
+  // under a full-suite run took longer than one test's 5 s, failing whichever test reached it first).
+  await import("../../billing/credits.js")
+}, 60_000)
 
 beforeEach(() => {
   vi.clearAllMocks()

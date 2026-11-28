@@ -7,6 +7,7 @@ import { GlassCard, GlassButton, copyUrl, downloadFile } from "../output-cards/s
 import { ActionMenu } from "../output-cards/action-menu"
 import { ActionBar } from "../output-cards/action-bar"
 import { shareMedia } from "../output-cards/share-utils"
+import { openVideoDownload } from "@/lib/video-result-download"
 import { useMediaUpload, FileDropZone, UrlInputRow } from "./shared"
 import { useT } from "@/lib/i18n"
 
@@ -104,7 +105,7 @@ export function VideoUploadCard({ label, url, nodeId, isFullscreen, inputValues,
               {/* Desktop toolbar — top-right, visible on hover */}
               {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events,jsx-a11y/no-static-element-interactions */}
               <div className="media-overlay-controls absolute top-2 end-2 hidden md:flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200" onClick={(e) => e.stopPropagation()}>
-                <GlassButton onClick={() => downloadFile(media.effectiveUrl!, `${label.replace(/\s+/g, "-").toLowerCase()}.mp4`)} title={t("common.download")}>
+                <GlassButton onClick={() => openVideoDownload(media.effectiveUrl!, () => downloadFile(media.effectiveUrl!, `${label.replace(/\s+/g, "-").toLowerCase()}.mp4`))} title={t("common.download")}>
                   <Download className="w-3.5 h-3.5" />
                 </GlassButton>
                 <GlassButton onClick={() => copyUrl(media.effectiveUrl!)} title={t("cfgshared.copyUrl")}>

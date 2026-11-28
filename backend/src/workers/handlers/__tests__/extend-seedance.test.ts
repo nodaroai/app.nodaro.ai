@@ -264,7 +264,8 @@ describe("extend-video / seedance-2-0-extend", () => {
     })
     // NO onTaskCreated by design: persisting the KIE task would let the
     // reconcile cron finalize this job with the UNSTITCHED extension clip.
-    expect(reconcileOpts).toBeUndefined()
+    // Only the route context: still no onTaskCreated (no default-upstream task is persisted).
+    expect(reconcileOpts).toEqual({ routeJob: { jobId: "job-1", jobType: "extend-video" } })
   })
 
   it("cuts the tail from the picture's end", async () => {
@@ -359,6 +360,8 @@ describe("extend-video / seedance-2-0-extend", () => {
       // hits the source's tail, trimStartFrames the extension's head.
       fallbackTrims: { trimEndFrames: 4, trimStartFrames: 3 },
       audioFadeSec: 0.15,
+      // An unwatermarked run joins two 10-bit clips in 10-bit HEVC (decided 2026-11-22).
+      keepTenBit: true,
     })
   })
 

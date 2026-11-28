@@ -173,7 +173,8 @@ describe("every path that ends a run is unchanged", () => {
       { file: "workers/orchestrator-worker.ts", args: "executionId, userId, { adoptLiveBudgetedRenders: true, adoptQueued: true }" },
     ])
     // The others pass no options at all: they end the run, and take its waiting children with it.
-    for (const c of calls.filter((x) => !x.args.includes("adoptQueued"))) expect(c.args.split(",").length).toBe(2)
+    // (A blocked account's stop says only that it is punitive: it adopts nothing either.)
+    for (const c of calls.filter((x) => !x.args.includes("adoptQueued"))) expect(c.args.replace(", { punitive: true }", "").split(",").length).toBe(2)
     expect(calls.length).toBeGreaterThanOrEqual(5)
   })
 })

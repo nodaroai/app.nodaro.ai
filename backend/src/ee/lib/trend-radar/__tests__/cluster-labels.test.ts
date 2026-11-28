@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { SocialPost } from "@nodaro/shared/social"
-import { clusterPosts, toCandidatePost } from "../cluster.js"
+import { clusterPosts, panelGrowthPct, toCandidatePost } from "../cluster.js"
 import { dayChangePct, labelOf, passesNow, statusOf } from "../labels.js"
 import { DEFAULT_THRESHOLDS, type TrendCandidateReading } from "../types.js"
 
@@ -50,6 +50,61 @@ describe("clusterPosts", () => {
     const many = Array.from({ length: 8 }, (_, i) => post({ handle: `u${i}`, views: i, url: `https://www.tiktok.com/@u${i}/video/730000000000000000${i}` }))
     expect(clusterPosts(many, 3).top.map((p) => p.author)).toEqual(["u7", "u6", "u5"])
   })
+
+  it("splits the posts by platform, counts the same handle on two platforms twice, and keeps each platform's top post", () => {
+    const tiktok = Array.from({ length: 9 }, (_, i) => post({ handle: `t${i}`, views: 1000 + i, url: `https://www.tiktok.com/@t${i}/video/730000000000000001${i}` }))
+    const c = clusterPosts([
+      ...tiktok,
+      post({ handle: "t0", platform: "instagram", url: "https://www.instagram.com/reel/Cig1/", likes: 40 }),
+      post({ handle: "ig2", platform: "instagram", url: "https://www.instagram.com/reel/Cig2/", likes: 30 }),
+      post({ handle: "yt", platform: "youtube", url: "https://www.youtube.com/shorts/yt_1", views: 5 }),
+    ])
+    expect(c.creators).toBe(12)
+    expect(c.platforms.tiktok).toEqual({ posts: 9, creators: 9, plays: 9036, top: expect.objectContaining({ author: "t8" }) })
+    expect(c.platforms.instagram).toEqual({ posts: 2, creators: 2, plays: 70, top: expect.objectContaining({ author: "t0", platform: "instagram" }) })
+    expect(c.platforms.youtube?.top?.embedUrl).toBe("https://www.youtube.com/embed/yt_1")
+    // Up to eight, every platform's best among them, most-played first.
+    expect(c.top).toHaveLength(8)
+    expect(c.top.map((p) => p.platform)).toEqual(["tiktok", "tiktok", "tiktok", "tiktok", "tiktok", "tiktok", "instagram", "youtube"])
+    expect(c.top[0]!.author).toBe("t8")
+  })
+
+  it("remembers every post's plays by its id, and the earliest post date", () => {
+    const c = clusterPosts([
+      post({ handle: "a", views: 100, publishedAt: "2026-10-20T10:00:00Z" }),
+      post({ handle: "b", views: 50, publishedAt: "2026-10-18T08:00:00Z", url: "https://www.tiktok.com/@b/video/7300000000000000009" }),
+      post({ handle: "c", platform: "instagram", url: "https://www.instagram.com/reel/Cx/", likes: 7, publishedAt: "not a date" }),
+    ])
+    expect(c.panel).toEqual({
+      "tiktok:a:": 100,
+      "tiktok:b:https://www.tiktok.com/@b/video/7300000000000000009": 50,
+      "instagram:c:https://www.instagram.com/reel/Cx/": 7,
+    })
+    expect(c.firstPostedAt).toBe("2026-10-18T08:00:00.000Z")
+    expect(clusterPosts([post({ handle: "a", views: 1 })]).firstPostedAt).toBeNull()
+  })
+})
+
+describe("panelGrowthPct", () => {
+  it("is the growth of the posts both readings saw, per day, one decimal", () => {
+    // A new post (c) and a post that dropped out (b) are left out of both sides.
+    expect(panelGrowthPct({ a: 1000, b: 9_000_000 }, { a: 1100, c: 5_000_000 }, 1)).toBe(10)
+    // Two days apart: compounded per day, 21% over two days is 10% a day.
+    expect(panelGrowthPct({ a: 1000 }, { a: 1210 }, 2)).toBe(10)
+    expect(panelGrowthPct({ a: 1000, b: 1000 }, { a: 1000, b: 1006 }, 1)).toBe(0.3)
+    expect(panelGrowthPct({ a: 1000 }, { a: 1000 }, 1)).toBe(0)
+  })
+
+  it("is null with no previous panel, no post seen twice, or nothing to grow from", () => {
+    expect(panelGrowthPct(null, { a: 1 }, 1)).toBeNull()
+    expect(panelGrowthPct(undefined, { a: 1 }, 1)).toBeNull()
+    expect(panelGrowthPct({ b: 10 }, { a: 1 }, 1)).toBeNull()
+    expect(panelGrowthPct({ a: 0 }, { a: 50 }, 1)).toBeNull()
+  })
+
+  it("counts a same-day gap as one day", () => {
+    expect(panelGrowthPct({ a: 100 }, { a: 110 }, 0)).toBe(10)
+  })
 })
 
 describe("toCandidatePost", () => {
@@ -72,7 +127,7 @@ describe("toCandidatePost", () => {
   })
 })
 
-const r = (creators: number, plays: number, i: number): TrendCandidateReading => ({ date: `2026-10-${String(10 + i).padStart(2, "0")}`, creators, plays, posts: 20 })
+const r = (creators: number, plays: number, i: number, growthPct: number | null = null): TrendCandidateReading => ({ date: `2026-10-${String(10 + i).padStart(2, "0")}`, creators, plays, posts: 20, growthPct })
 
 describe("labels", () => {
   it("dayChangePct is the growth from the previous reading, one decimal", () => {
@@ -80,6 +135,23 @@ describe("labels", () => {
     expect(dayChangePct([r(1, 100, 0), r(2, 118, 1)])).toBe(18)
     expect(dayChangePct([r(1, 0, 0), r(2, 118, 1)])).toBeNull()
     expect(dayChangePct([r(1, 1000, 0), r(2, 1006, 1)])).toBe(0.6)
+  })
+
+  it("dayChangePct prefers the reading's growth over the same posts to the summed change", () => {
+    // Summed plays halved (the search answered other posts) while the same posts grew 4%.
+    expect(dayChangePct([r(20, 2_000_000, 0), r(20, 1_000_000, 1, 4)])).toBe(4)
+    expect(dayChangePct([r(20, 2_000_000, 0), r(20, 1_000_000, 1, 0)])).toBe(0)
+    // A reading without it falls back to the summed change.
+    expect(dayChangePct([r(20, 100, 0, 7), r(20, 150, 1, null)])).toBe(50)
+  })
+
+  it("labels read the growth over the same posts, for the latest reading and the one before", () => {
+    const t = DEFAULT_THRESHOLDS
+    // The summed plays fall 50% (a noisy search) but the same posts grow 20% a day: rising, not slowing.
+    expect(labelOf([r(3, 2000, 0), r(4, 1000, 1, 20)], t)).toBe("rising")
+    // Two readings running under the slowing change, by growth: slowing.
+    expect(labelOf([r(9, 100, 0), r(9, 500, 1, 0.5), r(9, 900, 2, 0.2)], t)).toBe("slowing")
+    expect(statusOf("candidate", [r(9, 100, 0), r(9, 500, 1, 0.5), r(9, 900, 2, 0.2)], t)).toBe("slowing")
   })
 
   it("labels: new, rising, hot, slowing, watching", () => {

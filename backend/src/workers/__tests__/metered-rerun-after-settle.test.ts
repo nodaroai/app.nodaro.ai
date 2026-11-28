@@ -92,7 +92,7 @@ vi.mock("../../ee/billing/credits.js", async (importOriginal) => ({
   },
 }))
 vi.mock("../../ee/services/credits.js", () => ({
-  CreditsService: { refundCredits: h.serviceRefund, commitCredits: vi.fn(), trySettleManagedCredits: vi.fn(async () => false) },
+  CreditsService: { refundCredits: h.serviceRefund, commitCredits: vi.fn(), trySettleManagedCredits: vi.fn(async () => false), trySettleManagedCreditsOrReadLog: vi.fn(async () => ({ managed: false, log: null })) },
 }))
 
 import { attachLlmSpend, refundJobCredits, workerLlmBilling } from "../shared.js"

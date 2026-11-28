@@ -9,7 +9,7 @@ import { describe, it, expect, afterEach } from "vitest"
 import { readdirSync, readFileSync, statSync } from "node:fs"
 import { join, resolve, dirname } from "node:path"
 import { fileURLToPath } from "node:url"
-import { runtimeApiUrl, runtimeDefaultLocale, runtimeFlowUiOrigin, runtimeIsOnFlowUiHost, runtimeIsOnMovedHost, runtimeLegacyUiHosts, runtimeLinkOrigin, runtimeMediaOrigin, runtimeSettingsSourceOrigin, runtimeCallbackOrigin, runtimeSupabaseAnonKey, runtimeSupabaseUrl, runtimeUploadModerationEnabled, runtimePreviewStopRule } from "../runtime-config"
+import { runtimeApiUrl, runtimeDefaultLocale, runtimeFlowUiOrigin, runtimeIsOnFlowUiHost, runtimeIsOnMovedHost, runtimeLegacyUiHosts, runtimeLinkOrigin, runtimeMediaOrigin, runtimeStorageOrigins, runtimeSettingsSourceOrigin, runtimeCallbackOrigin, runtimeSupabaseAnonKey, runtimeSupabaseUrl, runtimeUploadModerationEnabled, runtimePreviewStopRule } from "../runtime-config"
 
 const SRC = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..")
 
@@ -173,6 +173,23 @@ describe("runtimeMediaOrigin (a white-label deployment's media host)", () => {
   it("is no value when the key is not a string at all", () => {
     window.__NODARO_RUNTIME__ = { mediaOrigin: 7 as unknown as string }
     expect(runtimeMediaOrigin()).toBeUndefined()
+  })
+})
+
+describe("runtimeStorageOrigins (the deployment's own storage the download routes accept)", () => {
+  afterEach(() => { delete window.__NODARO_RUNTIME__ })
+
+  it("returns the https origins /config.js names", () => {
+    window.__NODARO_RUNTIME__ = { storageOrigins: ["https://cdn.example.com", "https://pub-1.r2.dev"] }
+    expect(runtimeStorageOrigins()).toEqual(["https://cdn.example.com", "https://pub-1.r2.dev"])
+  })
+
+  it("is empty when /config.js names none, and drops a value that is not an https origin", () => {
+    expect(runtimeStorageOrigins()).toEqual([])
+    window.__NODARO_RUNTIME__ = { storageOrigins: ["http://cdn.example.com", "https://cdn.example.com/bucket", "https://ok.example.com"] }
+    expect(runtimeStorageOrigins()).toEqual(["https://ok.example.com"])
+    window.__NODARO_RUNTIME__ = { storageOrigins: "https://cdn.example.com" as unknown as string[] }
+    expect(runtimeStorageOrigins()).toEqual([])
   })
 })
 

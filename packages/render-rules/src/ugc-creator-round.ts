@@ -51,6 +51,8 @@ export const UGC_SPEND_REFUSAL_CODES: ReadonlySet<string> = new Set([
   // The wallet or pool cannot cover the job — also the free and paid tiers' daily limits and an
   // app run's free allowance, which the credit guard answers with this code.
   "insufficient_credits",
+  // A previously delivered video has an unpaid actual charge.
+  "routed_balance_due",
   // An app run's free allowance, as the app runner refuses it.
   "insufficient_app_credits",
   // A deployment's per-user allowance.

@@ -69,7 +69,7 @@ export function SheetGallery({ result, sheets, onSetThumbnail, accent }: SheetGa
             <img src={result.url} alt={t("entity.sheetResultAlt")} className="max-w-full max-h-[420px] object-contain" />
           </button>
           <div className="flex items-center gap-3">
-            <a href={result.url} download target="_blank" rel="noreferrer" className={btn}>{t("common.download")}</a>
+            <a /* download-site: a reference sheet image */ href={result.url} download target="_blank" rel="noreferrer" className={btn}>{t("common.download")}</a>
             <button type="button" onClick={() => void copyUrl(result.url)} className={btn}>{t("cfgshared.copyUrl")}</button>
             <button type="button" onClick={() => onSetThumbnail(result.url, result.label)} className={btn}>{t("entity.setAsThumbnail")}</button>
           </div>
@@ -102,7 +102,7 @@ export function SheetGallery({ result, sheets, onSetThumbnail, accent }: SheetGa
                   </button>
                   <div className="absolute inset-x-0 bottom-0 bg-black/60 text-white text-[11px] px-1.5 py-0.5 pointer-events-none">{shownLabel}</div>
                   <div className="absolute inset-x-0 top-0 flex justify-end gap-1 p-1 opacity-0 group-hover:opacity-100">
-                    <a href={sheet.url} download target="_blank" rel="noreferrer" className="px-1.5 py-0.5 text-[11px] rounded bg-black/60 text-white hover:bg-black/80" title={t("common.download")}>↓</a>
+                    <a /* download-site: a reference sheet image */ href={sheet.url} download target="_blank" rel="noreferrer" className="px-1.5 py-0.5 text-[11px] rounded bg-black/60 text-white hover:bg-black/80" title={t("common.download")}>↓</a>
                     <button type="button" onClick={() => void copyUrl(sheet.url)} className="px-1.5 py-0.5 text-[11px] rounded bg-black/60 text-white hover:bg-black/80" title={t("cfgshared.copyUrl")}>⧉</button>
                     <button type="button" onClick={() => onSetThumbnail(sheet.url, label)} className="px-1.5 py-0.5 text-[11px] rounded bg-black/60 text-white hover:bg-black/80">{t("entity.setThumb")}</button>
                   </div>

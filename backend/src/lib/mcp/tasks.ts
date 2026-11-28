@@ -33,6 +33,7 @@ import {
   ListTasksRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js"
 import { TREND_RUN_MARKER_SELECT, redactPrivateJobOutput, trendRunErrorText, TRASHED_JOB_COLUMN } from "../public-job-data.js"
+import { withOwnerOnlyOutputFields, type JobReader } from "../job-owner-output.js"
 
 export interface Task {
   taskId: string
@@ -122,13 +123,57 @@ export function completeTask(taskId: string): void {
 export async function cancelTask(taskId: string, userId: string): Promise<boolean> {
   const t = REGISTRY.get(taskId)
   if (!t || t.userId !== userId) return false
+  // The stop rule first, before anything is aborted: a video the provider is already making is
+  // not cancelled. It stays registered and running, and this answers false (nothing was cancelled).
+  const stop = await cancelUnderStopRule(taskId, userId)
+  if (stop === "left-running") return false
+  // Any other job is cancelled first, and only then is the task dropped: when the shared cancel
+  // finds it cannot be cancelled now (work already in flight that it leaves to finish), nothing
+  // was cancelled, the task stays registered and running, and this answers false.
+  if (stop === "not-a-video-run" && (await markJobCancelled(taskId, userId)) === "left-running") return false
   t.abortController.abort()
   REGISTRY.delete(taskId)
-  await markJobCancelled(taskId, userId)
   return true
 }
 
-async function markJobCancelled(jobId: string, userId: string): Promise<void> {
+/** The cancel could not tell whether the job's video already started; nothing was cancelled. Try again. */
+export class TaskCancelUnavailableError extends Error {
+  readonly retryable = true
+  constructor() {
+    super("This task cannot be cancelled right now. Try again in a moment.")
+    this.name = "TaskCancelUnavailableError"
+  }
+}
+
+/**
+ * The stop rule (lib/stop-rule.ts) for an MCP cancel. A followed video run, or
+ * a segmented one, is cancelled only through the shared cancel, which leaves a
+ * video whose task already started to finish (it is delivered and charged) and
+ * never releases what a run already billed. Any other job is not this
+ * function's: the caller flips it as before.
+ *
+ * A read that FAILS cancels nothing: flipping a row whose send may have
+ * started would throw away a paid video, so the cancel is refused (retryable).
+ * A database that does not have the send marker yet is not a failure: no send
+ * is marked there, and the job is cancelled as it always was.
+ */
+async function cancelUnderStopRule(jobId: string, userId: string): Promise<"not-a-video-run" | "cancelled" | "left-running"> {
+  const { supabase } = await import("../supabase.js")
+  const { STOP_RULE_COLUMNS, followedLane, finishesWhenStopped, stopsAtSegmentBoundary } = await import("../stop-rule.js")
+  const { isMissingColumnError } = await import("../postgrest-errors.js")
+  // trash-read: a cancel acts on the caller's running job wherever it is filed; nothing is answered from it
+  const stop = await supabase.from("jobs").select(`status, ${STOP_RULE_COLUMNS}`).eq("id", jobId).eq("user_id", userId).maybeSingle()
+  if (stop.error) {
+    if (isMissingColumnError(stop.error)) return "not-a-video-run"
+    throw new TaskCancelUnavailableError()
+  }
+  if (!stop.data || !(stopsAtSegmentBoundary(stop.data) || followedLane(stop.data) || finishesWhenStopped(stop.data))) return "not-a-video-run"
+  const { cancelOwnedJob } = await import("../cancel-job.js")
+  const result = await cancelOwnedJob(jobId, userId)
+  return result.kind === "in_flight" ? "left-running" : "cancelled"
+}
+
+async function markJobCancelled(jobId: string, userId: string): Promise<"cancelled" | "left-running"> {
   const { supabase } = await import("../supabase.js")
   // Fast path, unchanged: a job still on a worker is cancelled by flipping the
   // row — the worker's own pickup / completion CAS then no-ops and refunds.
@@ -168,7 +213,7 @@ async function markJobCancelled(jobId: string, userId: string): Promise<void> {
     const analysisJobId = typeof input?.analysisJobId === "string" ? input.analysisJobId : null
     const { cancelRunningChildJobs } = await import("../cancel-job.js")
     await cancelRunningChildJobs(jobId, userId, { analysisJobId })
-    return
+    return "cancelled"
   }
 
   // Nothing flipped: the row is either already terminal (nothing to do), a
@@ -190,6 +235,7 @@ async function markJobCancelled(jobId: string, userId: string): Promise<void> {
   if (result.kind === "cancelled") {
     await cancelRunningChildJobs(jobId, userId, { analysisJobId: result.analysisJobId })
   }
+  return result.kind === "in_flight" ? "left-running" : "cancelled"
 }
 
 /**
@@ -319,7 +365,8 @@ export function registerTaskHandlers(server: McpServer, getUserId: () => string)
     const t = getTask(taskId)
     if (!t) throw new Error(`Unknown taskId: ${taskId}`)
     if (t.userId !== getUserId()) throw new Error("forbidden")
-    return await waitForTerminal(t.taskId, t.abortController.signal)
+    // The task's owner is the caller (checked above): they read the job's owner-only output fields too.
+    return await waitForTerminal(t.taskId, t.abortController.signal, { userId: getUserId() })
   })
 
   inner.setRequestHandler(CancelTaskRequestSchema, async (req) => {
@@ -357,7 +404,7 @@ export function registerTaskHandlers(server: McpServer, getUserId: () => string)
  * plan suggested `output_url` but per v1.1 Task 4 we standardised on
  * `output_data`.)
  */
-async function waitForTerminal(jobId: string, signal: AbortSignal): Promise<{
+async function waitForTerminal(jobId: string, signal: AbortSignal, reader: JobReader): Promise<{
   taskId: string
   status: string
   output?: unknown
@@ -372,7 +419,8 @@ async function waitForTerminal(jobId: string, signal: AbortSignal): Promise<{
   while (Date.now() - start < TIMEOUT_MS && !signal.aborted) {
     const { data } = await supabase
       .from("jobs")
-      .select(`status, output_data, error_message, ${TREND_RUN_MARKER_SELECT}`)
+      // `user_id` is read to tell the job's owner (lib/job-owner-output.ts); never answered.
+      .select(`status, output_data, error_message, user_id, ${TREND_RUN_MARKER_SELECT}`)
       .is(TRASHED_JOB_COLUMN, null)
       .eq("id", jobId)
       .maybeSingle()
@@ -409,7 +457,7 @@ async function waitForTerminal(jobId: string, signal: AbortSignal): Promise<{
       return {
         taskId: jobId,
         status: data.status,
-        output: redactPrivateJobOutput(data.output_data ?? null),
+        output: withOwnerOnlyOutputFields(redactPrivateJobOutput(data.output_data ?? null), data.output_data, data.user_id, reader),
         error: trendRunErrorText(data.error_message, { trend: data.trend_run_marker }, false),
       }
     }

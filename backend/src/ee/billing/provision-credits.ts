@@ -6,6 +6,7 @@
  * All DB operations use the Supabase service-role client.
  */
 
+import { retryCreditTransaction } from "./credit-transaction-retry.js"
 import type { FastifyBaseLogger } from "fastify"
 import { supabase } from "../../lib/supabase.js"
 import { isMissingColumnError } from "../../lib/postgrest-errors.js"
@@ -917,12 +918,12 @@ export async function handleTransactionCompleted(
   //   - a failure can NEVER leave a committed claim without the grant (both roll
   //     back together) — no permanent zero-credit, no compensating delete needed.
   // Returns true if it granted, false if the claim already existed (duplicate).
-  const { data: granted, error: rpcError } = await supabase.rpc("grant_topup_credits_idempotent", {
+  const { data: granted, error: rpcError } = await retryCreditTransaction(() => supabase.rpc("grant_topup_credits_idempotent", {
     p_user_id: userId,
     p_credits: totalCredits,
     p_stripe_transaction_id: data.transactionId,
     p_amount_usd: data.totalAmount / 100, // Stripe amounts in cents
-  })
+  }))
 
   if (rpcError) {
     // Nothing committed (claim + grant are atomic) — safe to leave for a Stripe
@@ -932,7 +933,7 @@ export async function handleTransactionCompleted(
       data.transactionId,
       rpcError.message,
     )
-    return
+    throw new StripeEventRetryError("Top-up funding could not be confirmed")
   }
 
   if (granted === false) {
@@ -1091,15 +1092,15 @@ export async function handleAutoRechargeSucceeded(
     return
   }
 
-  const { data: granted, error } = await supabase.rpc("grant_topup_credits_idempotent", {
+  const { data: granted, error } = await retryCreditTransaction(() => supabase.rpc("grant_topup_credits_idempotent", {
     p_user_id: data.userId,
     p_credits: credits,
     p_stripe_transaction_id: data.piId,
     p_amount_usd: data.amountReceivedCents / 100,
-  })
+  }))
   if (error) {
     console.error("[stripe] auto-recharge grant failed:", data.piId, error.message)
-    return
+    throw new StripeEventRetryError("Auto-recharge funding could not be confirmed")
   }
   if (granted === false) {
     console.log("[stripe] auto-recharge already granted (idempotent):", data.piId)

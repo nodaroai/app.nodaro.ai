@@ -263,6 +263,8 @@ describe("pixverse-v6-extend — the deliverable", () => {
       fallbackTrims: { trimEndFrames: 0, trimStartFrames: 0 },
       audioFadeSec: 0.15,
       dropLeadingRepeats: true,
+      // An unwatermarked run joins two 10-bit clips in 10-bit HEVC (decided 2026-11-22).
+      keepTenBit: true,
     })
     expect(mocks.mockWatermarkLocalVideoAndUpload).toHaveBeenCalledWith(STITCHED_PATH, "job-1", "user-1", false)
   })

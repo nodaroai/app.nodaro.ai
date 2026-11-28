@@ -38,6 +38,7 @@ function saveBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob)
   const a = document.createElement("a")
   a.href = url
+  // download-site: a collection export, no stored result
   a.download = filename
   document.body.appendChild(a)
   a.click()

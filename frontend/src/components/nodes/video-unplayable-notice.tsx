@@ -3,7 +3,8 @@
 import { useState } from "react"
 import { AlertCircle, Download } from "lucide-react"
 import { useT } from "@/lib/i18n"
-import { downloadVideoFile, showsUnplayableNotice, unproxiedUrl } from "./video-unplayable"
+import { downloadVideoFile } from "@/lib/video-result-download"
+import { showsUnplayableNotice, unproxiedUrl } from "./video-unplayable"
 
 /**
  * A result `<video>`'s "this browser cannot play it" state (decided
@@ -39,7 +40,7 @@ export function useVideoUnplayable(url: string | undefined, onOtherError?: () =>
 }
 
 /** The message and Download action shown over a result the browser cannot play. */
-export function VideoUnplayableNotice({ url, label }: { url: string; label: string }) {
+export function VideoUnplayableNotice({ url }: { url: string }) {
   const t = useT()
   return (
     <div className="absolute inset-0 z-[5] flex flex-col items-center justify-center gap-2 bg-black/80 px-4 text-center" data-testid="video-unplayable">
@@ -48,7 +49,7 @@ export function VideoUnplayableNotice({ url, label }: { url: string; label: stri
       <button
         type="button"
         className="inline-flex items-center gap-1 rounded-full bg-white/15 px-3 py-1 text-[11px] text-white hover:bg-white/25"
-        onClick={(e) => { e.stopPropagation(); downloadVideoFile(url, label) }}
+        onClick={(e) => { e.stopPropagation(); downloadVideoFile(url) }}
       >
         <Download className="w-3 h-3" /> {t("common.download")}
       </button>

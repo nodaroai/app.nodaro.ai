@@ -15,10 +15,9 @@
  *                                      roleFace: boolean,
  *                                      flash: { "nodaro-prism": boolean, "nodaro-pulse": boolean },
  *                                      resolutions: { [engineChoice]?: size[] },
- *                                      upscaleChoice: boolean,
- *                                      upscaleTo: { [engine]?: { [size]?: nextSize } },
  *                                      portion: boolean,
- *                                      shortClips: boolean }
+ *                                      shortClips: boolean,
+ *                                      longClips: { maxSourceSec: number } | null }
  *
  * TRANSITION SHIM (the 2026-11-17 engine ids): each map also answers every
  * engine under its previous id (`"motion-prism"`, `"motion-pulse"`), the same
@@ -131,37 +130,6 @@
  * here under its engine). A client reading a server from before it finds none
  * and offers no Flash choice.
  *
- * `upscaleChoice` says whether a run and its estimate take the upscale choice
- * (`upscale: "off" | "next"`: the finished video upscaled to the next size and
- * delivered at it, decided 2026-11-24): one boolean for the deployment, true
- * only while this environment's engine declares `castSwap.upscaleChoice`
- * (which it does only where the deployment has turned it on;
- * lib/video-remake-upscale-choice.ts). Like `roleFace` it follows the engine
- * alone and is in every answer, the failed-read one included. It says the
- * field is TAKEN, not that a given run is offered it: that is the estimate's
- * `upscaleOffered` (never on a draft or a trend run, and not at a size the
- * admin turned off; a 1080p run is delivered at 4K). A client reading a server from before it finds none
- * and treats it as false.
- *
- * `upscaleTo` says, per engine (and Flash choice) and engine size, the size
- * "next" delivers here, so a page can show its Upscale control before a clip
- * is added: e.g. `{ "nodaro-prism": { "480p": "720p", "720p": "1080p",
- * "1080p": "4k" }, "nodaro-pulse": { "720p": "1080p", "1080p": "4k" } }`.
- * It is the engine's declared map (`castSwap.upscaleNext`) less every size the
- * admin switched off (`nodaro_motion_precise_upscale`, read as the engine reads
- * it: lib/video-remake-upscale-choice.ts `upscaleToOffered`); an engine with
- * no size left is left out, and the map is `{}` when `upscaleChoice` is false
- * or the engine declares none. A failed settings read answers no Prism or Prism
- * Flash size (Pulse's map still: it reads no row). Keyed by its own ids only,
- * never the previous ones (a new field: no client reads those). What a given
- * run is offered stays the estimate's `upscaleOffered`. A client reading a
- * server from before it finds none and treats it as `{}`.
- *
- * `upscaleChoice` and `upscaleTo` serve the clients built for the upscale
- * choice through the transition to `resolutions` below: no longer in the
- * SDK's types or the public docs, answered exactly as before until the old
- * request shape is removed.
- *
  * `resolutions` says, per engine choice (each engine and Flash choice), the
  * sizes a run is DELIVERED at here (`resolution` on a run and its estimate,
  * decided 2026-11-26), smallest (the default) first: e.g.
@@ -169,7 +137,7 @@
  * "1080p", "4k"], "nodaro-prism-flash": ["720p", "1080p"],
  * "nodaro-pulse-flash": ["720p", "1080p"] }`. It is the engine's declared
  * sizes (`castSwap.deliveredResolutions`) less every step the admin switched
- * off, read as `upscaleTo` reads them, with the engine's own sizes where no
+ * off, read as the engine reads them, with the engine's own sizes where no
  * step delivers them (lib/video-remake-delivered-resolution.ts
  * `deliveredResolutionsOffered`). `{}` while this environment's engine does
  * not declare `castSwap.deliveredResolution` (its `resolution` is then the
@@ -177,6 +145,21 @@
  * and Prism Flash answer the sizes their engines make). Keyed by its own ids
  * only. A client reading a server from before it finds none and treats it as
  * `{}`.
+ *
+ * `quality` says, per engine choice, the delivered sizes where a run and its
+ * estimate have a Quality choice here (`quality: "full" | "economy"`, decided
+ * 2026-11-27), smallest first: e.g. `{ "nodaro-prism": ["720p", "1080p"],
+ * "nodaro-pulse": ["1080p"] }`. A size is one when the engine can make it
+ * itself ("full") AND it is delivered here by a step ("economy", the
+ * default), so the two differ: the engine's declared `castSwap.qualityFull`
+ * within the sizes `resolutions` delivers by a step this deployment offers
+ * (lib/video-remake-quality.ts `qualityOffered`, reading the settings as
+ * `resolutions` does). An engine choice with no such size is left out; `{}`
+ * while this environment's engine does not declare `castSwap.quality` (it is
+ * then never sent the choice), and for a Prism-family choice when the
+ * settings read failed. Keyed by its own ids only. What a given request is
+ * offered stays the estimate's `qualityOffered`. A client reading a server
+ * from before it finds none and treats it as `{}`: no Quality control.
  *
  * `portion` says whether a run, its estimate and the plan-roles route take a
  * part of the clip (`portionStart` and `portionSec`, in seconds: an ordinary
@@ -188,6 +171,14 @@
  * declares `castSwap.shortClips`. Like `roleFace` both follow the engine alone
  * and are in every answer, the failed-read one included. A client reading a
  * server from before them finds none and treats each as false.
+ *
+ * `longClips` (decided 2026-11-25 and 2026-11-27) says whether a whole run on
+ * one engine with the Precise style takes a source longer than 30 s, run in
+ * parts joined into one result, and up to how long (`maxSourceSec`): the
+ * engine's own `castSwap.longClips`, declared only while the deployment's
+ * engine switch is on, else `null`. It follows the engine alone and is in
+ * every answer, as `portion` is. A client reading a server from before it
+ * finds none and treats it as `null`.
  */
 import type { FastifyInstance, RouteHandlerMethod } from "fastify"
 import { NODARO_MOTION_ENGINES, NODARO_MOTION_LEGACY_ENGINE_OF, type NodaroMotionEngine } from "@nodaro/shared/models"
@@ -205,14 +196,9 @@ import { getPluginSupports } from "../../lib/private-plugins/supports-registry.j
 import { engineTakesRoleFace } from "../../lib/cast-swap-role-face.js"
 import { flashOfferedEngines } from "../../lib/video-remake-flash.js"
 import { engineTakesFlashChoices } from "../../lib/nodaro-motion-flash-offer.js"
-import {
-  engineTakesUpscaleChoice,
-  enginePreciseUpscale,
-  upscaleToOffered,
-  upscaleToReadsSettings,
-  type VideoRemakeUpscaleTo,
-} from "../../lib/video-remake-upscale-choice.js"
-import { engineTakesPortion, engineTakesShortClips } from "../../lib/video-remake-portion.js"
+import { enginePreciseUpscale } from "../../lib/video-remake-upscale-choice.js"
+import { engineLongClips, engineTakesPortion, engineTakesShortClips } from "../../lib/video-remake-portion.js"
+import { qualityOffered, type VideoRemakeQualityOffered } from "../../lib/video-remake-quality.js"
 import {
   deliveredResolutionsOffered,
   deliveredResolutionsReadSettings,
@@ -262,14 +248,12 @@ function answer(
   takesPlanRolesPreviz: boolean,
   /** Per engine, whether its Flash choice is offered (`flashOfferedEngines`). */
   flash: Record<NodaroMotionEngine, boolean>,
-  /** The engine takes the upscale choice (`castSwap.upscaleChoice`); the engine alone, never the settings. */
-  upscaleChoice: boolean,
-  /** Per engine and size, what "next" delivers here (`upscaleToOffered`); keyed by its own ids, never the previous ones. */
-  upscaleTo: VideoRemakeUpscaleTo,
   /** Per engine choice, the sizes delivered here (`deliveredResolutionsOffered`); keyed by its own ids. */
   resolutions: VideoRemakeResolutions,
-  /** The engine's part-of-the-clip and short-clip capabilities (`castSwap.portion`, `castSwap.shortClips`); the engine alone. */
-  clipLength: { portion: boolean; shortClips: boolean },
+  /** Per engine choice, the delivered sizes with a Quality choice here (`qualityOffered`); keyed by its own ids. */
+  quality: VideoRemakeQualityOffered,
+  /** The engine's part-of-the-clip, short-clip and long-clip capabilities (`castSwap.portion`, `.shortClips`, `.longClips`); the engine alone. */
+  clipLength: { portion: boolean; shortClips: boolean; longClips: { maxSourceSec: number } | null },
 ) {
   return {
     engines: withPreviousEngineIds(engines),
@@ -282,11 +266,12 @@ function answer(
     previz,
     roleFace,
     flash: withPreviousEngineIds(flash),
-    upscaleChoice,
-    upscaleTo,
     resolutions,
+    quality,
     portion: clipLength.portion,
     shortClips: clipLength.shortClips,
+    // A fresh record in every answer: a caller's change to one never reaches the next.
+    longClips: clipLength.longClips ? { maxSourceSec: clipLength.longClips.maxSourceSec } : null,
   }
 }
 
@@ -306,16 +291,14 @@ const styleChoiceHandler: RouteHandlerMethod = async (req, reply) => {
   const takesPlanRoles = engineTakesPlanRoles(castSwap)
   const takesPreviz = engineTakesPreviz(castSwap)
   const roleFace = engineTakesRoleFace(castSwap)
-  const upscaleChoice = engineTakesUpscaleChoice(castSwap)
-  const takesUpscaleTo = upscaleToReadsSettings(castSwap)
   const takesResolutions = deliveredResolutionsReadSettings(castSwap)
-  const clipLength = { portion: engineTakesPortion(castSwap), shortClips: engineTakesShortClips(castSwap) }
+  const clipLength = { portion: engineTakesPortion(castSwap), shortClips: engineTakesShortClips(castSwap), longClips: engineLongClips(castSwap) }
   // What the answer says without the settings: people choose the style, no custom style, no roles planned from the prompt, no 3D previz clip.
   const withoutSettings = () =>
-    answer(styleChoices(null), { styleOnly, preciseArtStyle, preciseArtStyleAlone, customStyle: customStyleEngines(false) }, false, false, roleFace, false, flashOfferedEngines(null, castSwap), upscaleChoice, upscaleToOffered(castSwap, null), deliveredResolutionsOffered(castSwap, null), clipLength)
+    answer(styleChoices(null), { styleOnly, preciseArtStyle, preciseArtStyleAlone, customStyle: customStyleEngines(false) }, false, false, roleFace, false, flashOfferedEngines(null, castSwap), deliveredResolutionsOffered(castSwap, null), qualityOffered(castSwap, null), clipLength)
   // Nothing of the answer reads the settings for this engine: it enforces no Style choice, takes no custom style, plans no roles, takes no 3D previz clip,
-  // no Flash choice, and offers no upscale choice and no delivered size stepped up on a Prism-family engine (Pulse's needs no row).
-  if (!takesStyleChoice && !takesCustomStyle && !takesPlanRoles && !takesPreviz && !engineTakesFlashChoices(castSwap) && !takesUpscaleTo && !takesResolutions) {
+  // no Flash choice, and offers no delivered size stepped up on a Prism-family engine (Pulse's needs no row).
+  if (!takesStyleChoice && !takesCustomStyle && !takesPlanRoles && !takesPreviz && !engineTakesFlashChoices(castSwap) && !takesResolutions) {
     return reply.header("Cache-Control", `public, max-age=${STYLE_CHOICE_MAX_AGE_SECONDS}`).send(withoutSettings())
   }
   let settings: Awaited<ReturnType<typeof getAppSettings>> | null = null
@@ -342,9 +325,8 @@ const styleChoiceHandler: RouteHandlerMethod = async (req, reply) => {
       roleFace,
       engineTakesPlanRolesPreviz(castSwap),
       flashOfferedEngines(settings, castSwap),
-      upscaleChoice,
-      upscaleToOffered(castSwap, precise),
       deliveredResolutionsOffered(castSwap, precise),
+      qualityOffered(castSwap, precise),
       clipLength,
     ),
   )

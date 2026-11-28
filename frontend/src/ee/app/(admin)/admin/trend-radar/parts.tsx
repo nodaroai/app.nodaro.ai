@@ -22,12 +22,13 @@ export function StatusPill({ status, label }: { status: TrendCandidateStatus; la
   return <span className={cn("inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap", pill.className)}>{pill.text}</span>
 }
 
-export function Tile({ title, value, hint }: { title: string; value: string; hint: string }) {
+export function Tile({ title, value, hint, warning }: { title: string; value: string; hint: string; warning?: string }) {
   return (
-    <div className="rounded-lg border bg-card p-4 min-w-0">
+    <div className={cn("rounded-lg border bg-card p-4 min-w-0", warning && "border-destructive/60")}>
       <div className="text-sm text-muted-foreground">{title}</div>
       <div className="mt-1 text-2xl font-bold leading-tight">{value}</div>
       <div className="text-xs text-muted-foreground mt-1">{hint}</div>
+      {warning && <div className="text-xs text-destructive mt-1" role="status">{warning}</div>}
     </div>
   )
 }
@@ -38,6 +39,22 @@ export function Card({ title, aside, children, className }: { title: string; asi
       <div className="flex flex-wrap items-baseline justify-between gap-2 mb-3">
         <h2 className="text-sm font-semibold">{title}</h2>
         {aside && <span className="text-xs text-muted-foreground">{aside}</span>}
+      </div>
+      {children}
+    </section>
+  )
+}
+
+/** One numbered part of a settings page: a plain-language heading, what it is for, then its controls. */
+export function Section({ step, title, description, children }: { step: number; title: string; description: string; children: React.ReactNode }) {
+  return (
+    <section className="rounded-xl border bg-card p-5 sm:p-6 min-w-0" aria-labelledby={`section-${step}`}>
+      <div className="flex gap-3 mb-4">
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/15 text-sm font-bold text-primary-ink" aria-hidden>{step}</span>
+        <div className="min-w-0">
+          <h2 id={`section-${step}`} className="text-base font-semibold">{title}</h2>
+          <p className="text-sm text-muted-foreground mt-0.5">{description}</p>
+        </div>
       </div>
       {children}
     </section>

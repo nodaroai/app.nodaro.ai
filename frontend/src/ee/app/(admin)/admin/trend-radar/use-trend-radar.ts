@@ -1,5 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import type { ListTrendCandidatesParams, TrendCandidateStatus, TrendRadarSettingsPatch } from "@nodaro/sdk/trend-radar"
+import type { TrendCandidateCard, TrendCandidateStatus, TrendRadarSettingsPatch } from "@nodaro/sdk/trend-radar"
 import { hasAdmin } from "@/lib/edition"
 import { queryKeys } from "@/lib/query-keys"
 import { radarClient } from "./client"
@@ -27,10 +27,28 @@ export function useRadarSummary(polling = false) {
   })
 }
 
-export function useRadarCandidates(params: Pick<ListTrendCandidatesParams, "status" | "sort">, polling = false) {
+/** Pages the queue reads at most (200 cards each): far past any real queue, so a bug cannot loop. */
+export const QUEUE_MAX_PAGES = 10
+
+/**
+ * Every card of one status (or of every open and approved status, for "all"),
+ * read page by page to the end: the queue filters and sorts them in the
+ * browser, so it must hold all of them, not the first page.
+ */
+export function useRadarQueue(status: TrendCandidateStatus | undefined, polling = false) {
   return useQuery({
-    queryKey: queryKeys.admin.trendRadarCandidates(params.status ?? "all", params.sort ?? "creators"),
-    queryFn: () => radarClient.trendRadar.candidates({ ...params, limit: 200 }),
+    queryKey: queryKeys.admin.trendRadarCandidates(status ?? "all", "every-page"),
+    queryFn: async () => {
+      const cards: TrendCandidateCard[] = []
+      let cursor: string | undefined
+      for (let page = 0; page < QUEUE_MAX_PAGES; page++) {
+        const res = await radarClient.trendRadar.candidates({ ...(status ? { status } : {}), sort: "firstSeen", limit: 200, ...(cursor ? { cursor } : {}) })
+        cards.push(...res.data)
+        if (!res.next) return { cards, complete: true }
+        cursor = res.next
+      }
+      return { cards, complete: false }
+    },
     enabled: hasAdmin(),
     staleTime: 30_000,
     placeholderData: keepPreviousData,
@@ -47,6 +65,15 @@ export function useRadarCandidate(id: string | undefined) {
     staleTime: 30_000,
     retry,
   })
+}
+
+/** Reads a candidate ahead of time (the viewer's next one), so moving on shows its posts at once. */
+export function usePrefetchRadarCandidate() {
+  const qc = useQueryClient()
+  return (id: string | null) => {
+    if (!id || !hasAdmin()) return
+    void qc.prefetchQuery({ queryKey: queryKeys.admin.trendRadarCandidate(id), queryFn: () => radarClient.trendRadar.candidate(id), staleTime: 30_000 })
+  }
 }
 
 export function useRadarSettings() {

@@ -31,6 +31,7 @@ import { extractJobOutputs, isOwnedObjectKey } from "./job-policy-outputs.js"
 import { restrictedKeyOfAddress } from "./content-restriction-address.js"
 import { invalidateRestrictedSet, restrictedKeys } from "./content-restriction-set.js"
 import { isEvidenceKey } from "./evidence-keys.js"
+import { keptOriginalKeysOf, previewKeyOfKeptOriginal } from "./video-original-keys.js"
 import { isRestrictedCoverAddress } from "./job-cover/cover-restriction.js"
 import { keysUserMayDelete } from "./key-ownership.js"
 import { relocateRestrictedBytes, restoreRestrictedBytes, type RestrictionBytes } from "./content-restriction-bytes.js"
@@ -233,8 +234,38 @@ async function ownedThumbnailKey(asset: { user_id: string | null; metadata: Reco
 }
 
 /**
+ * The other file of a video stored twice (decided 2026-11-22,
+ * lib/video-result-store.ts): the kept original beside a preview
+ * (`videos/<id>.mp4` → `videos/<id>-master.<ext>`), or the preview beside an
+ * original. The same picture, so restricting one file restricts the other, as
+ * restricting their job does (its output names both). Only the keys storage
+ * holds; a key whose presence cannot be read is kept in, since a restriction
+ * errs toward the bytes (a move of an absent key records it missing).
+ */
+async function videoSiblingKeys(key: string | null): Promise<string[]> {
+  if (!key) return []
+  const preview = previewKeyOfKeptOriginal(key)
+  const candidates = [...keptOriginalKeysOf(key), ...(preview ? [preview] : [])]
+  if (candidates.length === 0) return []
+  // Loaded on demand: most readers of this module never restrict a file.
+  const { headR2Object } = await import("./storage.js")
+  const held = await Promise.all(
+    candidates.map(async (candidate) => {
+      try {
+        return (await headR2Object(candidate)).exists ? candidate : null
+      } catch (e) {
+        console.warn(`[content-restrictions] whether ${candidate} is stored could not be read; it is restricted with the file:`, e instanceof Error ? e.message : e)
+        return candidate
+      }
+    }),
+  )
+  return held.filter((k): k is string => k !== null)
+}
+
+/**
  * Restricts a stored file and everything that names its bytes: its own row,
- * the rows of copies (by key and by hash), and the jobs whose output it is.
+ * the rows of copies (by key and by hash), the jobs whose output it is, and
+ * for a video stored twice the other file of the pair (`videoSiblingKeys`).
  */
 export async function restrictAsset(assetId: string, input: RestrictInput): Promise<ContentRestriction> {
   // restricted-read: the restriction reads the row it restricts
@@ -252,7 +283,7 @@ export async function restrictAsset(assetId: string, input: RestrictInput): Prom
     {
       assetId: asset.id,
       jobId: null,
-      keys: keysOf([asset.r2_key, await ownedThumbnailKey(asset)]),
+      keys: keysOf([asset.r2_key, await ownedThumbnailKey(asset), ...(await videoSiblingKeys(asset.r2_key))]),
       contentHash: asset.content_hash,
       sourceUrl,
       ownerUserId: asset.user_id,

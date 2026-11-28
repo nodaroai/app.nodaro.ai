@@ -214,6 +214,15 @@ test("a JSON input declares no field: its wire lands in unitInputs (no resolver 
   assert.match(inputProblems([{ id: "plan", label: "Plan", accepts: ["look"], field: "planJson" }]).join("\n"), /handles\.inputs\[1\]\.field: a JSON input \(accepts "look"\) lands in unitInputs, never a data field — remove field/)
 })
 
+test("an image input with no field is the image lane: valid alone or beside others, and it accepts only image", () => {
+  assert.deepEqual(inputProblems([{ id: "front", label: "Front", accepts: ["image"] }, { id: "back", label: "Back", accepts: ["image"] }]), [])
+  // With a field it routes by its source's type, as before, and may take other kinds too.
+  assert.deepEqual(inputProblems([{ id: "photo", label: "Photo", accepts: ["image", "video"], field: "imageUrl" }]), [])
+  for (const accepts of [["image", "video"], ["audio", "image"]]) {
+    assert.match(inputProblems([{ id: "x", label: "X", accepts }]).join("\n"), /handles\.inputs\[1\]: an image input with no field lands in unitInputs by its id \(the image lane\) and accepts only "image"/, accepts.join(", "))
+  }
+})
+
 test("many: only true, only on a video/audio input, never with a field", () => {
   for (const accepts of [["video", "audio"], ["video"], ["audio"]]) {
     assert.deepEqual(inputProblems([{ id: "sources", label: "Sources", accepts, many: true }]), [], accepts.join(", "))

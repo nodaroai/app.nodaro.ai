@@ -116,6 +116,14 @@
  * deliver resolutions yet (`castSwap.deliveredResolution` absent) reads
  * `resolution` as its own size, and the quote's text names what it answers.
  *
+ * `quality` says how that size is made (decided 2026-11-27,
+ * lib/video-remake-quality.ts): "economy" (the default) or "full", sent as
+ * given; an engine that does not take the choice is never sent it (the
+ * routes' own hook, middleware/video-remake-quality.ts), so the tool needs
+ * no check of its own. Only a quote whose request named it says how the size
+ * is made (`quality`, `qualityOffered`, `engineResolution`, and a sentence);
+ * every other quote is the one of before, with no word of it.
+ *
  * A part of the clip (`portion_start`, `portion_sec`, in seconds, decided
  * 2026-11-25): an ordinary run of that length, priced by it, sent as
  * `portionStart` / `portionSec` to the run, the quote and the plan of the
@@ -127,6 +135,15 @@
  * `preview`, inside the clip, a source of at most 10 minutes) is the route's.
  * The tool has no quote of its own beside `video_remake`: a call without
  * `confirm` is the estimate.
+ *
+ * A long clip (decided 2026-11-25 and 2026-11-27): where the engine declares
+ * `castSwap.longClips`, a whole run on Nodaro Prism with the Precise style
+ * takes a source over 30 s, up to its `maxSourceSec`, made in parts. It needs
+ * no argument (the route decides it, and refuses `long_clip_too_long` past the
+ * declared length), so the tool only says so. Such a job may complete with only
+ * its first parts (`output_data.partial`): the started text then says what to
+ * look for, and get_job / wait_for_job / get_asset say it in words
+ * (`partialDeliveryGuidance`).
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import type { FastifyInstance } from "fastify"
@@ -163,7 +180,7 @@ import {
   loadedEngineTakesPlanRolesPreviz,
   loadedEngineTakesPreviz,
 } from "../../cast-swap-engines.js"
-import { neutralBreakdown, privacyCreditsOf } from "../../nodaro-motion-quote.js"
+import { neutralBreakdown, privacyCreditsOf, withStepFolded } from "../../nodaro-motion-quote.js"
 import { originalCdnImageUrls } from "../../cdn-original-url.js"
 import { clientRequestIdSchema, errorResult, GET_JOB_POLL_HINT, idempotencyHeaders, parseJobId } from "./_verb-helpers.js"
 import { amountsNote, amountWord, statedAmount, statedAmountRecord, unitFields } from "../amounts.js"
@@ -171,7 +188,8 @@ import { statedName } from "../deployment-name.js"
 import { checkIntentArg, intentMismatchSentence, runIntentArg, videoRemakeIntentMismatch } from "./_video-remake-intent.js"
 import { VIDEO_REMAKE_DELIVERED_SIZES, deliveredSizeLabel, deliveredSizeOfQuote, type VideoRemakeDeliveredSize } from "../../video-remake-delivered-resolution.js"
 import { videoRemakeResolutionArg, videoRemakeResolutionSentence, type VideoRemakeSizesHere } from "../video-remake-sizes.js"
-import { loadedEngineTakesPortion } from "../../video-remake-portion.js"
+import { loadedEngineLongClips, loadedEngineTakesPortion } from "../../video-remake-portion.js"
+import { VIDEO_REMAKE_QUALITIES, qualityQuoteOf } from "../../video-remake-quality.js"
 
 const executeGate: ToolGate = { required: ["workflows:execute"] }
 
@@ -534,6 +552,7 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor, vide
         "Without `confirm` it returns the PRICE QUOTE only (nothing is charged): show the credits to the user, and call again with `confirm: true` only once they accept. " +
         "That returns a job id: poll it with wait_for_job. `preview: true` renders 4 s first, a cheaper check of the look. " +
         "Where offered, portion_start + portion_sec run a part of the clip (a source up to 10 min), priced by its length. " +
+        "Where offered, a whole clip over 30 s (nodaro-prism, precise) runs in parts and may complete with only the first ones (outputData.partial: say so). " +
         `engine picks the engine: "nodaro-prism" (Nodaro Prism, the default) or "nodaro-pulse" (Nodaro Pulse; no draft); ${videoRemakeResolutionSentence(videoRemakeSizes)}. ` +
         "Image and video URLs must be http(s): upload local files with the upload tools first." +
         (recastOffered(session) ? ` ${RECAST_POINTER}` : "") +
@@ -542,7 +561,7 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor, vide
       // takes an older client's `kling_length` as `motion_length` and ignores `face_masking`
       // (the payload is built field by field). Only the listed keys are in the tool list.
       inputSchema: z.looseObject({
-        video_url: z.string().url().describe("The source clip, 4–30 s (where offered: 2–30 s, or up to 10 min with a part)."),
+        video_url: z.string().url().describe("The source clip, 4–30 s (where offered: 2–30 s, longer whole, or up to 10 min with a part)."),
         roles: z
           .array(
             z.discriminatedUnion("kind", [
@@ -661,7 +680,10 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor, vide
           .describe(videoRemakeResolutionArg(videoRemakeSizes)),
         draft: z.boolean().optional().describe("true = a 480p draft (nodaro-prism only) that full_quality can finish at 1080p. Default false: plain."),
         prepare_references: z.boolean().optional().describe("Default true: prepare the reference pictures first."),
-        quality: z.enum(["draft"]).optional().describe('Deprecated: use resolution + draft. "draft" means a 480p draft.'),
+        quality: z
+          .enum([...VIDEO_REMAKE_QUALITIES, "draft"])
+          .optional()
+          .describe('How resolution is made: "economy" (default) one size below, then enlarged to it; "full" at the size itself, sharper, costs more. Quote each; where there is one way only, that way runs. "draft" (deprecated): a 480p draft.'),
         session_id: z.string().min(1).optional().describe("A generation session to file the result in."),
         confirm: z.boolean().optional().describe("true ONLY after the user accepted the quoted credits in this conversation."),
         check_intent: checkIntentArg,
@@ -943,8 +965,9 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor, vide
         } catch {
           return { content: [{ type: "text" as const, text: "The Video Remake quote could not be read." }], isError: true as const }
         }
-        // The neutral key names only (an engine before 0.395.0 also, or only, sends the old ones).
-        const breakdown = neutralBreakdown(quote.breakdown)
+        // The neutral key names only (an engine before 0.395.0 also, or only, sends the old ones); an engine that still
+        // prices the step on a line of its own has it in the engine's line, never named.
+        const breakdown = withStepFolded(neutralBreakdown(quote.breakdown))
         const privacyCredits = privacyCreditsOf(quote)
         const references = breakdown.references
           ? ` That includes ${statedAmount(breakdown.references)} ${amountWord()} to prepare the reference pictures first (prepare_references: false skips it).`
@@ -974,13 +997,27 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor, vide
         // it `outputResolution`; an older one, nothing).
         const delivered = deliveredSizeOfQuote(quote)
         const sizeSentence = delivered !== undefined ? ` It is delivered at ${deliveredSizeLabel(delivered)}.` : ""
+        // How the size is made: answered only to a request that named `quality` (an engine without the choice, or a
+        // request that named none, answers nothing, and nothing is said).
+        const made = qualityQuoteOf(quote)
+        const qualitySentence =
+          made.quality === "economy"
+            ? // A "full" asked for where only Economy can be had (4K on an engine choice that does not render 4K itself): said, never passed off as Full.
+              `${args.quality === "full" ? " Full is not available at this size for this engine choice." : ""} Economy: rendered at ${made.engineResolution ?? "a smaller size"}, then upscaled; faces and motion can look processed.${made.qualityOffered === true ? ' quality: "full" renders at the size itself (quote it for its price).' : ""}`
+            : made.quality === "full"
+              ? ` Full: rendered at the size itself, no upscaling.${made.qualityOffered === true ? ' quality: "economy" costs less (quote it for its price).' : ""}`
+              : // Asked for, and the quote says nothing of it (an engine without the choice, or a request it is not
+                // read on): never let a "full" pass for one silently.
+                args.quality === "full"
+                ? ' quality: "full" is not available for this call: this quote is the default way of making the size.'
+                : ""
         const imageStyle = customImage !== undefined ? " The image's style is read when the run is confirmed; the price does not depend on it." : ""
         return {
           content: [
             {
               type: "text" as const,
               text:
-                `This ${engineName} ${args.preview ? "preview " : "run "}costs about ${statedAmount(expected ?? quote.totalCredits)} ${amountWord()}${held}.${sizeSentence}${references}${retry}${lower}${imageStyle}${intentMismatch ? intentMismatchSentence(intentMismatch) : ""} ` +
+                `This ${engineName} ${args.preview ? "preview " : "run "}costs about ${statedAmount(expected ?? quote.totalCredits)} ${amountWord()}${held}.${sizeSentence}${qualitySentence}${references}${retry}${lower}${imageStyle}${intentMismatch ? intentMismatchSentence(intentMismatch) : ""} ` +
                 (plannedAnswer ? `${plannedAnswer.sentence} ` : "") +
                 `${QUOTE_NEXT}${
                   quoteFor?.next ??
@@ -1002,6 +1039,8 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor, vide
             settlesLower: quote.settlesLower === true,
             // The size delivered, where the engine answers it.
             ...(delivered !== undefined ? { resolution: delivered } : {}),
+            // How the size is made, to a request that named `quality`.
+            ...made,
             confirmed: false,
             ...(plannedAnswer ? { planned: plannedAnswer.planned, arguments: plannedAnswer.arguments } : {}),
             ...(intentMismatch ? { intent: intentMismatch } : {}),
@@ -1058,8 +1097,10 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor, vide
       // words this call just read; where the job cannot be read, the words this call read.
       const styleText = describedText !== undefined ? ((await recordedCustomStyle(fastify, session, jobId)) ?? describedText) : undefined
       const styleSentence = styleText !== undefined ? ` The image's style was read as: "${styleText}"` : ""
+      // Where a clip over 30 s is made in parts, its result may cover only the clip's start: what to look for.
+      const longSentence = loadedEngineLongClips() ? " A clip over 30 s is made in parts: if the result's outputData has partial, it covers only the clip's start, and the user must be told." : ""
       return {
-        content: [{ type: "text" as const, text: statedName(`Video Remake started (job ${jobId}). To follow it, ${GET_JOB_POLL_HINT}.`) + styleSentence }],
+        content: [{ type: "text" as const, text: statedName(`Video Remake started (job ${jobId}). To follow it, ${GET_JOB_POLL_HINT}.`) + longSentence + styleSentence }],
         structuredContent: { jobId, confirmed: true, ...(styleText !== undefined ? { custom_style_text: styleText } : {}) },
       }
     },

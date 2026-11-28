@@ -8,6 +8,8 @@ import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
 import { Clapperboard, Loader2, AlertCircle, AlertTriangle, Type, Image as ImageIcon, Images, Film, Minus, Volume2, Music, Users, Aperture, Sparkles, Copy, ListChecks, SlidersHorizontal } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { NodeQuickStrip } from "./node-quick-strip"
+import { useRepairedCanvasVideo } from "@/hooks/use-repaired-video"
+import { ProClipDownloads } from "./pro-clip-downloads"
 import { GvpContinueControl } from "./gvp-continue-control"
 import { HandleWithPopover, HANDLE_COLORS, TEXT_HANDLE_COLOR } from "./handle-with-popover"
 import { EditableNodeLabel } from "./editable-node-label"
@@ -23,6 +25,7 @@ import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { videoNodeSizing } from "./video-node-defaults"
 import { isValidGenerateVideoProConnection } from "@/lib/generate-video-pro-handles"
 import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types"
+import { isSeedance2Provider } from "@nodaro/shared/models"
 import { buildVideoCreditModelIdentifier } from "@nodaro/shared/credits"
 import { SETTINGS_INPUT_HANDLE } from "@nodaro/shared/nodes"
 import { gvpRenderResolution, gvpSegmentAudio } from "@nodaro/render-rules"
@@ -103,6 +106,7 @@ function GenerateVideoProNodeComponent({ id, data, selected }: NodeProps) {
   const status = (nodeData.executionStatus as string | undefined) ?? "idle"
   const results = (nodeData.generatedResults as GeneratedResult[] | undefined) ?? []
   const activeIndex = (nodeData.activeResultIndex as number | undefined) ?? 0
+  useRepairedCanvasVideo(id, results)
   const activeResult = results[activeIndex]
   const activeUrl = activeResult?.url ?? (nodeData.generatedVideoUrl as string | undefined)
 
@@ -222,9 +226,11 @@ function GenerateVideoProNodeComponent({ id, data, selected }: NodeProps) {
   useModelCredits(`${provider}:8s:${resolution}`, 82)
   useModelCredits(`${provider}:8s:${resolution}-ref`, 50)
   useModelCredits("generate-video-pro", 10)
-  const liveEstimate = useVideoProCredits(runData)
-  const needsQuote = hasCredits() && runData.segmentMode !== undefined
-  const credits = needsQuote ? liveEstimate.data?.credits : estimateGenerateVideoProCredits(runData)
+  const hasOpeningVideo = useWorkflowStore(s => s.edges.some(edge => edge.target === id && edge.targetHandle === "videoReferences"))
+  const liveEstimate = useVideoProCredits(runData, hasOpeningVideo)
+  const needsQuote = hasCredits() && (runData.segmentMode !== undefined || isSeedance2Provider(provider))
+  const liveCredits = liveEstimate.isError ? undefined : liveEstimate.data?.credits
+  const credits = needsQuote ? liveCredits : estimateGenerateVideoProCredits(runData)
 
   // Result-aspect-ratio for the BaseNode minHeight calc + video-element sizing.
   const { aspectRatio: mediaAspectRatio, onLoadDimensions: handleLoadDimensions } =
@@ -335,7 +341,7 @@ function GenerateVideoProNodeComponent({ id, data, selected }: NodeProps) {
         runStripFootnote={settings.wired.length > 0 ? <SettingsPriceNote /> : undefined}
         topToolbarContent={
           <NodeQuickStrip nodeId={id} credits={credits} isRunning={status === "running"}
-            disabled={needsQuote && !liveEstimate.data}
+            disabled={needsQuote && liveCredits === undefined}
             disabledReason={liveEstimate.isError ? t("vidcfg.segmentMode.quoteError") : t("vidcfg.segmentMode.quoting")}>
             <GvpContinueControl nodeId={id} />
           </NodeQuickStrip>
@@ -350,6 +356,7 @@ function GenerateVideoProNodeComponent({ id, data, selected }: NodeProps) {
             <div className="relative w-full h-full">
               {resultOverlay}
               {policyNotice}
+              <ProClipDownloads clips={activeResult?.unassembledClips} />
             </div>
           ) : null
         ) : (
@@ -428,6 +435,7 @@ function GenerateVideoProNodeComponent({ id, data, selected }: NodeProps) {
           node. (Inline mode renders both inside the preview box above.) */}
       {!showInline && resultOverlay}
       {!showInline && policyNotice}
+      {!showInline && <ProClipDownloads clips={activeResult?.unassembledClips} />}
       {/* The wired settings, always visible; over a result they give way to
           its hover controls. */}
       <SettingsChips

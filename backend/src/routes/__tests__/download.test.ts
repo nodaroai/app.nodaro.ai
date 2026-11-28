@@ -149,7 +149,7 @@ describe("GET /v1/download", () => {
     expect(res.body).toContain("fake-image-data")
     expect(vi.mocked(safeFetch)).toHaveBeenCalledWith(
       "https://pub-test.r2.dev/images/test.png",
-      { timeoutMs: 120_000 },
+      expect.objectContaining({ method: "GET", timeoutMs: 120_000, signal: expect.any(AbortSignal) }),
     )
   })
 

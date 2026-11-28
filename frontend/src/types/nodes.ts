@@ -154,6 +154,7 @@ export interface FieldMapping {
 export type FieldMappings = Readonly<Record<string, FieldMapping>>
 
 export interface GeneratedResult {
+  readonly unassembledClips?: readonly { readonly url: string; readonly segment: number }[]
   readonly url: string
   readonly thumbnailUrl?: string
   readonly timestamp: string

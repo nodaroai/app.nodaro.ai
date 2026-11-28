@@ -2,10 +2,12 @@
 // @registry backend/src/nodes/*/quote.ts
 // @registry-exports quotes: UNIT_QUOTES
 import type { UnitQuote } from "../kit.js"
+import { quote as unit_long_image } from "../long-image/quote.js" // unit:long-image
 import { quote as unit_split_into_layers } from "../split-into-layers/quote.js" // unit:split-into-layers
 import { quote as unit_suno_speech } from "../suno-speech/quote.js" // unit:suno-speech
 
 export const UNIT_QUOTES: Readonly<Record<string, UnitQuote>> = Object.assign(Object.create(null), {
+  "long-image": unit_long_image, // unit:long-image
   "split-into-layers": unit_split_into_layers, // unit:split-into-layers
   "suno-speech": unit_suno_speech, // unit:suno-speech
 })

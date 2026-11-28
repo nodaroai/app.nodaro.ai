@@ -39,6 +39,17 @@ export function isKeptOriginalKey(key: string): boolean {
   return !!match && match[1]!.endsWith(ORIGINAL_SUFFIX) && (ORIGINAL_VIDEO_CONTAINERS as readonly string[]).includes(match[2]!)
 }
 
+/**
+ * The preview a kept original was stored beside (`videos/<id>.mp4` for
+ * `videos/<id>-master.<ext>`), or undefined when `key` is not a kept
+ * original: `keptOriginalKeysOf` read backwards.
+ */
+export function previewKeyOfKeptOriginal(key: string): string | undefined {
+  if (!isKeptOriginalKey(key)) return undefined
+  const match = /^videos\/([^/]+)\.[a-z0-9]+$/.exec(key)
+  return match ? `videos/${match[1]!.slice(0, -ORIGINAL_SUFFIX.length)}.mp4` : undefined
+}
+
 /** The job id a kept original's key names (`videos/<jobId>-master.<ext>`, or `<jobId>-merged-master`…): its UUID head. */
 export function jobIdOfKeptOriginalKey(key: string): string | undefined {
   if (!isKeptOriginalKey(key)) return undefined

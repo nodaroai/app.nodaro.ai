@@ -2973,6 +2973,34 @@ const SEEDANCE_DRAFT_FINALIZE_WIRE_MODEL = "bytedance/seedance-2-5-draft"
 export const LAYER_DECOMPOSITION_WIRE_MODEL = "seedream/5-5-layer-decomposition"
 export const LAYER_DECOMPOSITION_MODEL_KEY = "seedream-5-5-layer-decomposition"
 
+/**
+ * Kling 4.0's long image (the Long Image node): one very tall picture, a
+ * webpage design or a product detail page. No routing config of its own —
+ * long-image.ts sends it directly — so it is no image model any menu offers.
+ * Its model key names it to the egress seam, a job's `model` and its
+ * provider cost. It takes no content-filter parameter.
+ * Doc: https://docs.kie.ai/market/kling-4-0/long-image (read 2026-11-27).
+ */
+export const LONG_IMAGE_WIRE_MODEL = "kling-4-0/long-image"
+export const LONG_IMAGE_MODEL_KEY = "kling-4-long-image"
+
+/**
+ * The provider's listed figure for one long picture, in hundredths of a KIE
+ * credit (so sums are exact), by mode, page length and size (decided
+ * 2026-11-22), and for each picture sent. The job's provider cost records the
+ * task's own figure when its record states one, else these
+ * (image-cost.ts `longImageCostUsd`). Unmeasured on a real run.
+ */
+export const LONG_IMAGE_KIE_HUNDREDTHS = {
+  webpage: { "1K": 9900, "2K": 10750 },
+  ecommerce: {
+    short: { "1K": 4250, "2K": 5100 },
+    medium: { "1K": 8450, "2K": 9900 },
+    long: { "1K": 14100, "2K": 15500 },
+  },
+} as const
+export const LONG_IMAGE_INPUT_IMAGE_KIE_HUNDREDTHS = 50
+
 let entries: readonly ProviderSafetyEntry[] | null = null
 
 /** Every KIE model with a content-filter lever, one entry per endpoint. */

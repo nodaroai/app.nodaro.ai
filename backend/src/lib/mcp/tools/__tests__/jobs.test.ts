@@ -994,3 +994,111 @@ describe("MCP job tools — a job waiting for a slot", () => {
     expect(result.structuredContent).not.toHaveProperty("guidance")
   })
 })
+
+/**
+ * A clip delivered in part (decided 2026-11-27): a Video Remake made in parts whose later part failed completes with
+ * the first parts and `output_data.partial`. get_job and wait_for_job carry the record as stored and say it in words.
+ */
+describe("get_job and wait_for_job: a clip delivered in part", () => {
+  const PARTIAL = { deliveredSec: 48.25, sourceSec: 120, parts: { delivered: 2, planned: 5 }, reason: "part_failed", message: "We remade the first 0:48 of 2:00." }
+  const OUTPUT = { videoUrl: "https://r2/remake.mp4", durationSec: 48.25, partial: PARTIAL }
+  const ROW = { id: JOB, user_id: "u1", status: "completed", job_type: "cast-swap", progress: 100, output_data: OUTPUT, credits: 400, error_message: null }
+
+  it("get_job passes partial through intact and says it is not the whole clip", async () => {
+    mockGetJob(ROW)
+    const server = buildServer()
+    registerJobs({ server, session: jobsSession(), fastify: Fastify() })
+    const result = await callTool(server, "get_job", { job_id: JOB })
+    const sc = result.structuredContent as { outputData: Record<string, unknown>; guidance?: string }
+    expect(sc.outputData.partial).toEqual(PARTIAL)
+    expect(sc.outputData.durationSec).toBe(48.25)
+    expect(sc.guidance).toContain("only the first 48.3 s of the 120 s clip (2 of its 5 parts)")
+    expect(sc.guidance).toContain("not the whole clip")
+    const text = JSON.parse(result.content[0]!.text!) as { data: { output_data: Record<string, unknown> }; guidance?: string }
+    expect(text.data.output_data.partial).toEqual(PARTIAL)
+    expect(text.guidance).toBe(sc.guidance)
+  })
+
+  it("wait_for_job's completion sentence says it too", async () => {
+    mockJobReads([ROW, ROW])
+    const server = buildServer()
+    registerJobs({ server, session: jobsSession(), fastify: Fastify() })
+    const result = await callTool(server, "wait_for_job", { job_id: JOB, timeout_s: 30 })
+    const text = result.content[0]?.text ?? ""
+    expect(text).toContain("completed: https://r2/remake.mp4.")
+    expect(text).toContain("Partial result: this video is only the first 48.3 s of the 120 s clip")
+    expect((result.structuredContent as { outputData: Record<string, unknown> }).outputData.partial).toEqual(PARTIAL)
+  })
+
+  it("a whole result says nothing more", async () => {
+    const whole = { ...ROW, output_data: { videoUrl: "https://r2/remake.mp4", durationSec: 120 } }
+    mockGetJob(whole)
+    const server = buildServer()
+    registerJobs({ server, session: jobsSession(), fastify: Fastify() })
+    const result = await callTool(server, "get_job", { job_id: JOB })
+    expect((result.structuredContent as { guidance?: string }).guidance).toBeUndefined()
+    expect(JSON.parse(result.content[0]!.text!).guidance).toBeUndefined()
+    mockJobReads([whole, whole])
+    const waited = await callTool(server, "wait_for_job", { job_id: JOB, timeout_s: 30 })
+    expect(waited.content[0]?.text).toBe(`Job ${JOB} completed: https://r2/remake.mp4.`)
+  })
+})
+
+// The owner-only output fields (lib/job-owner-output.ts): a Video Remake run's version before upscale reaches the
+// job's owner only — never another user reading a public job.
+describe("Video Remake's version before upscale: the owner's reads only", () => {
+  const remake = (id: string, userId: string) => ({
+    id,
+    user_id: userId,
+    status: "completed",
+    job_type: "cast-swap",
+    created_at: "2026-11-27T10:00:00Z",
+    credits: 400,
+    output_data: {
+      videoUrl: `https://r2/${id}.mp4`,
+      resolution: "1080p",
+      quality: "economy",
+      __castSwapEngineResolution: "720p",
+      __castSwapEngineVideoUrl: `https://r2/${id}-engine.mp4`,
+      __castSwapEngineWidth: 1280,
+      __castSwapEngineHeight: 720,
+    },
+  })
+  const BEFORE = ["engineVideoUrl", "engineWidth", "engineHeight", "engineResolution"]
+  const anyChain = (rows: unknown[]) =>
+    (supabase.from as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
+      new Proxy({}, { get: (_t, prop) => (prop === "then" ? (res: (v: unknown) => void) => res({ data: rows, error: null }) : () => (supabase.from as any)()) }),
+    )
+  const listedOutputs = async (scope: "mine" | "public", rows: unknown[]) => {
+    anyChain(rows)
+    const server = buildServer()
+    registerJobs({ server, session: jobsSession(), fastify: Fastify() })
+    // Mine: a Video Remake run is listed when its type is asked for (`types` lifts the default kinds). Public: the
+    // gallery's kinds, and no owner filter (a row of a listed type carrying such an output, so the redaction is what
+    // is held: whatever a public row's output holds, none of the owner's names reach it).
+    const result = await callTool(server, "list_jobs", scope === "mine" ? { limit: 10, scope, types: ["cast-swap"] } : { limit: 10, scope, kinds: ["video"] })
+    return (JSON.parse(result.content[0]?.text as string) as { data: Array<{ output_data: Record<string, unknown> }> }).data.map((r) => r.output_data)
+  }
+
+  it("list_jobs scope public: another user's public run carries none of them (nor its server-only keys)", async () => {
+    const outputs = await listedOutputs("public", [{ ...remake("theirs", "someone-else"), job_type: "generate-video" }])
+    expect(outputs).toHaveLength(1)
+    for (const key of [...BEFORE, "__castSwapEngineVideoUrl"]) expect(outputs[0]).not.toHaveProperty(key)
+  })
+
+  it("list_jobs scope mine: the caller's own run carries them", async () => {
+    const outputs = await listedOutputs("mine", [remake("mine", "u1")])
+    expect(outputs[0]).toMatchObject({ engineVideoUrl: "https://r2/mine-engine.mp4", engineWidth: 1280, engineHeight: 720, engineResolution: "720p" })
+    expect(outputs[0]).not.toHaveProperty("__castSwapEngineVideoUrl")
+  })
+
+  it("get_job: the owner reads them, in the text's row and the structured view", async () => {
+    mockGetJob(remake("11111111-1111-4111-8111-111111111111", "u1"))
+    const server = buildServer()
+    registerJobs({ server, session: jobsSession(), fastify: Fastify() })
+    const result = await callTool(server, "get_job", { job_id: "11111111-1111-4111-8111-111111111111" })
+    const data = (JSON.parse(result.content[0]?.text as string) as { data: { output_data: Record<string, unknown> } }).data
+    expect(data.output_data).toMatchObject({ engineVideoUrl: "https://r2/11111111-1111-4111-8111-111111111111-engine.mp4", engineResolution: "720p" })
+    expect((result.structuredContent as { outputData: Record<string, unknown> }).outputData).toMatchObject({ engineVideoUrl: "https://r2/11111111-1111-4111-8111-111111111111-engine.mp4" })
+  })
+})

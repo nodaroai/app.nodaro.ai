@@ -299,6 +299,8 @@ describe("Gemini Omni Flash 1.2 Extend — the generation (decided 2026-11-17)",
       fallbackTrims: { trimEndFrames: 0, trimStartFrames: 0 },
       audioFadeSec: expect.any(Number),
       dropLeadingRepeats: true,
+      // An unwatermarked run joins two 10-bit clips in 10-bit HEVC (decided 2026-11-22).
+      keepTenBit: true,
     })
     expect(finalized().result).toMatchObject({ url: STITCHED_R2, providerUsed: P })
     expect(finalized().extraOutputData).toMatchObject({ rawExtensionUrl: FAL_URL, smartCuts: [expect.objectContaining({ matched: true, nextClipStartTrimFrames: 2 })] })

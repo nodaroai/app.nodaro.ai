@@ -17,9 +17,12 @@
  * where `quality` is the node's own setting.
  */
 import { isRenderNodeType, renderResultStamp, type RenderQuality, type RunResultRowStamp } from "@nodaro/shared/nodes"
-import { isUseCaseNodeType, RECORDED_OUTPUT_LENGTH_NODE_TYPES, REPLACE_AUDIO_NODE_TYPE, runResultTaskFields, usecaseListsItsResult } from "@nodaro/render-rules"
+import { deliveredVideoClips, type DeliveredVideoClip, isUseCaseNodeType, RECORDED_OUTPUT_LENGTH_NODE_TYPES, REPLACE_AUDIO_NODE_TYPE, runResultTaskFields, usecaseListsItsResult } from "@nodaro/render-rules"
+
+export { deliveredVideoClips, type DeliveredVideoClip }
 
 export interface RunResultIdentity {
+  readonly unassembledClips?: readonly DeliveredVideoClip[]
   readonly thumbnailUrl?: string
   readonly quality?: RenderQuality
   readonly clipKey?: string
@@ -68,9 +71,11 @@ export function recordedVideoLengthField(output: unknown): { readonly duration?:
 /** The identity of a take landed from a job's `output_data` or a run's node output. */
 export function runResultIdentity(nodeType: string | null | undefined, output: unknown): RunResultIdentity {
   const o = (output && typeof output === "object" ? output : {}) as Record<string, unknown>
+  const clips = nodeType === "generate-video-pro" || nodeType === "edit-video-pro" ? deliveredVideoClips(o) : []
   const thumbnailUrl = str(o.thumbnailUrl)
   return {
     ...(thumbnailUrl ? { thumbnailUrl } : {}),
+    ...(clips.length ? { unassembledClips: clips } : {}),
     // Only a render's stamps are a render's — and a use-case node's (Tighten
     // Episode): its take is its render's, "proxy" while it waits on review,
     // stamped with that render's plan and settings bases.
@@ -100,10 +105,9 @@ export function runResultIdentity(nodeType: string | null | undefined, output: u
 export function runResultRowIdentity(
   nodeType: string | null | undefined,
   output: { readonly listResults?: readonly string[]; readonly listResultStamps?: readonly RunResultRowStamp[] } | null | undefined,
-  url: string,
+  row: number,
 ): RunResultIdentity & { readonly jobId?: string } {
-  const row = output?.listResults?.indexOf(url) ?? -1
-  const stamp = row >= 0 ? output?.listResultStamps?.[row] : undefined
+  const stamp = output?.listResultStamps?.[row]
   if (!stamp) return {}
   const jobId = str(stamp.jobId)
   return { ...(jobId ? { jobId } : {}), ...runResultIdentity(nodeType, stamp) }
@@ -115,5 +119,24 @@ export function runResultRowIdentity(
  * is a list (Trailer's formats, each naming the run's wrapper).
  */
 export function carriesRowStamps(nodeType: string | null | undefined): boolean {
-  return isRenderNodeType(nodeType) || usecaseListsItsResult(nodeType)
+  return nodeType === "generate-video-pro" || nodeType === "edit-video-pro" || isRenderNodeType(nodeType) || usecaseListsItsResult(nodeType)
+}
+
+/** Keep the physical fan-out row through holes, filtering and duplicate URLs.
+ * A Pro video's completed job is the identity that a later repair will name. */
+export function runMediaRows(nodeType: string | undefined, output: {
+  listResults?: readonly string[]; listResultStamps?: readonly RunResultRowStamp[]
+}, previous: readonly { url: string; jobId: string }[]) {
+  const pro = nodeType === "generate-video-pro" || nodeType === "edit-video-pro"
+  const urls = new Set(previous.map(take => take.url))
+  const jobs = new Set(previous.map(take => take.jobId))
+  const all = output.listResults ?? []
+  const media = all.flatMap((url, i) => url?.startsWith("http") ? [{ url, i }] : [])
+  return {
+    multiple: media.length > 1 || (pro && all.length > 1 && media.length === 1),
+    newRows: media.filter(({ url, i }) => {
+      const job = pro && output.listResultStamps?.[i]?.jobId
+      return job ? !jobs.has(job) : !urls.has(url)
+    }),
+  }
 }

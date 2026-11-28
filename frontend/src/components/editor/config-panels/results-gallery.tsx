@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { CachedImage } from "@/components/ui/cached-image"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { downloadFile } from "@/components/presentation/output-cards/shared"
+import { openVideoDownload } from "@/lib/video-result-download"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { PreviewBadge, isPreviewQuality } from "@/components/render/preview-badge"
 import { restorePickedTakeTranscript } from "@/lib/apply-edl-take-transcript"
@@ -183,7 +184,11 @@ export function ResultsGallery({
             variant="outline"
             size="sm"
             className="flex-1 text-xs"
-            onClick={() => downloadFile(activeUrl, `${nodeType}-result.${EXTENSION_MAP[mediaType]}`)}
+            onClick={() => {
+              const asBefore = () => downloadFile(activeUrl, `${nodeType}-result.${EXTENSION_MAP[mediaType]}`)
+              if (mediaType === "video") openVideoDownload(activeUrl, asBefore)
+              else asBefore()
+            }}
           >
             <Download className="w-3 h-3 me-1.5" />
             {t("cfgshared.download")}

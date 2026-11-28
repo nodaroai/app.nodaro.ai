@@ -1,3 +1,5 @@
+import { followedLane, finishesWhenStopped, stopsAtSegmentBoundary, VIDEO_SEGMENT_STOP_JOB_TYPES, STOP_RULE_COLUMNS, type StopRuleRow } from "../lib/stop-rule.js"
+import { stopRuleSelect } from "../lib/video-route-schema.js"
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
@@ -96,15 +98,16 @@ export async function cancelJobsRoutes(app: FastifyInstance) {
       // `pending_review`, and it has a provider task because the provider
       // already delivered), so "Cancel all" used to skip it in silence and
       // strand its reservation (spec D18).
+      const jobsSelect = await stopRuleSelect(`id, status, provider, setHoldCreditId:input_data->>setHoldCreditId, ${STOP_RULE_COLUMNS}`)
       const { data: jobs, error: fetchError } = await supabase
         // trash-read: cancelling stops work: a deleted job still running is stopped too.
         .from("jobs")
-        .select("id, status, provider, setHoldCreditId:input_data->>setHoldCreditId")
+        .select(jobsSelect)
         .eq("user_id", userId)
         .in("status", [...IN_FLIGHT_JOB_STATUSES])
         // A background scrape saves its provider run only to re-attach after an
         // interruption: it stays cancellable while it runs, as it was in its route.
-        .or(`provider_task_id.is.null,reconcile_attempts.gt.0,status.eq.pending_review,job_type.in.(${[...BACKGROUND_SCRAPE_JOB_TYPES].join(",")})`)
+        .or(`provider_task_id.is.null,reconcile_attempts.gt.0,status.eq.pending_review,job_type.in.(${VIDEO_SEGMENT_STOP_JOB_TYPES.join(",")}),job_type.in.(${[...BACKGROUND_SCRAPE_JOB_TYPES].join(",")})`)
 
       if (fetchError) {
         return sendInternalError(reply, req, fetchError, "Failed to fetch jobs")
@@ -120,8 +123,8 @@ export async function cancelJobsRoutes(app: FastifyInstance) {
       // A use-case wrapper goes there too: only that helper also stops the
       // hidden run the wrapper owns (a bulk flip would refund its fee and
       // leave the run dispatching and billing).
-      const delegated = (j: { status: unknown; provider?: unknown }) =>
-        isParkedJobStatus(j.status as string) || j.provider === "use-case"
+      const delegated = (j: { status: unknown; provider?: unknown } & StopRuleRow) =>
+        isParkedJobStatus(j.status as string) || j.provider === "use-case" || followedLane(j) || finishesWhenStopped(j) || stopsAtSegmentBoundary(j)
       // A podcast pack's job is never cancelled: it holds the price of the tools it started (its tools are cancelled above or below).
       const cancellable = jobs.filter((j) => j.provider !== PODCAST_PACK_JOB_TYPE)
       const delegatedIds = cancellable.filter(delegated).map((j) => j.id as string)

@@ -377,6 +377,10 @@ export const lipSyncPricing: RoutePricing = {
   prechecks: [fourKSpellingPreHandler((b) => (typeof b.provider === "string" ? b.provider : undefined)), retiredLipSyncProviderPreHandler, lipSyncResolutionPreHandler],
   modelResolver: (req) => resolveLipSyncIdentifier(req.body as Record<string, unknown> | undefined, lipSyncMeasureOf(req), req.drivingAudio),
   opts: {
+    routedVideoInput: (body, req) => {
+      const parsed = lipSyncBody.safeParse(body)
+      return parsed.success ? { input: parsed.data, jobType: "lip-sync" } : null
+    },
     runModel: jobRunModel("lip-sync"),
     computeCredits: lipSyncComputeCredits,
     beforePricing: lipSyncPricingStep,

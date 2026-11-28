@@ -1,0 +1,5 @@
+---
+"@nodaro/sdk": minor
+---
+
+`trendRadar`: a candidate is now read on TikTok, Instagram and YouTube. A card adds `creatorsCapped` (a platform's search returned as many posts as it may, so the creator count is a floor), `platforms` (per platform `{ posts, creators, plays, capped, top }`, typed `TrendCandidatePlatforms` / `TrendCandidatePlatformStats`), `firstPostedAt` (the earliest post date seen) and `lastReadAt`; a reading adds `growthPct` (plays growth per day over the posts it and the previous reading both saw), which `dayChangePct` now reports when there is one; `candidates()` takes `sort: "plays"`; a post's `stillUrl` is a copy kept on the deployment's storage where the read could make one; `summary().lastRun` adds `stoppedEarly` (why a run stopped before reading every candidate it could afford); and `summary()` adds `reading` (typed `TrendRadarReadingCost`: the searches and credits one candidate's reading takes, the runner's balance, the highest daily search budget, and `deepSearchesMax` / `creditsPerDeepSearch` for the deeper count of a candidate whose search came back full), so the budget can be set in candidates per day.

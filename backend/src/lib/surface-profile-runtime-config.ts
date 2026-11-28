@@ -1,5 +1,6 @@
 import { isHttpsOrigin, type RuntimeSurfaceStrings } from "@nodaro/shared/runtime-config"
 import { config } from "./config.js"
+import { publishedStorageOrigins } from "./cdn-host.js"
 import { SURFACE_PROFILE_DEFAULT, runtimeSurfaceProfile, surfaceGateOpen, type SurfaceProfile } from "./surface-profile.js"
 import { resolveSurfaceStrings, type ReadUiStringManifest } from "./surface-strings.js"
 
@@ -146,4 +147,15 @@ export function renderMediaOriginForRuntimeConfig(): string {
   } catch {
     return ""
   }
+}
+
+/**
+ * `/config.js`'s `storageOrigins` (print-surface-profile.ts
+ * `--storage-origins`): the deployment's published storage origin
+ * (`publishedStorageOrigins`, lib/cdn-host.ts — R2_PUBLIC_URL's https origin,
+ * which the download routes accept; never the fallback host), comma-separated;
+ * "" when there is none (storage on plain http, or none configured).
+ */
+export function renderStorageOriginsForRuntimeConfig(): string {
+  return publishedStorageOrigins(config.R2_PUBLIC_URL ?? "").join(",")
 }

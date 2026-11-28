@@ -11,6 +11,7 @@
 import { z } from "zod"
 import { DIRECTION_KEYS, getRegisteredSubjectKeys } from "@nodaro/prompts/prompt-builder"
 import { redactPrivateJobData, redactPrivateJobOutput } from "../../public-job-data.js"
+import { withOwnerOnlyOutputFields, type JobReader } from "../../job-owner-output.js"
 import { jobRowProviderWords } from "../../provider-words.js"
 import { failureGuidance } from "./_job-error.js"
 import { statedName } from "../deployment-name.js"
@@ -46,6 +47,29 @@ export function outputSizeOf(out: Record<string, unknown> | null | undefined): {
   const height = out?.height
   const whole = (n: unknown): n is number => Number.isSafeInteger(n) && (n as number) > 0
   return whole(width) && whole(height) ? { width, height } : {}
+}
+
+/**
+ * The words for a completed job whose output covers only part of its source (decided 2026-11-27): a Video Remake
+ * clip made in parts whose later part failed, delivered from its start up to that part, with
+ * `output_data.partial = { deliveredSec, sourceSec, parts: { delivered, planned }, reason, message }`. Built from the
+ * numbers (never the stored sentence), so an agent never reports such a result as the whole clip. Undefined when the
+ * output carries no readable record (every other job).
+ */
+export function partialDeliveryGuidance(out: Record<string, unknown> | null | undefined): string | undefined {
+  const partial = out?.partial
+  if (!partial || typeof partial !== "object" || Array.isArray(partial)) return undefined
+  const { deliveredSec, sourceSec, parts } = partial as { deliveredSec?: unknown; sourceSec?: unknown; parts?: unknown }
+  const seconds = (n: unknown): n is number => typeof n === "number" && Number.isFinite(n) && n > 0
+  if (!seconds(deliveredSec) || !seconds(sourceSec) || deliveredSec >= sourceSec) return undefined
+  const s = (n: number): string => `${Math.round(n * 10) / 10} s`
+  const { delivered, planned } = (parts && typeof parts === "object" ? parts : {}) as { delivered?: unknown; planned?: unknown }
+  const whole = (n: unknown): n is number => Number.isSafeInteger(n) && (n as number) > 0
+  const counted = whole(delivered) && whole(planned) && delivered < planned ? ` (${delivered} of its ${planned} parts)` : ""
+  return (
+    `Partial result: this video is only the first ${s(deliveredSec)} of the ${s(sourceSec)} clip${counted}; the rest could not be made and is not in it. ` +
+    "Tell the user it is not the whole clip; do not present it as complete."
+  )
 }
 
 export const HELD_JOB_GUIDANCE =
@@ -169,6 +193,8 @@ export type JobView = z.infer<z.ZodObject<typeof JOB_VIEW_SCHEMA>>
 
 export interface JobRowLike {
   id: string
+  /** The job's owner (`jobs.user_id`), where the read selected it: it alone reads the owner-only output fields. */
+  user_id?: string | null
   status?: string | null
   progress?: number | null
   job_type?: string | null
@@ -190,10 +216,14 @@ export interface JobRowLike {
   completed_at?: string | null
 }
 
-/** Normalise a jobs row (public columns) into the envelope. Private remux bases are redacted. */
-export function jobView(row: JobRowLike): JobView {
+/**
+ * Normalise a jobs row (public columns) into the envelope. Private remux bases are redacted. With `reader` (a read of
+ * the reader's own job), the job's owner also reads its owner-only output fields (lib/job-owner-output.ts).
+ */
+export function jobView(row: JobRowLike, reader?: JobReader): JobView {
   const status = row.status ?? "pending"
-  const out = row.output_data ? redactPrivateJobOutput(row.output_data as Record<string, unknown>) : null
+  const redacted = row.output_data ? redactPrivateJobOutput(row.output_data as Record<string, unknown>) : null
+  const out = redacted && reader ? withOwnerOnlyOutputFields(redacted, row.output_data, row.user_id, reader) : redacted
   const view: JobView = {
     jobId: row.id,
     status,
@@ -226,6 +256,9 @@ export function jobView(row: JobRowLike): JobView {
   } else if (status === "pending_review") {
     view.retryable = false
     view.guidance = HELD_JOB_GUIDANCE
+  } else if (status === "completed") {
+    const partial = partialDeliveryGuidance(out)
+    if (partial) view.guidance = partial
   }
   return view
 }

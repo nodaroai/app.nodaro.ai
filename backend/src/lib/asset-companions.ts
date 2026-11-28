@@ -85,9 +85,13 @@ export async function companionsForRow(
   chargeOf: (key: string) => Promise<CompanionCharge>,
 ): Promise<AssetCompanion[]> {
   const companions: AssetCompanion[] = []
-  for (const { field, of } of COMPANION_OUTPUT_FIELDS) {
-    if (of !== type) continue
-    const url = output[field]
+  const urls = COMPANION_OUTPUT_FIELDS.filter(field => field.of === type).map(({ field }) => output[field])
+  if (type === "video") {
+    for (const list of [output.unassembledClips, output.assemblyClips]) {
+      if (Array.isArray(list)) urls.push(...list.map(part => part?.url))
+    }
+  }
+  for (const url of urls) {
     if (typeof url !== "string" || !url) continue
     const key = keyOfUrl(url)
     if (key === primaryKey || !isCanonicalObjectKey(key) || !isOwnedObjectKey(jobId, key)) continue

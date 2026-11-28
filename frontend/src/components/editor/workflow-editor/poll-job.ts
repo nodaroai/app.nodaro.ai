@@ -321,6 +321,7 @@ function handleJobCompleted(
   resolve: (url: string) => void,
   resultFields?: PollJobResultOptions["resultFields"],
   nodeFields?: PollJobResultOptions["nodeFields"],
+  onMediaTake?: ExecutionContext["onMediaTake"],
 ): boolean {
   // Media-typed completion: the first listed key the job actually produced.
   const outputKey = outputKeyList(outputKeySpec).find(
@@ -369,6 +370,8 @@ function handleJobCompleted(
           perVariantFields: sunoVariantFields(job.output_data as Record<string, unknown> | undefined),
         })
       : [buildSingleResult(url as string, jobId, { thumbnailUrl, extraFields: resultExtra })];
+
+  if (newResults[0]) onMediaTake?.(nodeId, newResults[0]);
 
   // A UGC video's join, overlay or captions (its finish nodes, by their place in the chain) is
   // stamped with the job on the server's clock, as every lane stamps it: a reopen then tells this
@@ -441,7 +444,7 @@ export function pollJobWithNodeUpdate(
   const completed = (job: Awaited<ReturnType<typeof getJobStatusLean>>, jobId: string, resolve: (result: string) => void) =>
     opts.jsonLanding
       ? handleJsonJobCompleted(job.output_data as Record<string, unknown> | null | undefined, opts.jsonLanding, { nodeId, label, updateNodeData, resolve, success: (m) => guardedToast.success(m) })
-      : handleJobCompleted(job, nodeId, jobId, outputKey, label, extraOutputFields, updateNodeData, resolve, opts.resultFields, opts.nodeFields);
+      : handleJobCompleted(job, nodeId, jobId, outputKey, label, extraOutputFields, updateNodeData, resolve, opts.resultFields, opts.nodeFields, ctx.onMediaTake);
 
   /**
    * A failed job, read by the poll or by its last check after the status went quiet: the node

@@ -228,6 +228,15 @@ vi.mock("@/providers/video/video-overlay.js", () => ({
   renderVideoOverlay: mocks.mockRenderVideoOverlay,
 }))
 
+// Merge Video & Audio stores through the video result funnel (lib/video-result-store.ts).
+const funnel = vi.hoisted(() => ({
+  storeVideoResult: vi.fn().mockResolvedValue({ videoUrl: "https://r2.example.com/videos/job-1.mp4", originalVideoUrl: "https://r2.example.com/videos/job-1-master.mp4" }),
+}))
+vi.mock("@/lib/video-result-store.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/video-result-store.js")>()),
+  storeVideoResult: funnel.storeVideoResult,
+}))
+
 vi.mock("../../shared.js", () => ({
   commitJobCredits: mocks.mockCommitJobCredits,
   shouldSaveJobResult: mocks.mockShouldSaveJobResult,
@@ -1252,7 +1261,7 @@ describe("combine-videos handler", () => {
 describe("merge-video-audio handler", () => {
   const handler = ffmpegHandlers["merge-video-audio"]
 
-  it("delegates to mergeVideoAudio then completeFfmpegVideoJob", async () => {
+  it("merges from the kept original, stores through the video result funnel, and records every field it returns", async () => {
     const job = makeJob("merge-video-audio", {
       videoUrl: "https://vid.mp4",
       audioUrl: "https://audio.mp3",
@@ -1270,8 +1279,30 @@ describe("merge-video-audio handler", () => {
       voiceoverVolume: 80,
       backgroundVolume: 20,
       keepOriginalAudio: true,
+      // Read from the kept original, its picture copied (decided 2026-11-22).
+      readOriginal: true,
     })
-    expect(mocks.mockCompleteFfmpegVideoJob).toHaveBeenCalledWith("/tmp/merge-work/output.mp4", ctx)
+    // Never watermarked, as before.
+    expect(funnel.storeVideoResult).toHaveBeenCalledWith({ path: "/tmp/merge-work/output.mp4" }, { jobId: "job-1", userId: "user-1", watermark: false })
+    expect(mocks.mockCleanupWorkDir).toHaveBeenCalledWith("/tmp/merge-work")
+    expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", {
+      output_data: expect.objectContaining({
+        videoUrl: "https://r2.example.com/videos/job-1.mp4",
+        originalVideoUrl: "https://r2.example.com/videos/job-1-master.mp4",
+      }),
+    })
+    expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1")
+    expect(mocks.mockCompleteFfmpegVideoJob).not.toHaveBeenCalled()
+  })
+
+  it("a store that fails is refunded, as its upload's failure always was (the job called no provider)", async () => {
+    const { PostProcessingError, isPostProcessingError } = await import("@/lib/post-processing-error.js")
+    funnel.storeVideoResult.mockRejectedValueOnce(new PostProcessingError("upload failed", { cause: new Error("R2 down") }))
+    const job = makeJob("merge-video-audio", { videoUrl: "https://vid.mp4", audioUrl: "https://audio.mp3" })
+    const err = await handler(job as never, makeCtx()).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(Error)
+    expect(isPostProcessingError(err)).toBe(false)
+    expect(mocks.mockMarkJobCompleted).not.toHaveBeenCalled()
   })
 })
 
@@ -1409,6 +1440,8 @@ describe("trim-video handler", () => {
       lookbackFrames: 32,
       outputSilent: true,
       chargeCheck: expect.any(Function),
+      // An editing node's cut reads its kept original, conformed (editing-source.ts).
+      source: "editing",
     })
   })
 

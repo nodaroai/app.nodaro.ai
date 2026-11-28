@@ -1,6 +1,7 @@
 import { execFile, spawn, type ExecFileException } from "node:child_process"
 import { execFileFfmpeg, spawnFfmpeg } from "./ffmpeg-process.js"
-import { retryOnShortage, spawnShowsShortage, stderrShowsShortage } from "./ffmpeg-shortage-retry.js"
+import { spawnShowsShortage, stderrShowsShortage, type LaunchEvidence } from "./ffmpeg-shortage-retry.js"
+import { retryOnBoxShortage } from "./box-shortage.js"
 import { promises as fs } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -679,6 +680,10 @@ export interface FfmpegLaunchOptions {
   /** The child's environment: the probe guard's, for a run that reads a link through its proxy
    *  (`ffmpeg-reading-links.ts`). Omitted: this process's own. */
   readonly env?: NodeJS.ProcessEnv
+  /** Told when the launch is admitted and about to start (again, for a launch the box's shortage
+   *  made run again): a caller that accounts for the time ffmpeg runs starts its clock here, never
+   *  while the launch waited for its slot. `runFfmpeg` only. */
+  readonly onAdmitted?: () => void
 }
 
 export { ffmpegMemoryBudgetNow }
@@ -936,10 +941,14 @@ function execFailureFlags(error: ExecFileException): { killed: boolean; timedOut
   }
 }
 
-/** The box's passing shortage, from a failed launch's full stderr or its spawn error (never a stopped launch). */
-function shortageMark(error: ExecFileException, stderr: string | undefined): { resourceShortage?: true } {
+/**
+ * The box's passing shortage, from a failed launch's full stderr or its spawn
+ * error — or, whatever the launch printed, from the kernel having just refused
+ * this container a process or a thread (`evidence`). Never a stopped launch.
+ */
+function shortageMark(error: ExecFileException, stderr: string | undefined, evidence: LaunchEvidence): { resourceShortage?: true } {
   if (error.killed === true || error.name === "AbortError") return {}
-  return stderrShowsShortage(stderr) || spawnShowsShortage(error) ? { resourceShortage: true } : {}
+  return evidence.mark(stderrShowsShortage(stderr) || spawnShowsShortage(error))
 }
 
 /**
@@ -956,7 +965,8 @@ export async function runFfmpeg(
   stallWatch?: FfmpegStallWatch,
 ): Promise<string> {
   // A launch that failed for the box's passing shortage runs again, its slot released while it waits.
-  return retryOnShortage((limitMs) => holdSlot(() => new Promise<string>((resolve, reject) => {
+  return retryOnBoxShortage((limitMs, evidence) => holdSlot(() => new Promise<string>((resolve, reject) => {
+    launch?.onAdmitted?.()
     // Declared first: the callback may run before execFile returns.
     let stopEscalation = () => {}
     let stopWatch = () => {}
@@ -976,7 +986,7 @@ export async function runFfmpeg(
         const detail = capture.fields({ signal: "SIGKILL", signalledByUs: true, stoppedBecause: "no progress" })
         reject(Object.assign(ffmpegStallError(stalledAfterMs, stallWatch?.stallMs), detail))
       } else if (error) {
-        reject(Object.assign(ffmpegFailureError(stderr, error.message, execExit(error)), execFailureFlags(error), shortageMark(error, stderr)))
+        reject(Object.assign(ffmpegFailureError(stderr, error.message, execExit(error)), execFailureFlags(error), shortageMark(error, stderr, evidence)))
       } else {
         resolve(stdout)
       }
@@ -1007,7 +1017,7 @@ export async function runFfmpegCapture(
   timeoutMs?: number,
   launch?: FfmpegLaunchOptions,
 ): Promise<{ stdout: string; stderr: string }> {
-  return retryOnShortage((limitMs) => holdSlot(() => new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
+  return retryOnBoxShortage((limitMs, evidence) => holdSlot(() => new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
       // Declared first: the callback may run before execFile returns.
       let stopEscalation = () => {}
       const child = execFileFfmpeg(args, {
@@ -1028,7 +1038,7 @@ export async function runFfmpegCapture(
               stdout,
               stderr,
               ...execFailureFlags(error),
-              ...shortageMark(error, stderr),
+              ...shortageMark(error, stderr, evidence),
             }),
           )
         } else {
@@ -1059,7 +1069,7 @@ export async function runFfmpegWithProgress(
   timeoutMs?: number,
   launch?: FfmpegLaunchOptions,
 ): Promise<void> {
-  return retryOnShortage((limitMs) => holdSlot(() => new Promise<void>((resolve, reject) => {
+  return retryOnBoxShortage((limitMs, evidence) => holdSlot(() => new Promise<void>((resolve, reject) => {
       const proc = spawnFfmpeg(["-progress", "pipe:1", "-nostats", ...args], {
         stdio: ["ignore", "pipe", "pipe"],
       })
@@ -1086,7 +1096,7 @@ export async function runFfmpegWithProgress(
       proc.on("error", (err) => {
         clearTimeout(watchdog)
         const detail = diagnostics.fields({ processError: (err as NodeJS.ErrnoException).code })
-        reject(Object.assign(new Error(`ffmpeg failed to spawn: ${err.message}`), detail, spawnShowsShortage(err as NodeJS.ErrnoException) ? { resourceShortage: true as const } : {}))
+        reject(Object.assign(new Error(`ffmpeg failed to spawn: ${err.message}`), detail, evidence.mark(spawnShowsShortage(err as NodeJS.ErrnoException))))
       })
       proc.on("close", (code: number | null, signal?: NodeJS.Signals | null) => {
         clearTimeout(watchdog)
@@ -1097,7 +1107,7 @@ export async function runFfmpegWithProgress(
         } else {
           // `signal` set here was not ours: the only kill this runner sends is the watchdog's (`timedOut` above).
           const exit: FfmpegExit = { code, signal: signal ?? null, signalledByUs: false }
-          reject(Object.assign(ffmpegFailureError(diagnostics, `exit code ${code}`, exit), stderrShowsShortage(diagnostics.messageTail) ? { resourceShortage: true as const } : {}))
+          reject(Object.assign(ffmpegFailureError(diagnostics, `exit code ${code}`, exit), evidence.mark(stderrShowsShortage(diagnostics.messageTail))))
         }
       })
   }), { limitMs, label: "ffmpeg", peakMemoryMiB: launch?.peakMemoryMiB }), { limitMs: ffmpegLimitMs(timeoutMs), label: "ffmpeg" })

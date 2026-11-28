@@ -59,7 +59,7 @@ import { perHandleRunFields } from "@/lib/per-handle-batch"
 import { applyEdlRunCutFields, applyEdlTakeTranscriptField } from "@/lib/apply-edl-cut"
 import { runOutputTaskFields, usecaseResultIsText } from "@nodaro/render-rules"
 import { usecaseFailedRunFields, usecaseRestoredResults, usecaseTextRunPatch } from "@/lib/use-case-run-result"
-import { carriesRowStamps, runResultIdentity, runResultRowIdentity } from "@/lib/run-result-identity"
+import { carriesRowStamps, runMediaRows, runResultIdentity, runResultRowIdentity } from "@/lib/run-result-identity"
 import { isJsonRunResultType, jobRunOutput, jsonRunResultPatch, unitBatchClearFields, unitSideJobFields, unitSideListRowFields, unitSideRunFields } from "@/lib/json-run-result"
 import { UNIT_BATCH_FIELDS } from "@/lib/unit-compose"
 import { UGC_JOB_RESULT_TYPES, UGC_PATCH_REPLACES_GENERIC, isUgcFinishNode, ugcCreatorShowsRun, ugcJobMayLand, ugcJobNoOutputMessage, ugcJobResultPatch, ugcRunPatch, ugcStopPatch } from "@/lib/ugc-run-patch"
@@ -2591,36 +2591,32 @@ function syncNodeStatesToStore(
         }
 
         // Add generated results — for fan-out nodes, include ALL list results
-        const listResultUrls = (state.output.listResults ?? []).filter(
-          (u) => u && u.startsWith("http"),
-        );
         const prev = (data.generatedResults ?? []) as GeneratedResult[];
         const existingUrls = new Set(prev.map((r) => r.url));
 
         // List/loop fan-out: one URL per iteration, each with its own jobId
         // (and, on Video Overlay, the key of its own composition; on a node
         // unit with side outputs, that row's own — a split image's layers).
-        if (listResultUrls.length > 1) {
+        const mediaRows = runMediaRows(nodeType, state.output, prev);
+        if (mediaRows.multiple) {
           const rowFields = videoOverlayListRowFields(nodeType, state.output);
           const rowSide = unitSideListRowFields(nodeType, state.output);
-          const newResults = listResultUrls
-            .filter((url) => !existingUrls.has(url))
-            .map((url, i) => {
-              // The row's OWN job, thumbnail and stamps (listResultStamps) —
-              // never `jobIds[i]`: that list is in settle order, without the
-              // rows that failed, so position paired a row with a sibling's job.
-              const { jobId: rowJobId, ...rowIdentity } = runResultRowIdentity(nodeType, state.output, url);
-              return {
-                url,
-                timestamp: state.completedAt ?? new Date().toISOString(),
-                jobId: rowJobId ?? `exec-${node.id}-${i}`,
-                ...rowIdentity,
-                ...rowFields(url),
-                ...rowSide(url),
-                // Apply EDL: only the render the output describes keeps its Transcript.
-                ...applyEdlTakeTranscriptField(nodeType, state.output, url),
-              };
-            });
+          const newResults = mediaRows.newRows.map(({ url, i }) => {
+            // The row's OWN job, thumbnail and stamps (listResultStamps) —
+            // never `jobIds[i]`: that list is in settle order, without the
+            // rows that failed, so position paired a row with a sibling's job.
+            const { jobId: rowJobId, ...rowIdentity } = runResultRowIdentity(nodeType, state.output, i);
+            return {
+              url,
+              timestamp: state.completedAt ?? new Date().toISOString(),
+              jobId: rowJobId ?? `exec-${node.id}-${i}`,
+              ...rowIdentity,
+              ...rowFields(url),
+              ...rowSide(url),
+              // Apply EDL: only the render the output describes keeps its Transcript.
+              ...applyEdlTakeTranscriptField(nodeType, state.output, url),
+            };
+          });
           if (newResults.length > 0) {
             updates.generatedResults = [...newResults, ...prev];
             updates.activeResultIndex = 0;

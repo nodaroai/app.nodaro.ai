@@ -2,8 +2,10 @@
 // @registry backend/src/nodes/*/recover.ts
 // @registry-exports recovers: UNIT_RECOVERS
 import type { UnitRecover } from "../kit.js"
+import { recover as unit_long_image } from "../long-image/recover.js" // unit:long-image
 import { recover as unit_split_into_layers } from "../split-into-layers/recover.js" // unit:split-into-layers
 
 export const UNIT_RECOVERS: Readonly<Record<string, UnitRecover>> = Object.assign(Object.create(null), {
+  "long-image": unit_long_image, // unit:long-image
   "split-into-layers": unit_split_into_layers, // unit:split-into-layers
 })

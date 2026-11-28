@@ -45,7 +45,7 @@ test("the version the goldens and the banner fixture name is the pinned release'
 })
 
 test("nothing in the repository still pins the old prebuilt or carries a second copy of the build", () => {
-  const files = execFileSync("git", ["ls-files", "-z"], { cwd: fileURLToPath(root("")), encoding: "utf8" }).split("\0").filter(Boolean)
+  const files = execFileSync("git", ["ls-files", "-z"], { cwd: fileURLToPath(root("")), encoding: "utf8", maxBuffer: 64 << 20 }).split("\0").filter(Boolean)
   const self = "tools/__tests__/ffmpeg-pin.test.mjs"
   const old = /BtbN|autobuild-2026|0ba73bbd|d3f90a71/
   const hits = files.filter(f => f !== self && !/package-lock\.json$/.test(f) && existsSync(root(f)) && old.test(readFileSync(root(f), "utf8")))

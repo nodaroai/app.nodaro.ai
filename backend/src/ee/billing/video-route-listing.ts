@@ -132,7 +132,7 @@ export function routedListedPrice(listing: RoutedListing | undefined, priceId: s
   if (!parsed) return { routed: false }
   if (videoRouteChoiceFor(listing.policy, parsed.model, undefined) !== "alternate") return { routed: false }
   const view = listing.view
-  if (!view || !view.v2 || !view.capable(parsed.model)) return { routed: false }
+  if (!view || !view.v2 || !view.capable(parsed.model)) return { routed: true, base: undefined }
   const factor = priceFactorOf(listing.factors, priceFactorKey(parsed))
   return { routed: true, base: routedListedBase(listing.pricesUsd, priceId, factor) }
 }

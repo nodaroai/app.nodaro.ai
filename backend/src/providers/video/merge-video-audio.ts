@@ -3,7 +3,7 @@ import { copyFile } from "node:fs/promises"
 import { downloadFile, runFfmpeg, needsTranscode, probeMediaStreams, getVideoStreamDuration, BROWSER_SAFE_VIDEO_ARGS, createWorkDir, cleanupWorkDir } from "./ffmpeg-utils.js"
 import { runPostProcessing } from "../../lib/post-processing-error.js"
 import { probeMatched, type MatchedProbe } from "./matched-encode.js"
-import { isHdr } from "./extend-stitch-args.js"
+import { downloadVideoSource } from "./editing-source.js"
 import { NoVideoStreamError, isNoVideoStreamError } from "../../lib/media-stream-errors.js"
 
 interface AudioTrack {
@@ -41,24 +41,56 @@ interface MergeVideoAudioOptions {
    */
   readonly fitAudioToVideo?: boolean
   /**
-   * When true, an HDR picture (HLG or PQ, `isHdr` on the probed file) is
-   * stream-copied as it is — only the audio is encoded — so the merged file
-   * keeps its HDR and the store keeps it as the original beside a browser-safe
-   * preview. Set by Generate Video's audio track (decided 2026-11-25: an HDR
-   * run is never charged for an 8-bit file). Every other picture, and every
-   * other caller, takes the merge's usual path.
+   * When true, the picture is stream-copied as it is (only the audio is
+   * encoded) even when a browser cannot play it — a 10-bit, HDR, HEVC, AV1,
+   * VP9 or 4:4:4 picture — so the merged file keeps it and the store keeps it
+   * as the original beside a browser-safe preview (`lib/video-result-store.ts`).
+   * For a step that FINISHES a generation on the provider's own file: Lip
+   * Sync's voice line, Generate Video's audio track and driving clip (decided
+   * 2026-11-22: the steps that finish a generation keep 10-bit). A picture no
+   * container here can hold as it is (`keptPictureContainer`) takes the
+   * merge's usual path. Every other caller, and every browser-safe picture,
+   * takes the usual path too.
    */
-  readonly keepHdrPicture?: boolean
+  readonly keepPicture?: boolean
+  /**
+   * When true, `videoUrl` is read from its kept original when the run may read
+   * one (`downloadVideoSource`, `lib/video-source.ts`), and that original's
+   * picture is copied as it is (`keepPicture`): Merge Video & Audio (decided
+   * 2026-11-22). Any other input is merged as before.
+   */
+  readonly readOriginal?: boolean
+}
+
+/** The containers a kept picture is copied into. */
+export type KeptPictureContainer = "mp4" | "mov"
+
+/** Codecs an MP4 holds as they are (HEVC tagged `hvc1`). */
+const MP4_HELD_CODECS: ReadonlySet<string> = new Set(["h264", "hevc", "av1", "vp9"])
+
+/**
+ * The container a kept picture is copied into, by the probed file: a
+ * QuickTime file stays QuickTime (it may hold ProRes, PCM, 4:4:4), any other
+ * file whose codec an MP4 holds is an MP4; undefined for a picture neither
+ * holds as it is (VP8, an unread codec), which takes the merge's usual path.
+ */
+export function keptPictureContainer(probe: MatchedProbe): KeptPictureContainer | undefined {
+  if (!probe.videoCodec) return undefined
+  if (probe.quickTime) return "mov"
+  return MP4_HELD_CODECS.has(probe.videoCodec) ? "mp4" : undefined
 }
 
 /**
- * The merge's picture arguments: an HDR picture kept (`keepHdrPicture` and an
- * HDR probe) is copied, an HEVC one tagged `hvc1` so players open the MP4; a
- * picture a browser cannot play is otherwise re-encoded to browser-safe H.264;
- * any other picture is copied. Pure, so its choice is tested on probes.
+ * The merge's picture arguments: a kept picture (`keep`, a picture a browser
+ * cannot play, a container that holds it) is copied, an HEVC one tagged `hvc1`
+ * so players open it; a picture a browser cannot play is otherwise re-encoded
+ * to browser-safe H.264; any other picture is copied. Pure, so its choice is
+ * tested on probes.
  */
-export function mergeVideoStreamArgs(o: { needsReencode: boolean; keepHdr: boolean; probe: MatchedProbe }): string[] {
-  if (o.keepHdr && isHdr(o.probe)) return ["-c:v", "copy", ...(o.probe.videoCodec === "hevc" ? ["-tag:v", "hvc1"] : [])]
+export function mergeVideoStreamArgs(o: { needsReencode: boolean; keep: boolean; probe: MatchedProbe }): string[] {
+  if (o.keep && o.needsReencode && keptPictureContainer(o.probe) !== undefined) {
+    return ["-c:v", "copy", ...(o.probe.videoCodec === "hevc" ? ["-tag:v", "hvc1"] : [])]
+  }
   return o.needsReencode ? [...BROWSER_SAFE_VIDEO_ARGS] : ["-c:v", "copy"]
 }
 
@@ -141,10 +173,16 @@ async function mergeVideoAudioImpl(options: MergeVideoAudioOptions): Promise<str
 
   try {
     const videoPath = join(workDir, "input.mp4")
-    const outputPath = join(workDir, "output.mp4")
 
+    // Whether the picture is kept as it is (`keepPicture`, or the kept
+    // original Merge Video & Audio read: `readOriginal`).
+    let keep = options.keepPicture === true
     if (options.videoPath) {
       await copyFile(options.videoPath, videoPath)
+    } else if (options.readOriginal) {
+      console.log("[mergeVideoAudio] Downloading video")
+      const { origin } = await downloadVideoSource(videoUrl, videoPath)
+      keep = keep || origin === "original"
     } else {
       console.log("[mergeVideoAudio] Downloading video")
       await downloadFile(videoUrl, videoPath)
@@ -227,8 +265,13 @@ async function mergeVideoAudioImpl(options: MergeVideoAudioOptions): Promise<str
       console.log("[mergeVideoAudio] Could not probe codec — re-encoding to browser-safe H.264")
     }
 
-    // Probed only where an HDR picture may be kept: every other merge is as before.
-    const hdrProbe: MatchedProbe = options.keepHdrPicture === true ? await probeMatched(videoPath) : {}
+    // Probed only where the picture may be kept: every other merge is as before.
+    const keptProbe: MatchedProbe = keep ? await probeMatched(videoPath) : {}
+    const pictureArgs = mergeVideoStreamArgs({ needsReencode, keep, probe: keptProbe })
+    // A kept picture goes into the container that holds it (a QuickTime file
+    // stays QuickTime); every other merge writes an MP4, as before.
+    const keptContainer = pictureArgs[1] === "copy" && needsReencode ? keptPictureContainer(keptProbe) : undefined
+    const outputPath = join(workDir, `output.${keptContainer ?? "mp4"}`)
 
     // `fitAudioToVideo`: the VIDEO STREAM's length (never the container's),
     // read from the downloaded file. Silence is appended without end and the
@@ -246,7 +289,7 @@ async function mergeVideoAudioImpl(options: MergeVideoAudioOptions): Promise<str
         "-filter_complex", fitSec === undefined ? filter : `${filter};[aout]apad${FITTED_AUDIO_LABEL}`,
         "-map", "0:v",
         "-map", fitSec === undefined ? "[aout]" : FITTED_AUDIO_LABEL,
-        ...mergeVideoStreamArgs({ needsReencode, keepHdr: options.keepHdrPicture === true, probe: hdrProbe }),
+        ...pictureArgs,
         "-c:a", "aac",
         // Fitted output only (the default arguments stay as they were): the
         // index is written at the front, so the clip starts playing before it

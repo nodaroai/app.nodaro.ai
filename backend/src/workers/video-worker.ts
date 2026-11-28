@@ -11,6 +11,7 @@ import { isPostProcessingError } from "../lib/post-processing-error.js"
 import { isHouseModelRunError, isHouseModelRunPending } from "../lib/house-model-failure.js"
 import { isProviderRunPending } from "../lib/provider-run-pending.js"
 import { isAlternateRoutePending } from "../lib/alternate-route.js"
+import { ALTERNATE_ROUTE_PROVIDER_KIND, alternateRouteRecordOf } from "../lib/alternate-route-request.js"
 import { isDeterministicJobError } from "../lib/deterministic-job-error.js"
 import { declaredJobBudgetMs } from "../lib/job-budget.js"
 import { providerDetailOf } from "../lib/provider-error-detail.js"
@@ -77,6 +78,8 @@ import { registerLaneParking } from "../lib/concurrency-lanes/park.js"
 import { serverShare } from "../lib/concurrency-lanes/server-share.js"
 import { claimWithBullEntry, dropRequeuePayload } from "../lib/concurrency-lanes/columns.js"
 import { runHolding } from "../lib/concurrency-lanes/hold.js"
+// Whose run a job's video steps read their sources for (lib/video-source.ts).
+import { runWithVideoSourceContext, VIDEO_SOURCE_JOB_NAMES } from "../lib/video-source-context.js"
 import { VIDEO_WORKER_LOCK_DURATION_MS, VIDEO_WORKER_MAX_STALLED_COUNT, VIDEO_WORKER_STALLED_INTERVAL_MS } from "@nodaro/render-rules"
 import { runWithinCapacity } from "./worker-capacity.js"
 import { savedProviderTaskOf, videoHandlerFlags } from "./video-handler-flags.js"
@@ -88,6 +91,20 @@ import type { ReleaseOutcome } from "../lib/concurrency-lanes/gate.js"
  *  branch below. Exported for the liveness guard: a handed-back row keeps its
  *  last `pre-task` stamp through this delay, so it must stay far below the
  *  sweep threshold. */
+/**
+ * A routed run of a lane that finishes the provider's clip itself (an extend
+ * stitches it, voiced video and lip-sync lay the voice on it, entity motion
+ * attaches it) re-attaches to its held route task when it is picked again:
+ * its handler runs, and `runRouted` reads the task it holds instead of
+ * starting another (lib/alternate-route.ts) — so a clip the route billed is
+ * finished, never handed to a generic recovery that would deliver it raw.
+ */
+function resumesRoutedTask(row: { provider_kind?: unknown; provider_task_id?: unknown; input_data?: unknown } | null | undefined, jobName: string): boolean {
+  if (!row || row.provider_kind !== ALTERNATE_ROUTE_PROVIDER_KIND || typeof row.provider_task_id !== "string") return false
+  if (jobName === "image-to-video" || jobName === "text-to-video") return false
+  return alternateRouteRecordOf(row.input_data)?.routed === true
+}
+
 export const DRAIN_REQUEUE_DELAY_MS = 2_000
 
 const allHandlers: Record<string, HandlerFn> = {
@@ -238,7 +255,7 @@ export function createVideoWorker() {
     // A handler that re-attaches to its saved task itself (the background
     // scrapes: the plan to settle with is in its payload, which the inline
     // reconcile never sees) is run instead, below — never a second task.
-    const resumesTask = HANDLER_FLAGS.resuming.has(job.name)
+    const resumesTask = HANDLER_FLAGS.resuming.has(job.name) || resumesRoutedTask(jobRecord, job.name)
     if (jobRecord?.provider_task_id && !resumesTask) {
       await tryInlineReconcile({
         id: jobId,
@@ -500,7 +517,7 @@ export function createVideoWorker() {
       // Bind a cancellation context so provider poll loops abort the moment
       // the user cancels — instead of polling the upstream job to completion.
       try {
-        await runHolding(admission.hold, () => runWithJobCancellation(jobId, jobUserId, () => handler(job, ctx), { finalAttempt: () => isFinalJobAttempt(job) }))
+        await runHolding(admission.hold, () => runWithJobCancellation(jobId, jobUserId, () => runWithVideoSourceContext(jobUserId, () => handler(job, ctx), { readsOriginals: VIDEO_SOURCE_JOB_NAMES.has(job.name) }), { finalAttempt: () => isFinalJobAttempt(job) }))
       } catch (firstErr) {
         const firstBlock = safetyBlockOf(firstErr, modelId)
         if (!firstBlock || firstBlock.maxAttempts < 2) throw firstErr
@@ -514,7 +531,7 @@ export function createVideoWorker() {
         console.warn(
           `[worker] Job ${jobId} safety-blocked on ${modelId ?? "unknown model"} — retrying the same request once inline`,
         )
-        await runHolding(admission.hold, () => runWithJobCancellation(jobId, jobUserId, () => handler(job, ctx), { finalAttempt: () => isFinalJobAttempt(job) }))
+        await runHolding(admission.hold, () => runWithJobCancellation(jobId, jobUserId, () => runWithVideoSourceContext(jobUserId, () => handler(job, ctx), { readsOriginals: VIDEO_SOURCE_JOB_NAMES.has(job.name) }), { finalAttempt: () => isFinalJobAttempt(job) }))
       }
 
       // Record execution duration for progress bar estimation

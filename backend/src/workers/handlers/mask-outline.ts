@@ -14,6 +14,7 @@ import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
 import { uploadFileToR2 } from "../../lib/storage.js"
 import { runPostProcessing } from "../../lib/post-processing-error.js"
 import { cleanupWorkDir, createWorkDir, downloadFile } from "../../providers/video/ffmpeg-utils.js"
+import { downloadEditingSource } from "../../providers/video/editing-source.js"
 import type { MaskEraseBoxInput } from "../../providers/video/mask-erase.js"
 import { MASK_OUTLINE_RECIPE, drawMaskOutlineVideo, maskOutlineOutputPath } from "../../services/mask-outline/draw-mask-outline.js"
 import {
@@ -42,7 +43,8 @@ const handleMaskOutline: HandlerFn = async function handleMaskOutline(job, ctx) 
   try {
     const videoPath = join(workDir, "video.mp4")
     const maskPath = join(workDir, "mask.mp4")
-    await downloadFile(d.videoUrl, videoPath)
+    // The picture: its kept original when the run may read one, conformed (editing-source.ts).
+    await downloadEditingSource(d.videoUrl, videoPath)
     await downloadFile(d.maskUrl, maskPath)
     await setJobProgress(job, ctx.jobId, 10)
 

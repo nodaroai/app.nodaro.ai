@@ -27,7 +27,7 @@ import { describe, it, expect } from "vitest"
 import ts from "typescript"
 import { SCAN_TIMEOUT_MS, eachSourceFile, lineOf, parseText } from "./source-scan.js"
 
-const RESERVE_RPCS: ReadonlySet<string> = new Set(["reserve_credits", "reserve_job_credits"])
+const RESERVE_RPCS: ReadonlySet<string> = new Set(["reserve_credits", "reserve_job_credits", "reserve_video_route_credits"])
 const GUARDS: ReadonlySet<string> = new Set(["refuseBlockedReservation", "blockedReservationRefusal"])
 /** Guards whose ANSWER is the refusal: awaiting one and dropping the result refuses nothing. */
 const ANSWER_GUARDS: ReadonlySet<string> = new Set(["blockedReservationRefusal"])
@@ -211,7 +211,7 @@ describe("every credit reservation refuses a blocked account first", { timeout: 
     // `reserve_job_credits` is spelled ONLY inside CreditsService's conditional
     // rpc name: seeing it proves the conditional is followed in the real code.
     const names = new Set(sites.flatMap((s) => s.names))
-    expect([...names].sort()).toEqual(["reserve_credits", "reserve_job_credits"])
+    expect([...names].sort()).toEqual(["reserve_credits", "reserve_job_credits", "reserve_video_route_credits"])
   })
 
   it("every site awaits the block check in its own body, before the RPC", () => {

@@ -1,12 +1,12 @@
 import {
   runFfmpeg,
-  downloadFile,
   createWorkDir,
   cleanupWorkDir,
   probeVideoSource,
   BROWSER_SAFE_VIDEO_ARGS,
 } from "../../providers/video/ffmpeg-utils.js"
 import { uploadFileWithKeyToR2 } from "../../lib/storage.js"
+import { downloadEditingSource } from "../../providers/video/editing-source.js"
 import sharp from "sharp"
 import { writeFile } from "node:fs/promises"
 import { join } from "node:path"
@@ -88,7 +88,9 @@ export async function composeMotionSheet(opts: {
     const probed = await Promise.all(
       Array.from({ length: n }, async (_unused, i) => {
         const p = join(work, `c${i}.mp4`)
-        await downloadFile(opts.clipUrls[i], p)
+        // Its kept original when the run may read one, conformed as an editing
+        // step's source (providers/video/editing-source.ts).
+        await downloadEditingSource(opts.clipUrls[i], p, { ...(opts.userId ? { owner: opts.userId } : {}) })
         let durationSeconds = 0
         try {
           const probe = await probeVideoSource(p)

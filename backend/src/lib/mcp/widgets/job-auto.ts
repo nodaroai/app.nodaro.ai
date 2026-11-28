@@ -22,7 +22,7 @@
  * textContent + setAttribute ONLY. NO apostrophes inside JS string literals
  * (rendered-JS SyntaxError class — guarded by widget-js-valid.test.ts).
  */
-import { uiProtocolShim } from "./_common.js"
+import { downloadLinkShim, uiProtocolShim } from "./_common.js"
 import { WIDGET_MEDIA_ORIGINS } from "./csp-origins.js"
 import { mcpLaneAddresses } from "../../mcp-lane-addresses.js"
 import { widgetJs } from "../deployment-name.js"
@@ -255,7 +255,7 @@ export const JOB_AUTO_CLASSIFY_JS = classifyJs(`"${OVERFLOW_NOTE}"`)
 
 /**
  * Builds the static job-auto widget HTML. Registered once per request by the
- * resource registrar under ui://nodaro/widget/v5/job-auto, with the session's
+ * resource registrar under ui://nodaro/widget/v6/job-auto, with the session's
  * pages host (`pagesBase`, lib/mcp-lane-addresses.ts) for the library link.
  */
 export function buildJobAutoWidget(pagesBase: string = mcpLaneAddresses().pagesBase): string {
@@ -264,6 +264,7 @@ export function buildJobAutoWidget(pagesBase: string = mcpLaneAddresses().pagesB
 <meta charset="UTF-8" />
 <style>${CARD_CSS}</style>
 ${uiProtocolShim()}
+${downloadLinkShim(pagesBase)}
 </head>
 <body>
 <div class="card">
@@ -434,7 +435,8 @@ ${uiProtocolShim()}
       dl.type = 'button';
       dl.textContent = 'Download';
       dl.addEventListener('click', function() {
-        if (window.NodaroMCP && window.NodaroMCP.openLink) window.NodaroMCP.openLink(item.value);
+        // A video result: the original file kept beside it when there is one (downloadLinkShim).
+        if (window.NodaroMCP && window.NodaroMCP.openLink) window.NodaroMCP.openLink(window.resultDownloadUrl(item.value));
       });
       actions.appendChild(dl);
       actions.appendChild(copyButton(function() { return item.value; }));

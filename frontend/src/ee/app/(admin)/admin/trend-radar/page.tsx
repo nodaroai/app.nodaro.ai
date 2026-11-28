@@ -1,34 +1,39 @@
 // Admin → Trend Radar: the candidates the daily run found, with the run's
-// tiles, a status filter and a sort. Nothing reaches the catalog from here:
-// "Review" opens the candidate, and only its "Open as draft trend" creates a
-// draft trend (in the trends admin, where the source clip is finished).
-// Everything on this page comes through the SDK's `trendRadar` resource.
+// tiles, and the queue as a gallery (the default) or a table. The status is
+// read from the server one list at a time; the platform, site, views, age,
+// search and sort run over the loaded cards, and all of it lives in the
+// page's address. A tile opens the viewer, where the post plays and the
+// candidate is decided. Nothing reaches the catalog from here without an
+// approval, and only "Open as draft trend" creates a draft trend (in the
+// trends admin, where the source clip is finished). Everything on this page
+// comes through the SDK's `trendRadar` resource.
 
 import { useEffect, useState } from "react"
-import { Link } from "react-router-dom"
-import type { TrendCandidateSort, TrendCandidateStatus } from "@nodaro/sdk/trend-radar"
+import { Link, useSearchParams } from "react-router-dom"
 import { Loader2, RefreshCw, Settings2 } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
-import { formatDay, formatDayChange, formatPlays, formatSeconds, formatWhen } from "./format"
-import { StatusPill, Tile } from "./parts"
-import { QUEUE_FILTERS, radarUnavailable, useRadarCandidates, useRadarSummary, useRunRadar } from "./use-trend-radar"
+import { searchesHint } from "./daily-reading"
+import { formatWhen } from "./format"
+import { Tile } from "./parts"
+import { QueueGallery } from "./queue-gallery"
+import { QueueTable } from "./queue-table"
+import { QueueToolbar } from "./queue-toolbar"
+import { filterCards, platformCounts, readFilters, sortCards, sourceNames, writeFilters, type QueueFilters } from "./queue-view"
+import { QueueViewer } from "./queue-viewer"
+import { radarUnavailable, useRadarQueue, useRadarSummary, useRunRadar } from "./use-trend-radar"
 
-const SORTS: ReadonlyArray<{ key: TrendCandidateSort; label: string }> = [
-  { key: "creators", label: "Creators, most first" },
-  { key: "dayChange", label: "Day change" },
-  { key: "firstSeen", label: "First seen" },
-]
+const OPEN_PARAM = "open"
 
 export default function AdminTrendRadarPage() {
-  const [filter, setFilter] = useState<"all" | TrendCandidateStatus>("all")
-  const [sort, setSort] = useState<TrendCandidateSort>("creators")
+  const [params, setParams] = useSearchParams()
+  const filters = readFilters(params)
+  const openId = params.get(OPEN_PARAM)
   // A run just started here re-reads the page for a while (the run is asynchronous).
   const [polling, setPolling] = useState(false)
   const summary = useRadarSummary(polling)
-  const candidates = useRadarCandidates({ ...(filter === "all" ? {} : { status: filter }), sort }, polling)
+  const queue = useRadarQueue(filters.status === "all" ? undefined : filters.status, polling)
   const run = useRunRadar()
 
   useEffect(() => {
@@ -37,9 +42,21 @@ export default function AdminTrendRadarPage() {
     return () => clearTimeout(stop)
   }, [polling])
 
-  const unavailable = radarUnavailable(summary.error) || radarUnavailable(candidates.error)
-  const rows = candidates.data?.data ?? []
-  const maxCreators = Math.max(1, ...rows.map((c) => c.creators))
+  const write = (next: QueueFilters, open: string | null) => {
+    const p = writeFilters(next)
+    if (open) p.set(OPEN_PARAM, open)
+    setParams(p, { replace: true })
+  }
+  const setFilters = (next: QueueFilters) => write(next, null)
+  const setOpenId = (id: string | null) => write(filters, id)
+
+  const cards = queue.data?.cards ?? []
+  // A few hundred cards at most: filtering and sorting them on each render costs nothing.
+  const shown = sortCards(filterCards(cards, filters, new Date()), filters.sort, filters.platform)
+  const sources = sourceNames(cards)
+  const perPlatform = platformCounts(cards)
+
+  const unavailable = radarUnavailable(summary.error) || radarUnavailable(queue.error)
   const counts = summary.data?.counts
 
   const runNow = () => {
@@ -60,11 +77,11 @@ export default function AdminTrendRadarPage() {
           <p className="text-sm text-muted-foreground">Candidates found by the daily run. Nothing reaches the catalog without an approval here.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {(summary.isFetching || candidates.isFetching) && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-label="Loading" />}
+          {(summary.isFetching || queue.isFetching) && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-label="Loading" />}
           <Button variant="outline" size="sm" asChild>
             <Link to="/admin/trend-radar/settings">
               <Settings2 className="h-4 w-4 me-2" />
-              Sources &amp; thresholds
+              Settings
             </Link>
           </Button>
           <Button variant="outline" size="sm" onClick={runNow} disabled={run.isPending || unavailable}>
@@ -83,111 +100,39 @@ export default function AdminTrendRadarPage() {
               title="Last run"
               value={formatWhen(summary.data?.lastRun?.at ?? null)}
               hint={summary.data?.lastRun ? `${summary.data.lastRun.sourcesRead} sources read · ${summary.data.lastRun.namesSeen} names seen` : "no run yet"}
+              warning={summary.data?.lastRun?.stoppedEarly ?? undefined}
             />
             <Tile title="Candidates" value={String(counts?.candidates ?? "—")} hint="passed the creator threshold" />
             <Tile title="Watching" value={String(counts?.watching ?? "—")} hint="re-read every morning" />
             <Tile
               title="Searches today"
               value={String(summary.data?.searchesToday ?? "—")}
-              hint={summary.data ? `of ${summary.data.dailySearchBudget} daily budget` : ""}
+              hint={summary.data ? searchesHint(summary.data.dailySearchBudget, summary.data.reading?.searchesPerRead) : ""}
             />
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-wrap gap-1.5" role="group" aria-label="Status">
-              {QUEUE_FILTERS.map((f) => {
-                const count = f.key === "candidate" ? counts?.candidates : f.key === "watching" ? counts?.watching : f.key === "slowing" ? counts?.slowing : undefined
-                return (
-                  <button
-                    key={f.key}
-                    type="button"
-                    aria-pressed={filter === f.key}
-                    onClick={() => setFilter(f.key)}
-                    className={cn(
-                      "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm min-h-8",
-                      filter === f.key ? "bg-foreground text-background border-foreground" : "bg-card hover:bg-accent",
-                    )}
-                  >
-                    {f.label}
-                    {count !== undefined && <span className="tabular-nums opacity-70">· {count}</span>}
-                  </button>
-                )
-              })}
-            </div>
-            <label className="flex items-center gap-2 text-sm text-muted-foreground">
-              <span>Sort</span>
-              <Select value={sort} onValueChange={(v) => setSort(v as TrendCandidateSort)}>
-                <SelectTrigger className="h-8 w-[190px]" aria-label="Sort">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {SORTS.map((s) => (
-                    <SelectItem key={s.key} value={s.key}>{s.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </label>
-          </div>
+          <QueueToolbar filters={filters} onChange={setFilters} counts={counts} platformCounts={perPlatform} total={cards.length} sources={sources} shown={shown.length} />
 
-          <div className="rounded-lg border bg-card overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
-                  <th className="text-start font-medium px-3 py-2.5">Trend</th>
-                  <th className="text-start font-medium px-3 py-2.5">First seen</th>
-                  <th className="text-start font-medium px-3 py-2.5">Creators</th>
-                  <th className="text-start font-medium px-3 py-2.5">Plays</th>
-                  <th className="text-start font-medium px-3 py-2.5">Day change</th>
-                  <th className="text-start font-medium px-3 py-2.5">Status</th>
-                  <th className="px-3 py-2.5" />
-                </tr>
-              </thead>
-              <tbody>
-                {candidates.isLoading && !candidates.data ? (
-                  <tr><td colSpan={7} className="px-3 py-10 text-center text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin inline-block" aria-label="Loading" /></td></tr>
-                ) : candidates.error ? (
-                  <tr><td colSpan={7} className="px-3 py-8 text-center text-destructive">{candidates.error.message}</td></tr>
-                ) : rows.length === 0 ? (
-                  <tr><td colSpan={7} className="px-3 py-8 text-center text-muted-foreground">Nothing here yet. The daily run adds candidates as new template pages and clips appear.</td></tr>
-                ) : (
-                  rows.map((c) => {
-                    const decided = c.status === "rejected" || c.status === "archived"
-                    return (
-                      <tr key={c.id} className={cn("border-b last:border-b-0", decided && "text-muted-foreground")}>
-                        <td className="px-3 py-3 min-w-[220px]">
-                          <Link to={`/admin/trend-radar/${c.id}`} className="font-semibold hover:underline">{c.name}</Link>
-                          <div className="text-xs text-muted-foreground">
-                            {c.soundName ? `sound: "${c.soundName}"` : "sound: original"} · {formatSeconds(c.durationSec)}
-                          </div>
-                        </td>
-                        <td className="px-3 py-3 whitespace-nowrap text-muted-foreground">{c.firstSeen.name} · {formatDay(c.firstSeen.firstSeenAt)}</td>
-                        <td className="px-3 py-3">
-                          <div className="flex items-center gap-2">
-                            <span className="tabular-nums font-semibold w-6">{c.creators}</span>
-                            <span className="h-1.5 w-[72px] rounded bg-muted overflow-hidden" aria-hidden="true">
-                              <span className="block h-full bg-foreground" style={{ width: `${Math.round((100 * c.creators) / maxCreators)}%` }} />
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-3 py-3 tabular-nums">{formatPlays(c.plays)}</td>
-                        <td className={cn("px-3 py-3 tabular-nums", (c.dayChangePct ?? 0) > 0 ? "text-emerald-700 dark:text-emerald-300" : "text-muted-foreground")}>{formatDayChange(c.dayChangePct)}</td>
-                        <td className="px-3 py-3"><StatusPill status={c.status} label={c.label} /></td>
-                        <td className="px-3 py-3 whitespace-nowrap text-end">
-                          {c.status === "approved" && c.trendId ? (
-                            <Button size="sm" variant="outline" asChild><Link to={`/admin/trends/${c.trendId}`}>Open draft</Link></Button>
-                          ) : (
-                            <Button size="sm" variant={c.status === "candidate" ? "default" : "outline"} asChild><Link to={`/admin/trend-radar/${c.id}`}>Review</Link></Button>
-                          )}
-                        </td>
-                      </tr>
-                    )
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-          {candidates.data?.next && <p className="text-xs text-muted-foreground">Showing the first {rows.length}. Narrow the filter to see the rest.</p>}
-          <p className="text-xs text-muted-foreground">Plays are read logged out, once a day; where a site hides views, likes are counted instead. Readings are deleted after the retention period.</p>
+          {queue.isLoading && !queue.data ? (
+            <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" aria-label="Loading" /></div>
+          ) : queue.error ? (
+            <p className="py-8 text-center text-sm text-destructive">{queue.error.message}</p>
+          ) : cards.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">Nothing here yet. The daily run adds candidates as new template pages and clips appear.</p>
+          ) : shown.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">No candidate matches these filters.</p>
+          ) : filters.view === "gallery" ? (
+            <QueueGallery cards={shown} platform={filters.platform} onOpen={setOpenId} />
+          ) : (
+            <QueueTable cards={shown} platform={filters.platform} onOpen={setOpenId} />
+          )}
+
+          {queue.data && !queue.data.complete && <p className="text-xs text-muted-foreground">Showing the first {cards.length}. Pick a status to see the rest.</p>}
+          <p className="text-xs text-muted-foreground">
+            Views are read logged out; where a site hides views (Instagram), likes are counted instead. Growth is measured on the same posts from one reading to the next. Readings are deleted after the retention period.
+          </p>
+
+          <QueueViewer cards={shown} openId={openId} platform={filters.platform} onOpenId={setOpenId} />
         </>
       )}
     </div>

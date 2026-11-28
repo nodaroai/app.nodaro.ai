@@ -46,6 +46,7 @@ import { optimizedImageUrl } from "@/lib/image"
 import { AndOrToggle, ConditionRowEditor } from "./condition-row-editor"
 import { getPreviewItemKey } from "@/lib/preview-items"
 import { downloadFile } from "@/components/presentation/output-cards/shared"
+import { openVideoDownload } from "@/lib/video-result-download"
 import { SCRAPER_OUTPUT_FIELDS } from "@nodaro/shared/social"
 import { buildExpressionFromVisual, type FilterOperator } from "@nodaro/shared/workflow"
 import {
@@ -749,7 +750,10 @@ export function PreviewConfig({ data, onUpdate }: { data: PreviewNodeData; onUpd
                     className="flex-1 text-xs h-7"
                     onClick={() => {
                       const ext = item.type === "video" ? "mp4" : item.type === "audio" ? "mp3" : "png"
-                      downloadFile(item.value, `${item.sourceNodeLabel}.${ext}`)
+                      const asBefore = () => downloadFile(item.value, `${item.sourceNodeLabel}.${ext}`)
+                      // A video: its kept original when it has one (lib/video-result-download.ts).
+                      if (item.type === "video") openVideoDownload(item.value, asBefore)
+                      else asBefore()
                     }}
                   >
                     <Download className="w-3 h-3 me-1" />

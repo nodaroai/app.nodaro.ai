@@ -21,6 +21,7 @@ import Fastify, { type FastifyInstance } from "fastify"
 const resolver = vi.hoisted(() => ({ result: {} as Record<string, unknown> }))
 const db = vi.hoisted(() => ({
   modelPricing: new Map<string, number>(),
+  jobRow: null as Record<string, unknown> | null,
   reserved: [] as Array<{ credits: number; model: string }>,
 }))
 
@@ -69,6 +70,7 @@ vi.mock("@/lib/supabase.js", () => {
     storage_limit_bytes: 10_000_000_000,
   }
   const answer = (table: string, eqs: Array<[string, unknown]>, many: boolean) => {
+    if (table === "jobs") return { data: db.jobRow, error: null }
     if (table === "profiles") return { data: PROFILE, error: null }
     if (table === "model_pricing") {
       const id = eqs.find(([col]) => col === "model_identifier")?.[1] as string | undefined
@@ -104,7 +106,7 @@ vi.mock("@/lib/supabase.js", () => {
   return { supabase: { from, rpc, auth: { getUser: async () => ({ data: { user: null }, error: null }) } } }
 })
 vi.mock("@/lib/insert-job.js", () => ({
-  insertJob: vi.fn().mockResolvedValue({ data: { id: "job-hd" }, error: null }),
+  insertJob: vi.fn(async (_req: unknown, row: Record<string, unknown>) => { db.jobRow = { ...row, id: "job-hd" }; return { data: { id: "job-hd" }, error: null } }),
 }))
 vi.mock("@/lib/kie-task-ownership.js", () => ({ kieTaskOwnedByAnother: vi.fn().mockResolvedValue(false) }))
 vi.mock("@/lib/queue.js", () => ({ videoQueue: { add: vi.fn().mockResolvedValue({ id: "q" }) }, redis: {} }))
@@ -135,6 +137,7 @@ beforeAll(async () => {
 })
 afterAll(async () => { await app.close() })
 beforeEach(() => {
+  db.jobRow = null
   db.reserved = []
   db.modelPricing = new Map()
 })

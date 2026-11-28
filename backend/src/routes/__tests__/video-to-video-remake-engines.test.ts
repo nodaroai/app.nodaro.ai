@@ -237,6 +237,21 @@ describe("POST /v1/video-to-video — Video Remake's engines are quoted, never r
     expectNothingStarted()
   })
 
+  it("an engine that still answers the earlier fields: the size delivered, the step in the engine's line, none of them named", async () => {
+    state.estimate = {
+      status: 200,
+      body: { ...PULSE_ESTIMATE, breakdown: { base: 40, motion: 300, references: 0, upscale: 60 }, resolution: "1080p", outputResolution: "4k", upscale: "next", upscaleOffered: true },
+    }
+    const res = await run({ provider: "nodaro-pulse", resolution: "4k" })
+    expect(res.statusCode).toBe(200)
+    const { quote } = res.json().videoRemake
+    expect(quote.resolution).toBe("4k")
+    expect(quote.breakdown).toEqual({ base: 40, motion: 360, references: 0 })
+    for (const key of ["outputResolution", "upscale", "upscaleOffered"]) expect(quote, key).not.toHaveProperty(key)
+    expect(JSON.stringify(res.json()).toLowerCase()).not.toContain("upscale")
+    expectNothingStarted()
+  })
+
   it("an older engine's key names are answered as the neutral ones", async () => {
     state.estimate = { status: 200, body: { data: { totalCredits: 500, breakdown: { castSwap: 40, references: 0, seedance: 460 }, maskingCredits: 30, settlesLower: true } } }
     const { videoRemake } = (await run({ provider: "nodaro-prism" })).json()

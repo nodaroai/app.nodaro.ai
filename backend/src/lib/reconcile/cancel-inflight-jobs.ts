@@ -1,4 +1,5 @@
 import { supabase } from "../supabase.js"
+import { finishesWhenStopped, followedLane, type StopRuleRow } from "../stop-rule.js"
 import { refundReservedCreditsForJob } from "../credits-job-lifecycle.js"
 import { withdrawFromLane } from "../concurrency-lanes/withdraw.js"
 import { IN_FLIGHT_JOB_STATUSES, isParkedJobStatus } from "../job-status.js"
@@ -44,6 +45,12 @@ export interface CancelInFlightOptions {
    *  cancelling it. Off for the component-timeout cleanup, where the parent has
    *  given up on the inner run and cancelling it is the point. */
   readonly adoptLiveBudgetedRenders?: boolean
+  /**
+   * The run is ended as a penalty (a blocked account): nothing of it is left to
+   * finish, deliver or charge. Without it a Seedance 2.x video whose task
+   * already started is left to finish (the stop rule).
+   */
+  readonly punitive?: boolean
   /** Orchestrator RESUME only (with `adoptLiveBudgetedRenders`): a child still
    *  waiting for a concurrency slot (`queued`) keeps its place in line and the
    *  time it has waited — ADOPTED (class 4 below) instead of cancelled and
@@ -337,6 +344,21 @@ export async function cancelInFlightChildJobs(
     // Class 1 — cancel + refund (pre-provider, fan-out iteration, orphan, or a
     // render whose worker is gone).
     //
+    // The stop rule first (lib/stop-rule.ts): a followed video (a Seedance 2.x send)
+    // whose task already started is never cancelled and refunded from here. The
+    // provider is making it and the reconcile sweep finishes it: it is delivered
+    // to the library and charged, and what it billed is never released. (A row
+    // class 2 adopted above never reaches this: this is the fan-out iteration
+    // and the orphan.) A segmented run (Generate Video Pro, Edit Video Pro, UGC)
+    // is NOT kept here: with its worker gone nothing would finish it, a live one
+    // is adopted above, and its re-run reuses the work it already made.
+    const stopInput = (row.input_data ?? null) as Record<string, unknown> | null
+    const stopRow: StopRuleRow = { status: row.status, job_type: row.job_type, provider_task_id: row.provider_task_id, model: stopInput?.provider, inputType: stopInput?.type }
+    if (opts.punitive !== true && followedLane(stopRow) && finishesWhenStopped(stopRow)) {
+      console.warn(`[orchestrator/resume] job ${id}: its video already started — left to finish (delivered and charged), not cancelled`)
+      continue
+    }
+
     // D10 first, BEFORE the flip: a metered LLM hold whose job recorded a
     // billed cost is committed, never refunded — the reconcile sweep's own
     // rule (`settleMeteredHoldsBeforeCancel`). One that cannot be committed

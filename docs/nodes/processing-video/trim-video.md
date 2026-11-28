@@ -37,6 +37,10 @@ The Trim Video node extracts or shapes a section of video. Six modes:
 
 A link must be an ordinary video or audio file, not a streaming playlist (HLS, DASH): such a link is refused with a `400` before anything is charged — see [media links](../../features/media-links.md).
 
+## Source file
+
+When the video connected to this node is a generation result that kept its original file beside its playable copy (an HDR, 10-bit or HEVC video: see [Video originals and previews](../../design/video-original-and-preview.md)), the node works from that original, not from the copy, and still outputs an 8-bit H.264 MP4. An HDR picture (HLG or PQ) is converted to SDR first, by the same conversion as the result's playable copy, so the output looks like the copy you played; an HDR video you upload is converted the same way. All of a run's conversions together get up to 15 minutes; a video too long to convert in what is left is read as before: the playable copy, or an upload as it is. When a picture was converted, the job's output says so: `output_data.warningCode` is `hdr_tone_mapped`, with an English `warningMessage`. If the original cannot be used (it is gone, it is over the node's download limit, or converting it fails or would take too long), the node works from the playable copy, as before. The price is the same either way. A **lossless keyframe** cut copies the picture without re-encoding it, so it uses the video you connected as it is (for a generation result, its playable copy), as before.
+
 ## Credit Cost
 
 Trim Video is **dynamically priced** based on output length, in units of **11 credits**<!-- credits-rate: trim-video --> — the run's units priced together as one charge:

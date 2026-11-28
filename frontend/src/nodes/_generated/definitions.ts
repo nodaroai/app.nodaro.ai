@@ -6,6 +6,7 @@ import { definition as unit_clip_pack } from "../clip-pack/definition.generated"
 import { definition as unit_episode_chapters } from "../episode-chapters/definition.generated" // unit:episode-chapters
 import { definition as unit_episode_trailer } from "../episode-trailer/definition.generated" // unit:episode-trailer
 import { definition as unit_gif_to_video } from "../gif-to-video/definition.generated" // unit:gif-to-video
+import { definition as unit_long_image } from "../long-image/definition.generated" // unit:long-image
 import { definition as unit_remove_audio } from "../remove-audio/definition.generated" // unit:remove-audio
 import { definition as unit_shot_cuts } from "../shot-cuts/definition.generated" // unit:shot-cuts
 import { definition as unit_speaker_layout } from "../speaker-layout/definition.generated" // unit:speaker-layout
@@ -17,6 +18,7 @@ import type { ClipPackData as unit_clip_pack_data } from "../clip-pack/types" //
 import type { EpisodeChaptersData as unit_episode_chapters_data } from "../episode-chapters/types" // unit:episode-chapters
 import type { EpisodeTrailerData as unit_episode_trailer_data } from "../episode-trailer/types" // unit:episode-trailer
 import type { GifToVideoData as unit_gif_to_video_data } from "../gif-to-video/types" // unit:gif-to-video
+import type { LongImageData as unit_long_image_data } from "../long-image/types" // unit:long-image
 import type { RemoveAudioData as unit_remove_audio_data } from "../remove-audio/types" // unit:remove-audio
 import type { ShotCutsData as unit_shot_cuts_data } from "../shot-cuts/types" // unit:shot-cuts
 import type { SpeakerLayoutData as unit_speaker_layout_data } from "../speaker-layout/types" // unit:speaker-layout
@@ -30,6 +32,7 @@ export const UNIT_DEFINITIONS: ReadonlyArray<UnitDefinition> = [
   unit_episode_chapters, // unit:episode-chapters
   unit_episode_trailer, // unit:episode-trailer
   unit_gif_to_video, // unit:gif-to-video
+  unit_long_image, // unit:long-image
   unit_remove_audio, // unit:remove-audio
   unit_shot_cuts, // unit:shot-cuts
   unit_speaker_layout, // unit:speaker-layout
@@ -45,6 +48,7 @@ export type UnitNodeType =
   | "episode-chapters" // unit:episode-chapters
   | "episode-trailer" // unit:episode-trailer
   | "gif-to-video" // unit:gif-to-video
+  | "long-image" // unit:long-image
   | "remove-audio" // unit:remove-audio
   | "shot-cuts" // unit:shot-cuts
   | "speaker-layout" // unit:speaker-layout
@@ -59,6 +63,7 @@ export type UnitNodeData =
   | unit_episode_chapters_data // unit:episode-chapters
   | unit_episode_trailer_data // unit:episode-trailer
   | unit_gif_to_video_data // unit:gif-to-video
+  | unit_long_image_data // unit:long-image
   | unit_remove_audio_data // unit:remove-audio
   | unit_shot_cuts_data // unit:shot-cuts
   | unit_speaker_layout_data // unit:speaker-layout
@@ -69,5 +74,6 @@ export type UnitNodeData =
 
 // Each unit's app fields (unit.json appFields) against its data type (types.ts): a value it does not take fails typecheck at its line.
 export type UnitAppFieldsChecked = [
+  UnitAppFieldsFit<unit_long_image_data, typeof unit_long_image.appFields>, // unit:long-image
   UnitAppFieldsFit<unit_split_into_layers_data, typeof unit_split_into_layers.appFields>, // unit:split-into-layers
 ]

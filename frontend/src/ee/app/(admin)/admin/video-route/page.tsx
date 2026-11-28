@@ -1,16 +1,17 @@
-import { useEffect, useState } from "react"
+import { useVideoRouteDraft } from "@/ee/hooks/use-video-route-draft"
 import { Loader2, Route as RouteIcon } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
+  useDecideVideoRouteHold,
   useRevertVideoRoutePolicy,
   useSaveVideoRouteFactors,
   useSaveVideoRoutePolicy,
   useVideoRoute,
 } from "@/ee/hooks/queries/use-video-route"
-import type { VideoRouteChoice, VideoRoutePolicy, VideoRouteView } from "@/ee/lib/video-route-api"
+import { type VideoRouteAccountDay, type VideoRouteChoice, type VideoRoutePolicy, type VideoRouteView } from "@/ee/lib/video-route-api"
 
 /**
  * Admin → Video route: which route each Seedance 2.x model takes, per
@@ -25,9 +26,93 @@ const INHERIT = "__model__"
 
 const CHOICE_LABEL: Record<VideoRouteChoice, string> = { default: "Default provider", alternate: "Alternate route" }
 
+function usd(n: number): string {
+  return "$" + n.toFixed(2)
+}
+
+function routeBalanceText(route: VideoRouteView["balances"]["route"]): string {
+  return route ? usd(route.availableUsd) + " available, " + usd(route.heldUsd) + " held" : "Not available here"
+}
+
 function numberOrNull(raw: string): number | null {
   const n = Number(raw)
   return raw.trim() === "" || !Number.isFinite(n) ? null : n
+}
+
+// Account days are kept for 30 days, so a row written before a field existed can lack it: "-" then, never a crash.
+function money(n: number | null | undefined): string {
+  return typeof n === "number" ? usd(n) : "-"
+}
+
+const ACCOUNT_STATUS: Record<VideoRouteAccountDay["status"], { label: string; title: string }> = {
+  measured: { label: "Measured", title: "The account's spend for this day was read." },
+  pending: { label: "Pending", title: "The account's spend for this day could not be read yet. It is read again." },
+  unmeasured: { label: "Not measured", title: "The account's spend could not be read while the route still reported this day." },
+}
+
+function gapTitle(d: VideoRouteAccountDay, since: string | undefined, alertedUsd: number | undefined): string {
+  return [`Tolerance ${money(d.toleranceUsd)}`, since ? `past it since the check of ${since}` : "", alertedUsd !== undefined ? `alerted at ${usd(alertedUsd)}` : ""].filter(Boolean).join(", ")
+}
+
+/** Unrecorded / over-recorded: highlighted past the day's tolerance; its title says since when and what was alerted. */
+function GapCell({ d, value, since, alertedUsd }: { d: VideoRouteAccountDay; value: number | null | undefined; since: string | undefined; alertedUsd: number | undefined }) {
+  const past = typeof value === "number" && typeof d.toleranceUsd === "number" && value > d.toleranceUsd
+  return (
+    <td className={past ? "pe-4 tabular-nums text-amber-600 dark:text-amber-400" : "pe-4 tabular-nums"} title={typeof value === "number" ? gapTitle(d, since, alertedUsd) : undefined}>
+      {money(value)}
+    </td>
+  )
+}
+
+function AccountDaysTable({ days }: { days: VideoRouteAccountDay[] }) {
+  if (days.length === 0) return <p className="text-sm text-muted-foreground">No day checked yet.</p>
+  return (
+    <div className="overflow-x-auto">
+      <table className="text-xs">
+        <thead>
+          <tr className="text-muted-foreground">
+            <th className="pe-4 text-start">Day</th>
+            <th className="pe-4 text-start">Status</th>
+            <th className="pe-4 text-start">Account spend</th>
+            <th className="pe-4 text-start">Bills (all environments)</th>
+            <th className="pe-4 text-start">Still to be billed</th>
+            <th className="pe-4 text-start">Unrouted</th>
+            <th className="pe-4 text-start">Other spend allowance</th>
+            <th className="pe-4 text-start">Straddle</th>
+            <th className="pe-4 text-start">Unrecorded</th>
+            <th className="pe-4 text-start">Over-recorded</th>
+            <th className="text-start">Checked by</th>
+          </tr>
+        </thead>
+        <tbody>
+          {days.map((d) => {
+            const status = ACCOUNT_STATUS[d.status] ?? null
+            const split = Object.entries(d.byEnv ?? {}).sort(([a], [b]) => a.localeCompare(b)).map(([env, n]) => `${env} ${money(n)}`).join(" · ")
+            return (
+              <tr key={d.day}>
+                <td className="pe-4 font-mono">{d.day}</td>
+                <td className="pe-4" title={status?.title}>{status?.label ?? "-"}</td>
+                <td className="pe-4 tabular-nums">{money(d.actualUsd)}</td>
+                <td className="pe-4 tabular-nums">
+                  {money(d.ledgerUsd)}
+                  {split && <span className="block text-muted-foreground">{split}</span>}
+                </td>
+                <td className="pe-4 tabular-nums">
+                  {d.pendingUsd > 0 || d.unpricedSends > 0 ? `${money(d.pendingUsd)}${d.unpricedSends > 0 ? ` +${d.unpricedSends} unpriced` : ""}` : "-"}
+                </td>
+                <td className="pe-4 tabular-nums">{d.unroutedJobs > 0 || d.unroutedUsd > 0 ? `${money(d.unroutedUsd)} (${d.unroutedJobs ?? 0})` : "-"}</td>
+                <td className="pe-4 tabular-nums">{money(d.otherSpendUsd)}</td>
+                <td className="pe-4 tabular-nums">{money(d.straddleUsd)}</td>
+                <GapCell d={d} value={d.unrecordedUsd} since={d.unrecordedSince} alertedUsd={d.alerted?.unrecordedUsd} />
+                <GapCell d={d} value={d.overRecordedUsd} since={d.overRecordedSince} alertedUsd={d.alerted?.overRecordedUsd} />
+                <td className="font-mono" title={d.at ? new Date(d.at).toLocaleString() : undefined}>{d.env ?? "-"}</td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
 }
 
 function ModelRow({
@@ -65,7 +150,7 @@ function ModelRow({
           <div className="font-mono text-xs text-muted-foreground">{model.id}</div>
           {!model.capable && (
             <div className="text-xs text-amber-600 dark:text-amber-400">
-              This environment's route cannot take this model: it runs on the default provider at the default price here.
+              This environment's alternate route cannot take this model. Requests selecting it are refused.
             </div>
           )}
         </div>
@@ -110,14 +195,9 @@ export default function AdminVideoRoutePage() {
   const savePolicy = useSaveVideoRoutePolicy()
   const revert = useRevertVideoRoutePolicy()
   const saveFactors = useSaveVideoRouteFactors()
-  const [draft, setDraft] = useState<VideoRoutePolicy | null>(null)
-  const [factors, setFactors] = useState<Record<string, string>>({})
-
-  useEffect(() => {
-    if (!data) return
-    setDraft(data.policy)
-    setFactors(Object.fromEntries(Object.entries(data.factors).map(([k, f]) => [k, String(f.factor)])))
-  }, [data])
+  const decideHold = useDecideVideoRouteHold()
+  // The edits, and the saved setting they were started from (hooks/use-video-route-draft.ts).
+  const { draft, setDraft, baseUpdatedAt, staleChanges, reset, factors, setFactors, factorsBaseUpdatedAt, factorsStale, resetFactors } = useVideoRouteDraft(data)
 
   if (isLoading || !draft) {
     return isError ? <p className="p-6 text-sm text-destructive">Could not load the video route setting.</p> : <Loader2 className="m-6 size-5 animate-spin" />
@@ -127,8 +207,14 @@ export default function AdminVideoRoutePage() {
 
   async function run(p: Promise<unknown>, ok: string) {
     try {
-      await p
-      toast.success(ok)
+      const view = (await p) as VideoRouteView | undefined
+      // A decision that is saved but not applied yet says so, instead of claiming the charge or the release.
+      const decided = view?.decided
+      if (decided?.heldForTotal) toast.info("Not charged: with its billed parts this run's total is far above its quote. It now waits as a held bill, to be confirmed or rejected on its own.")
+      else if (decided && !decided.settled) toast.success("Decision saved. It is applied when this run's settlement next runs.")
+      // The amount the settlement computed and charged at that moment.
+      else if ((decided?.decision === "confirmed" || decided?.decision === "quote") && decided.chargedCredits !== null) toast.success(`Confirmed. The run was charged ${decided.chargedCredits} credits.`)
+      else toast.success(ok)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not save")
     }
@@ -141,8 +227,8 @@ export default function AdminVideoRoutePage() {
         <div>
           <h1 className="text-xl font-semibold">Video route</h1>
           <p className="text-sm text-muted-foreground">
-            Which provider runs each Seedance model. A change applies to new jobs only, in every environment on this
-            database. A run on the alternate route is charged what the route billed, with the same markup.
+            Which provider runs each Seedance model. A change applies to new jobs in this environment only.
+            Routed runs settle from the route's verified bill. A bill far above its quote waits here for a decision.
           </p>
           <p className="text-xs text-muted-foreground">
             This environment: {data.route.present ? (data.route.v2 ? "an alternate route is loaded" : "the loaded route predates per-model routing") : "no alternate route is loaded"}.
@@ -151,11 +237,38 @@ export default function AdminVideoRoutePage() {
         </div>
       </header>
 
-      {!data.routesPerModel && (
+      {data.updatedAt === null && data.route.present && (
         <p className="rounded-md border border-amber-500/40 p-3 text-sm text-amber-700 dark:text-amber-300">
-          This build cannot run a model on the alternate route yet: every model stays on the default provider.
+          Nothing has been saved here yet. From the first save on, these settings alone decide the route, for every model and service.{" "}
+          {data.legacyRouting === null
+            ? "The alternate route loaded here does not report what it runs today, so this form cannot show it. Anything it runs today without a setting (for example a feature's own edit steps) moves to the default provider at the first save, unless you choose the alternate route for that model and service below. Check what runs there today before saving."
+            : data.legacyRouting.length === 0 && data.legacyRoutingUnrecognised.length === 0
+              ? "The alternate route reports that it runs nothing today without a setting."
+              : data.legacyRouting.length === 0
+                ? ""
+              : `On the alternate route today, and pre-selected below so a first save keeps them: ${data.legacyRouting.map((l) => `${l.model} for ${l.service}`).join(", ")}. Change them only if you mean to move that traffic.`}
+          {data.legacyRoutingUnrecognised.length > 0 && (
+            <span className="mt-1 block">
+              Unrecognised, will move to the default provider at the first save: {data.legacyRoutingUnrecognised.map((l) => `${l.model} for ${l.service}`).join(", ")}.
+            </span>
+          )}
         </p>
       )}
+      {!data.routesPerModel && (
+        <p className="rounded-md border border-amber-500/40 p-3 text-sm text-amber-700 dark:text-amber-300">
+          This build cannot run a model on the alternate route. Select the default provider to admit new runs here.
+        </p>
+      )}
+      <section className="grid gap-2 rounded-md border p-3 text-sm sm:grid-cols-2">
+        <div>
+          <div className="text-muted-foreground">Alternate route balance</div>
+          <div className="tabular-nums">{routeBalanceText(data.balances.route)}</div>
+        </div>
+        <div>
+          <div className="text-muted-foreground">Default provider balance (its credits)</div>
+          <div className="tabular-nums">{data.balances.defaultProviderCredits ?? "No snapshot yet"}</div>
+        </div>
+      </section>
 
       <section className="flex flex-col gap-3">
         {data.models.map((model) => (
@@ -183,12 +296,25 @@ export default function AdminVideoRoutePage() {
           />
         </label>
         <label className="flex flex-col gap-1 text-sm">
-          Alert when the route's real spend exceeds the recorded cost by more than (%)
+          Daily account check: alert when the account's spend and everything recorded (all environments) differ by more than (% of what was recorded)
           <Input
             inputMode="decimal"
             value={draft.spendDriftAlertPercent}
             onChange={(e) => setDraft({ ...draft, spendDriftAlertPercent: numberOrNull(e.target.value) ?? 0 })}
           />
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          Known other spend on the route's account (USD per day)
+          <Input
+            inputMode="decimal"
+            aria-label="Known other spend on the route's account (USD per day)"
+            // A setting saved before this field existed comes back without it.
+            value={draft.accountOtherSpendUsdPerDay ?? 0}
+            onChange={(e) => setDraft({ ...draft, accountOtherSpendUsdPerDay: Math.max(0, numberOrNull(e.target.value) ?? 0) })}
+          />
+          <span className="block text-xs text-muted-foreground">
+            Spend on the shared account that this platform never records. Taken off the account's spend before the daily check alerts. Leave 0 unless you know it.
+          </span>
         </label>
         <label className="flex flex-col gap-1 text-sm">
           Alert after this many route failures of one model within {draft.failureAlert.windowMinutes} minutes
@@ -198,22 +324,229 @@ export default function AdminVideoRoutePage() {
             onChange={(e) => setDraft({ ...draft, failureAlert: { ...draft.failureAlert, failures: Math.max(1, Math.round(numberOrNull(e.target.value) ?? 1)) } })}
           />
         </label>
+        <label className="flex flex-col gap-1 text-sm">
+          Hold a bill for a decision when it is more than this many times its quote
+          <Input
+            inputMode="decimal"
+            aria-label="Bill anomaly multiple"
+            value={draft.billAnomalyMultiple}
+            onChange={(e) => setDraft({ ...draft, billAnomalyMultiple: Math.max(1, numberOrNull(e.target.value) ?? 1) })}
+          />
+        </label>
+        <label className="flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            className="mt-1"
+            aria-label="Enforce unpaid charges"
+            disabled={!data.environmentNameable && !draft.enforceUnpaidCharges}
+            checked={draft.enforceUnpaidCharges}
+            onChange={(e) => setDraft({ ...draft, enforceUnpaidCharges: e.target.checked })}
+          />
+          <span>
+            Enforce unpaid charges
+            <span className="block text-xs text-muted-foreground">
+              Off: a charge the payer could not cover is recorded and alerted, and nothing else changes. On: it blocks that payer's new paid
+              runs, later funding repays it first, and an external wallet must support the routed-debt contract.
+            </span>
+          </span>
+        </label>
       </section>
 
+      {staleChanges.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-destructive/50 p-3 text-sm" role="alert">
+          <span>This setting was saved by someone else since you started editing. Changed: {staleChanges.join(", ")}. A save from here is refused; reload to see it (your unsaved edits are dropped).</span>
+          <Button size="sm" variant="outline" onClick={reset}>Reload</Button>
+        </div>
+      )}
       <div className="flex flex-wrap gap-2">
-        <Button onClick={() => run(savePolicy.mutateAsync(draft), "Saved. New jobs use it within a few seconds.")} disabled={savePolicy.isPending}>
+        <Button
+          onClick={() => {
+            const dropped = data.updatedAt === null ? data.legacyRoutingUnrecognised : []
+            if (dropped.length > 0 && !window.confirm(`The alternate route reports it runs these today, but this server does not recognise them, so they cannot be kept: ${dropped.map((l) => `${l.model} for ${l.service}`).join(", ")}. After this save they run on the default provider. Save anyway?`)) return
+            // The setting the DRAFT was started from, never the newest one the page holds.
+            void run(savePolicy.mutateAsync({ policy: draft, expectedUpdatedAt: baseUpdatedAt }).then((view) => (reset(), view)), "Saved. New jobs use it within a few seconds.")
+          }}
+          disabled={savePolicy.isPending}
+        >
           Save
         </Button>
         <Button
           variant="destructive"
           onClick={() => {
-            if (window.confirm("Put every model back on the default provider for new jobs?")) void run(revert.mutateAsync(), "Every model is back on the default provider.")
+            if (window.confirm("Put every model back on the default provider for new jobs?")) void run(revert.mutateAsync().then((view) => (reset(), view)), "Every model is back on the default provider.")
           }}
           disabled={revert.isPending}
         >
           Revert all to default
         </Button>
       </div>
+
+      <section className="flex flex-col gap-2">
+        <h2 className="font-medium">What the route took (last 7 days)</h2>
+        <p className="text-sm text-muted-foreground">
+          Requests per model and service: accepted by the alternate route, refused, or previously run on the default provider.
+        </p>
+        {data.outcomes.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No routed jobs yet.</p>
+        ) : (
+          <table className="text-xs">
+            <thead>
+              <tr className="text-start text-muted-foreground">
+                <th className="pe-4 text-start">Model</th>
+                <th className="pe-4 text-start">Service</th>
+                <th className="pe-4 text-start">On the route</th>
+                <th className="pe-4 text-start">Refused (why)</th>
+                <th className="text-start">Historical default (why)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.outcomes.map((o) => (
+                <tr key={`${o.model}:${o.service}`}>
+                  <td className="pe-4 font-mono">{o.model}</td>
+                  <td className="pe-4 font-mono">{o.service}</td>
+                  <td className="pe-4 tabular-nums">{o.alternate}</td>
+                  <td className="pe-4">{Object.entries(o.refused).map(([why, n]) => `${why}: ${n}`).join(", ") || "—"}</td>
+                  <td>{Object.entries(o.kept).map(([why, n]) => `${why}: ${n}`).join(", ") || "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+
+      <section className="flex flex-col gap-2" aria-label="Held settlements">
+        <h2 className="font-medium">Held settlements</h2>
+        <p className="text-sm text-muted-foreground">
+          A run whose verified bill is more than {data.policy.billAnomalyMultiple} times its quote is delivered but not charged until it is
+          decided here: confirm charges it in full, reject releases the hold and records the loss. A run the route never billed is listed
+          too, once every re-read is spent: settle it at its quote, or release it.
+        </p>
+        {data.holds.length === 0 ? <p className="text-sm text-muted-foreground">Nothing is held.</p> : (
+          <ul className="flex flex-col gap-2">
+            {data.holds.map((hold) => (
+              <li key={hold.jobId} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm">
+                <div>
+                  <p className="font-mono text-xs">Job {hold.jobId}</p>
+                  {hold.kind === "unbilled" ? (
+                    <p>The route never reported a bill for part of this run. Settle it at its quote, or release it.</p>
+                  ) : (
+                    <p className="tabular-nums">
+                      Billed {hold.billedUsd === null ? "-" : usd(hold.billedUsd)} against a quote of {hold.quotedUsd === null ? "-" : usd(hold.quotedUsd)}
+                      {hold.credits === null ? "" : ` · ${hold.credits} credits`}
+                    </p>
+                  )}
+                  <p className="tabular-nums">
+                    {hold.wouldCharge === null
+                      ? "What a charge would take cannot be computed yet."
+                      : hold.kind === "unbilled"
+                        ? `Settling now charges ${hold.wouldCharge} credits (real bills where there are any, the quote for the rest).`
+                        : `Confirming now charges ${hold.wouldCharge} credits.`}
+                    {hold.wouldLose === null
+                      ? ""
+                      : ` ${hold.kind === "unbilled" ? "Releasing" : "Rejecting"} records ${hold.wouldLose} credits as a loss: the route's bill for its sends (the quote where it has not billed yet), the route's cost alone.`}
+                  </p>
+                  {hold.kind === "unbilled" && hold.totalAnomalous && (
+                    <p className="text-xs text-amber-700 dark:text-amber-300">
+                      That total is far above this run's quote: settling will not charge it, it will hold it for a separate confirmation.
+                    </p>
+                  )}
+                  <p className="text-xs text-muted-foreground">{new Date(hold.heldAt).toLocaleString()}</p>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    // A charge is decided for the total shown: with none to show, there is nothing to decide on yet.
+                    disabled={decideHold.isPending || hold.wouldCharge === null}
+                    title={hold.wouldCharge === null ? "Its total cannot be computed right now" : undefined}
+                    onClick={() => {
+                      if (hold.kind === "unbilled") {
+                        if (window.confirm(hold.wouldCharge === null ? "Charge this run's unbilled parts at their quote?" : `Charge this run ${hold.wouldCharge} credits (real bills, and the quote for what the route never billed)?`)) void run(decideHold.mutateAsync({ jobId: hold.jobId, decision: "quote", ...(hold.wouldCharge !== null ? { expectedChargedCredits: hold.wouldCharge } : {}) }), "Settled at its quote.")
+                      } else if (window.confirm(`Charge this run ${hold.wouldCharge ?? hold.credits ?? "its"} credits in full?`)) void run(decideHold.mutateAsync({ jobId: hold.jobId, decision: "confirm", ...(hold.wouldCharge !== null ? { expectedChargedCredits: hold.wouldCharge } : {}) }), "Confirmed. The run is charged in full.")
+                    }}
+                  >
+                    {hold.kind === "unbilled" ? "Settle at quote" : "Confirm charge"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={decideHold.isPending}
+                    onClick={() => {
+                      if (window.confirm("Release this run's hold and record the bill as a loss?")) void run(decideHold.mutateAsync({ jobId: hold.jobId, decision: "reject" }), "Rejected. The hold is released.")
+                    }}
+                  >
+                    {hold.kind === "unbilled" ? "Release" : "Reject"}
+                  </Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="flex flex-col gap-2" aria-label="Routing alerts">
+        <h2 className="font-medium">Routing alerts</h2>
+        <p className="text-sm text-muted-foreground">Internal price, balance and settlement alerts. These are never sent to customers.</p>
+        {data.alerts.length === 0 ? <p className="text-sm text-muted-foreground">No alerts.</p> : (
+          <ul className="flex flex-col gap-2">
+            {data.alerts.map((alert) => (
+              <li key={alert.key} className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm">
+                <p>{alert.message}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{new Date(alert.updatedAt).toLocaleString()}{alert.model ? ` · ${alert.model}` : ""}{alert.jobId ? ` · Job ${alert.jobId}` : ""}</p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="flex flex-col gap-2">
+        <h2 className="font-medium">Daily spend check</h2>
+        <p className="text-sm text-muted-foreground">
+          Each day, the bills this environment recorded (counted on the day the route billed each, and corrected for nine days as late bills arrive), on charged runs and as known losses
+          (runs that failed, replaced sends, sends given up on and billed later), beside what the route's account reports it spent.
+          That account is shared with other environments, so what it spent beyond this ledger is shown for context and raises no
+          alert. What this ledger records beyond the whole account's spend is context here too: the account check below compares the account with every environment's bills and alerts.
+        </p>
+        {data.spendDays.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No day checked yet.</p>
+        ) : (
+          <table className="text-xs">
+            <thead>
+              <tr className="text-muted-foreground">
+                <th className="pe-4 text-start">Day</th>
+                <th className="pe-4 text-start">Jobs</th>
+                <th className="pe-4 text-start">Recorded</th>
+                <th className="pe-4 text-start">Known losses</th>
+                <th className="pe-4 text-start">Route reports</th>
+                <th className="text-start">Account beyond this ledger</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.spendDays.map((d) => (
+                <tr key={d.day}>
+                  <td className="pe-4 font-mono">{d.day}</td>
+                  <td className="pe-4 tabular-nums">{d.jobs}</td>
+                  <td className="pe-4 tabular-nums">{usd(d.recordedUsd)}</td>
+                  <td className="pe-4 tabular-nums">{d.failedJobs > 0 ? `${usd(d.lossesUsd)} (${d.failedJobs})` : "-"}</td>
+                  <td className="pe-4 tabular-nums">{d.actualUsd === null ? "-" : usd(d.actualUsd)}</td>
+                  <td className="tabular-nums">{d.unexplainedUsd === null ? "-" : usd(d.unexplainedUsd)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+
+      <section className="flex flex-col gap-2">
+        <h2 className="font-medium">Account check (all environments)</h2>
+        <p className="text-sm text-muted-foreground">
+          Once a day, for every environment together: what the route's whole account spent each UTC day, beside every environment's
+          verified bills the route billed that day, the sends delivered with no bill yet, and alternate-route jobs with no routing
+          decision. The known other spend is taken off the account's spend, and a run that straddles midnight is offset by the
+          neighbouring day. Unrecorded is what the account spent beyond everything recorded; over-recorded is what was recorded beyond
+          the account's spend. Either one past the day's tolerance is alerted once a later check still sees it.
+        </p>
+        <AccountDaysTable days={data.accountDays ?? []} />
+      </section>
 
       <section className="flex flex-col gap-2">
         <h2 className="font-medium">Price correction factors</h2>
@@ -231,6 +564,12 @@ export default function AdminVideoRoutePage() {
             <Input className="w-28" inputMode="decimal" value={value} onChange={(e) => setFactors({ ...factors, [key]: e.target.value })} />
           </label>
         ))}
+        {factorsStale && (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-destructive/50 p-3 text-sm" role="alert">
+            <span>The factors changed since you started editing them (a save, or an automatic raise). A save from here is refused; reload to see them.</span>
+            <Button size="sm" variant="outline" onClick={resetFactors}>Reload</Button>
+          </div>
+        )}
         {Object.keys(factors).length > 0 && (
           <div>
             <Button
@@ -239,8 +578,9 @@ export default function AdminVideoRoutePage() {
                 run(
                   saveFactors.mutateAsync({
                     factors: Object.fromEntries(Object.entries(factors).map(([k, v]) => [k, { factor: Math.max(1, numberOrNull(v) ?? 1) }])),
-                    expectedUpdatedAt: data.factorsUpdatedAt,
-                  }),
+                    // The table these inputs were started from, never the newest one the page holds.
+                    expectedUpdatedAt: factorsBaseUpdatedAt,
+                  }).then((view) => (resetFactors(), view)),
                   "Factors saved.",
                 )
               }
@@ -254,16 +594,23 @@ export default function AdminVideoRoutePage() {
 
       {Object.keys(data.prices).length > 0 && (
         <section className="flex flex-col gap-2">
-          <h2 className="font-medium">The route's listed prices (as charged)</h2>
+          <h2 className="font-medium">The route's listed prices (as charged), beside the default provider's</h2>
+          <p className="text-sm text-muted-foreground">A route price above the default one is highlighted. A reference-video row is the price of a reference as long as the output; a run with a shorter reference settles lower.</p>
           {Object.entries(data.prices).map(([model, rows]) => (
             <details key={model}>
               <summary className="cursor-pointer text-sm">{model} — {rows.length} prices</summary>
               <table className="mt-1 text-xs">
                 <tbody>
+                  <tr className="text-muted-foreground">
+                    <th className="pe-4 text-start">Price id</th>
+                    <th className="pe-4 text-start">Route</th>
+                    <th className="text-start">Default provider</th>
+                  </tr>
                   {rows.map((row) => (
                     <tr key={row.id}>
                       <td className="pe-4 font-mono">{row.id}</td>
-                      <td className="tabular-nums">{row.charged}</td>
+                      <td className={row.defaultCharged !== null && row.charged > row.defaultCharged ? "pe-4 tabular-nums text-amber-600 dark:text-amber-400" : "pe-4 tabular-nums"}>{row.charged}</td>
+                      <td className="tabular-nums">{row.defaultCharged ?? "-"}</td>
                     </tr>
                   ))}
                 </tbody>

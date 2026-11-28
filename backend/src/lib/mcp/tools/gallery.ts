@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { z } from "zod"
-import { resolveOutputUrl, assetKindOf, outputSizeOf } from "./_job-view.js"
+import { resolveOutputUrl, assetKindOf, outputSizeOf, partialDeliveryGuidance } from "./_job-view.js"
 import type { FastifyInstance } from "fastify"
 import type { McpSession } from "../session.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
@@ -342,9 +342,9 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
         },
         annotations: { readOnlyHint: true },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v5/gallery",
+        "ui/resourceUri": "ui://nodaro/widget/v6/gallery",
         ui: {
-          resourceUri: "ui://nodaro/widget/v5/gallery",
+          resourceUri: "ui://nodaro/widget/v6/gallery",
           visibility: ["model", "app"],
         },
       },
@@ -551,9 +551,9 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
         },
         annotations: { readOnlyHint: true },
         _meta: {
-          "ui/resourceUri": "ui://nodaro/widget/v5/gallery",
+          "ui/resourceUri": "ui://nodaro/widget/v6/gallery",
           ui: {
-            resourceUri: "ui://nodaro/widget/v5/gallery",
+            resourceUri: "ui://nodaro/widget/v6/gallery",
             visibility: ["model", "app"],
           },
         },
@@ -898,8 +898,10 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
           }
         }
 
+        // A clip delivered in part (a Video Remake made in parts): said in words, so it is never shown as the whole clip.
+        const partial = data.status === "completed" ? partialDeliveryGuidance(out) : undefined
         return {
-          content: [{ type: "text", text: JSON.stringify({ data: shownJob, ...unitFields() }, null, 2) }],
+          content: [{ type: "text", text: JSON.stringify({ data: shownJob, ...(partial ? { guidance: partial } : {}), ...unitFields() }, null, 2) }],
           structuredContent: {
             jobId: data.id,
             status: data.status,
@@ -962,9 +964,9 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
         // valid without an outputSchema.
         annotations: { readOnlyHint: true },
         _meta: {
-          "ui/resourceUri": "ui://nodaro/widget/v5/job-auto",
+          "ui/resourceUri": "ui://nodaro/widget/v6/job-auto",
           ui: {
-            resourceUri: "ui://nodaro/widget/v5/job-auto",
+            resourceUri: "ui://nodaro/widget/v6/job-auto",
             visibility: ["model", "app"],
           },
         },

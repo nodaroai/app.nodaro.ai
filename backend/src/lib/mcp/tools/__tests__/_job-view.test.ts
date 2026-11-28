@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { jobView, resolveOutputUrl, assetKindOf, outputSizeOf } from "../_job-view.js"
+import { jobView, resolveOutputUrl, assetKindOf, outputSizeOf, partialDeliveryGuidance } from "../_job-view.js"
 
 // Audit 2026-09-06 fix #2 (A-5 / A-12): two job readers, two shapes — `get_job`
 // returned the raw row as text with per-type output keys, `get_asset` a
@@ -218,5 +218,35 @@ describe("jobView — the Preview marker", () => {
     expect(jobView({ ...render, output_data: { videoUrl: "v", quality: "final" } }).preview).toBeUndefined()
     expect(jobView({ ...render, job_type: "generate-video" }).preview).toBeUndefined()
     expect(jobView({ ...render, output_data: null }).preview).toBeUndefined()
+  })
+})
+
+describe("partialDeliveryGuidance: a clip delivered in part", () => {
+  const partial = { deliveredSec: 59.4, sourceSec: 119.96, parts: { delivered: 2, planned: 4 }, reason: "short_take", message: "We remade the first 0:59 of 1:59." }
+
+  it("says what the video covers, from the numbers", () => {
+    expect(partialDeliveryGuidance({ videoUrl: "v", partial })).toBe(
+      "Partial result: this video is only the first 59.4 s of the 120 s clip (2 of its 4 parts); the rest could not be made and is not in it. " +
+        "Tell the user it is not the whole clip; do not present it as complete.",
+    )
+  })
+
+  it("leaves out a part count it cannot read, and says nothing for a record that is not one", () => {
+    expect(partialDeliveryGuidance({ partial: { ...partial, parts: { delivered: "2", planned: 4 } } })).not.toContain("parts")
+    expect(partialDeliveryGuidance({ partial: { ...partial, parts: { delivered: 4, planned: 4 } } })).not.toContain("parts")
+    for (const bad of [undefined, null, "partial", [], {}, { ...partial, deliveredSec: 0 }, { ...partial, sourceSec: "120" }, { ...partial, deliveredSec: 120, sourceSec: 120 }]) {
+      expect(partialDeliveryGuidance({ videoUrl: "v", partial: bad }), JSON.stringify(bad)).toBeUndefined()
+    }
+    expect(partialDeliveryGuidance(null)).toBeUndefined()
+    expect(partialDeliveryGuidance({ videoUrl: "v" })).toBeUndefined()
+  })
+
+  it("is the envelope's guidance on a completed job only, which keeps the record in outputData", () => {
+    const row = { id: "j", status: "completed", job_type: "cast-swap", output_data: { videoUrl: "v", durationSec: 59.4, partial } }
+    const view = jobView(row)
+    expect(view.guidance).toContain("only the first 59.4 s")
+    expect(view.outputData).toEqual(row.output_data)
+    expect(jobView({ ...row, status: "processing" }).guidance).toBeUndefined()
+    expect(jobView({ ...row, output_data: { videoUrl: "v", durationSec: 120 } }).guidance).toBeUndefined()
   })
 })

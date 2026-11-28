@@ -210,6 +210,7 @@ import { trendRadarRoutes } from "./ee/routes/trend-radar.js"
 import { adminNodaroMotionRoutes } from "./ee/routes/admin-nodaro-motion.js"
 import { adminVideoRouteRoutes } from "./ee/routes/admin-video-route.js"
 import { publishRouteListing } from "./ee/billing/video-route-listing-publish.js"
+import { videoRouteInternalRoutes } from "./ee/routes/video-route-internal.js"
 import { adminProviderSafetyRoutes } from "./ee/routes/admin-provider-safety.js"
 import { providerSafetyLocksRoutes } from "./routes/provider-safety-locks.js"
 import { motionTransferRoutes } from "./routes/motion-transfer.js"
@@ -427,11 +428,13 @@ import { registerPlanRolesDailyLimit } from "./lib/plan-roles-daily-limit.js"
 import { registerCastSwapPrevizGate } from "./lib/cast-swap-previz-gate.js"
 import { registerCastSwapRoleFaceGate } from "./lib/cast-swap-role-face.js"
 import { registerFirstRemakeEstimateHook } from "./ee/lib/first-remake-offer.js"
+import { registerVideoRemakeQuoteAnswerHook } from "./ee/lib/video-remake-estimate-answer.js"
 import { registerTokenWorkflowScopeGuard } from "./middleware/token-workflow-scope.js"
 import { registerSequenceExecutionGuard } from "./middleware/sequence-execution-guard.js"
 import { registerRetiredVideoProviderHook } from "./middleware/retired-video-provider.js"
 import { registerServerOnlyBodyKeysHook } from "./middleware/server-only-body-keys.js"
 import { registerNodaroMotionEngineHook } from "./middleware/nodaro-motion-engine.js"
+import { registerVideoRemakeQualityHook } from "./middleware/video-remake-quality.js"
 import { videoRemakeRewriteUrl } from "./lib/video-remake-paths.js"
 import { registerNodaroMotionPulseAudioHook } from "./middleware/nodaro-motion-pulse-audio.js"
 import { registerNodaroMotionPrismReferenceAudioHook } from "./middleware/nodaro-motion-prism-reference-audio.js"
@@ -658,6 +661,8 @@ export async function buildApp() {
   registerCastSwapRoleFaceGate(app)
   // "First Remake on us": a Video Remake quote says what the offer would cover (Cloud).
   if (hasCredits()) registerFirstRemakeEstimateHook(app)
+  // A Video Remake quote names the size delivered, never how it is made, whichever engine answered it (Cloud).
+  if (hasCredits()) registerVideoRemakeQuoteAnswerHook(app)
   // A personal API key limited to some workflows reaches only the routes that
   // declare which workflow they touch (`config.workflowScope`); everything
   // else refuses it. Before every route's own preHandlers (creditGuard among
@@ -670,6 +675,8 @@ export async function buildApp() {
   // A Video Remake run or quote naming its engine by any id (public, earlier
   // or internal) reaches the plugin's route as the internal id every engine takes.
   registerNodaroMotionEngineHook(app)
+  // Its Quality choice (`quality: "full" | "economy"`) reaches only an engine that takes it; any other would refuse the value.
+  registerVideoRemakeQualityHook(app)
   // A direct Video Remake run's Pulse audio is the admin's setting, never the caller's
   // (a trend run keeps the one its trend composed).
   registerNodaroMotionPulseAudioHook(app)
@@ -867,6 +874,8 @@ export async function buildApp() {
 if (hasAdmin() && hasCredits()) await app.register(adminNodaroMotionRoutes)
 // Admin → Video route: per-model routing of the Seedance 2.x family (ee/routes/admin-video-route.ts).
 if (hasAdmin() && hasCredits()) await app.register(adminVideoRouteRoutes)
+// The standalone orchestrator admits a routable video job through this process (it loads no plugin).
+if (hasCredits()) await app.register(videoRouteInternalRoutes)
   // Provider content filters, per model (admin read; platform operator write).
   if (hasAdmin()) await app.register(adminProviderSafetyRoutes)
   // Which models an admin forced the filter on for: the node checkbox shows it.

@@ -1503,7 +1503,7 @@ type TrashEntry =
 Newest first. A **removed** item stays until `sessions.restoreItem(session.id,
 job.id)` or `sessions.removeItem(session.id, job.id, { forever: true })`. A
 **deleted** job stays until `purgeAt` (30 days after `deletedAt`), then it is
-deleted for good (a copy saved to the Library stays); `jobs.restore(job.id)` brings it back into
+deleted for good (a copy saved to the Library stays; a video's kept original goes unless a Library item of that video, another job or a run in progress uses it); `jobs.restore(job.id)` brings it back into
 every session it was in, `jobs.delete(job.id, { forever: true })` deletes it
 now. A removed item whose job you also deleted is listed once, as the deleted
 job. A job no session ever held has no tool, so `tool` leaves it out: pass
@@ -2420,6 +2420,8 @@ interface VideoRemakeParams {
   motionLength?: "cut-end" | "cut-start" // VideoRemakeMotionLength, nodaro-pulse only; default "cut-end"
   resolution?: VideoRemakeResolution // the size delivered: "720p" (default), "1080p" or "4k";
                                    // Flash choices "720p" (default) or "1080p" (see The size delivered)
+  quality?: VideoRemakeQuality     // "economy" (default: rendered one size below, then upscaled) or
+                                   // "full" (rendered at the size, costs more); see Quality
   draft?: boolean                  // default false; true = a 480p draft whose same take Full Quality can
                                    // finish at 1080p (leave resolution out); true above 480p is a 400;
                                    // nodaro-pulse has no draft (true = 400 draft_unsupported)
@@ -2436,6 +2438,7 @@ type VideoRemakeEngineChoice = VideoRemakeEngine | VideoRemakeFlashEngine
 type VideoRemakeStyle = "precise" | "motion"            // how the run follows the clip (see below)
 type VideoRemakeEngineLegacyId = …     // @deprecated: the ids older clients sent; still accepted in a request, never returned
 type VideoRemakeResolution = "480p" | "720p" | "1080p" | "4k" // a size delivered ("4k" lower-case)
+type VideoRemakeQuality = "full" | "economy" // how the size delivered is made (see Quality)
 
 interface VideoRemakeEstimate {
   engine?: VideoRemakeEngineChoice // the engine quoted, or the Flash choice asked for
@@ -2563,6 +2566,29 @@ as `{}`), the deployment's engine does not deliver resolutions yet:
 `"720p"` or `"1080p"`, Nodaro Pulse `"720p"` (default) or `"1080p"`, Nodaro
 Prism Flash `"480p"` (default) or `"720p"`, Nodaro Pulse Flash `"720p"`.
 
+**Quality** (`quality`, `VideoRemakeQuality`): how the size delivered is made.
+`"economy"` (the default) renders one size below and upscales the result to
+`resolution`; faces and motion can look processed. `"full"` renders at
+`resolution` itself, with no upscale step, and costs more. The choice exists
+where `styleChoice()` lists the size under `quality`, per engine choice (e.g.
+`{ "nodaro-prism": ["720p", "1080p"], "nodaro-pulse": ["1080p"] }`; `{}` or
+absent: no Quality control). Anywhere else a size is made one way only and the
+request is made that way, never refused for it. 480p is never listed (the two
+ways are the same run there), and 4K only for an engine choice that renders 4K
+itself here: where `resolutions` offers 4K and `quality` does not list it, 4K
+is rendered at 1080p and upscaled, so say that Full is not available at 4K for
+that choice. To price the two, call
+`estimate()` once per value: an estimate whose request names `quality` answers
+`quality` (how this quote is made), `qualityOffered` (`true` only when both
+ways exist for this request: read it on the `"economy"` estimate) and, with
+`"economy"`, `engineResolution` (the size rendered before the upscale). A
+completed job of such a run says `quality` (`VideoRemakeJobOutput.quality`),
+and, read by its owner, an Economy run whose upscale step was applied also
+carries the video before it: `engineVideoUrl`, `engineWidth`, `engineHeight`
+and `engineResolution` ("Before upscale"; never on someone else's read). The version before upscaling is kept
+with the result and counts toward your storage. A request that names no
+`quality` is sent and answered exactly as before.
+
 **A part of the clip, and short clips** (each where the deployment's engine
 has it switched on; read any answer other than `true`, a missing one included,
 as off). Where `styleChoice()` answers `portion: true`, `run()`, `estimate()`
@@ -2583,10 +2609,41 @@ lengthened, run and cut back, and priced at the lengthened length; a 4 s
 preview of a clip under 4 s is still refused `preview_out_of_range`. The
 estimate is the authority on a clip's length (`clip_out_of_range`).
 
+**Long clips** (`styleChoice().longClips`, `VideoRemakeLongClips`): where the
+deployment's engine has it switched on, `styleChoice()` answers
+`longClips: { maxSourceSec }` (else `null`, or absent from an older server:
+read both as off). A whole `run()` (no `preview`, no part of the clip, not a
+trend run) on Nodaro Prism, not its Flash choice, with the Precise style then
+takes a source longer than 30 s, up to `maxSourceSec` seconds, with no field
+of its own: it is made in parts, joined into one result of the source's
+length, and `estimate()` prices the run that will be made. Refusals: `400
+long_clip_too_long` (a whole clip over `maxSourceSec`, from `run()`,
+`estimate()` and `planRoles()`), and `409 long_clip_no_full_quality` from
+`fullQuality()` / `fullQualityEstimate()` (such a run has no Full Quality yet).
+Any other engine, style or run keeps the 30 s limit (`clip_out_of_range`).
+
+**A clip delivered in part** (`VideoRemakeJobOutput.partial`,
+`VideoRemakePartial`): when a later part of a long clip fails after its
+retries (or its take cannot be joined whole), the job still completes, with
+the clip from its start up to that part, never with a gap. Its output carries
+`partial: { deliveredSec, sourceSec, parts: { delivered, planned }, reason, message }`
+and its `durationSec` is the delivered length. `reason` is `"part_failed"`,
+`"short_take"` or `"joined_length"` (open-ended); `message` is one English
+sentence to show the person. The undelivered parts' renders are released, not
+charged; the run's own fee is the one its quote stated, and nothing retries
+the rest on its own. If the first part fails the job fails, with nothing
+delivered. Check `partial` before presenting a result as the whole clip:
+
+```ts
+const { data: job } = await client.jobs.get(jobId)
+const out = job.output_data as VideoRemakeJobOutput
+if (out.partial) console.warn(out.partial.message) // the video covers only the first out.partial.deliveredSec s
+```
+
 **A forced style** (`styleChoice()`, `VideoRemakeStyleChoice`): Nodaro may fix
 an engine's style for everyone as Motion, and every `run()` and `estimate()` on it then
 uses that style whatever `style` says. `styleChoice()` answers
-`{ engines: { "nodaro-prism": VideoRemakeStyleChoiceOption, "nodaro-pulse": VideoRemakeStyleChoiceOption }, styleOnly?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, preciseArtStyle?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, preciseArtStyleAlone?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, customStyle?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, planRoles?: boolean, planRolesPreviz?: boolean, previz?: boolean, roleFace?: boolean, flash?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, resolutions?: { [engineChoice]?: VideoRemakeResolution[] }, portion?: boolean, shortClips?: boolean }`,
+`{ engines: { "nodaro-prism": VideoRemakeStyleChoiceOption, "nodaro-pulse": VideoRemakeStyleChoiceOption }, styleOnly?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, preciseArtStyle?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, preciseArtStyleAlone?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, customStyle?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, planRoles?: boolean, planRolesPreviz?: boolean, previz?: boolean, roleFace?: boolean, flash?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, resolutions?: { [engineChoice]?: VideoRemakeResolution[] }, portion?: boolean, shortClips?: boolean, longClips?: { maxSourceSec: number } | null }`,
 each engine `"user"` (the caller chooses), `"precise"` or `"flex"`
 (`style: "motion"`, fixed as above). `"precise"` changes no request: Nodaro's
 own apps run Precise on that engine and hide their style control, and every
@@ -2829,7 +2886,8 @@ offered here: set the roles yourself; a server from before it answers 404),
 `403 model_not_available` / `403 node_not_available`, `400 video_unreadable`,
 `400 clip_out_of_range` (not 4–30 s, or 2–30 s where `shortClips` is `true`),
 `400 preview_out_of_range`, a part of the clip's refusals (see A part of the
-clip above),
+clip above), `400 long_clip_too_long` (a whole Nodaro Prism clip over
+`longClips.maxSourceSec`, see Long clips above),
 `400 image_unreadable` (an image could not be fetched, is too large or is not
 a picture; the envelope's `details.index`, read as
 `err.details.details.index`, says which), `502 plan_roles_failed` (try again,
@@ -3063,8 +3121,9 @@ a `prePrompt` or `postPrompt` over 4,000 characters (`validation_error`), a `{ro
 (`prompt_too_long`: a `{role:N}` reads as the role's name when it sends no
 images), a clip outside 4–30 s (2–30 s where `styleChoice()` answers
 `shortClips: true`), or a preview past the clip's end
-(`previewStart + 4` > its length), and a part of the clip's own refusals (see
-A part of the clip, and short clips); also for an invalid body
+(`previewStart + 4` > its length), a part of the clip's own refusals (see
+A part of the clip, and short clips) and `long_clip_too_long` (see Long
+clips); also for an invalid body
 (`validation_error`), an address that is not public http(s) (`unsafe_url`) or a
 clip whose length cannot be read (`video_unreadable`). Other refusals: `401`,
 `402 insufficient_credits` (`run()` only), `404` (a `sessionId` you may not use),
@@ -3128,6 +3187,7 @@ idempotency key is taken. The new job keeps the draft's origin; `sessionId`
 files it in a session. Refusals carry a `VideoRemakeFullQualityRefusalCode`:
 `401 unauthorized`, `404 not_found`, `409 not_completed`, `409 not_a_draft`,
 `410 draft_expired`, `409 full_quality_pending`, `409 full_quality_unavailable`,
+`409 long_clip_no_full_quality` (a clip over 30 s made in parts),
 `402 insufficient_credits` (or a workspace cap), `422 job_blocked`,
 `503 job_read_failed` (retryable), `503 estimate_unavailable`,
 `503 host_too_old` — the full table is in the
@@ -3216,7 +3276,8 @@ interface TrendDetail extends TrendCard {
   previewSec: 4 | null                   // 4 when a 4 s preview run is offered
   engine?: "nodaro-prism" | "nodaro-pulse" // TrendEngine: the engine every run uses (the trend's choice); absent = nodaro-prism
   engineName?: string                   // "Nodaro Prism" | "Nodaro Pulse"
-  resolutions: ("480p" | "720p" | "1080p")[] // default first: nodaro-prism ["480p", "720p", "1080p"] (480p plain; a draft only with draft: true), nodaro-pulse ["720p", "1080p"]
+  resolutions: ("480p" | "720p" | "1080p" | "4k")[] // default first; with deliveredResolution, the sizes a run is delivered at here (e.g. ["720p", "1080p", "4k"], as styleChoice() lists them for the trend's engine choice); without it nodaro-prism ["480p", "720p", "1080p"] (480p plain; a draft only with draft: true), nodaro-pulse ["720p", "1080p"]
+  deliveredResolution?: true             // resolutions are the sizes a run is delivered at, and a run's resolution names the size it comes back at; absent = read as listed, as before
   original?: TrendOriginal               // the clip every run starts from, to show; absent only on a version without a display copy; the first example on a trend that hides its original
   slots: TrendDetailSlot[]
   examples: Array<TrendVideo & { slots: Record<string, string[]> }> // may be []; an optional slot the example kept as in the original has no key in its slots; from the second example on a trend that hides its original
@@ -3242,8 +3303,8 @@ interface TrendRunRequest {
   example?: number      // 1-based, as TrendDetail.examples lists them; its pictures fill the optional slots you leave out (not in Full depth trends). Default 1; leave it out on a trend with no examples. On a trend that hides its original, leaving it out uses the example shown as the original
   details?: string      // ≤ 1,000 characters; mention a slot as {slot:<key>}
   preview?: boolean     // 4 s run, when previewSec is 4
-  resolution?: "480p" | "720p" | "1080p" // one of the trend's resolutions, default its first; else 400 resolution_unsupported
-  draft?: boolean       // default false (480p is plain); true = a 480p draft Full Quality can finish at 1080p, nodaro-prism only; nodaro-pulse: true = 400 draft_unsupported
+  resolution?: "480p" | "720p" | "1080p" | "4k" // one of the trend's resolutions, default its first; else 400 resolution_unsupported ("4k" without deliveredResolution: 400 validation_error)
+  draft?: boolean       // default false (480p is plain); true = a 480p draft Full Quality can finish at 1080p, nodaro-prism only, whatever resolutions lists (resolution left out or "480p"); nodaro-pulse or a Flash trend: true = 400 draft_unsupported
   sessionId?: string    // accepted (and checked), not yet applied: trend runs are not filed into sessions yet
   projectId?: string    // accepted, but not used by the run today
   previewJobId?: string // a full run: the jobId of your own completed preview of this trend (uuid; any other job is ignored)
@@ -3268,7 +3329,8 @@ interface TrendRun {
   example?: number                   // 1-based, as the page listed the examples for the run's version; 0 = the trend had no example (none was used); absent when it used the example shown as the original of a trend that hides it
   slots: Array<{ key: string; label: string; kind: TrendSlotKind; images: string[]; fromExample: boolean; fromDefault?: true } & TrendChips>
   details?: string
-  preview: boolean; resolution: string; draft: boolean
+  preview: boolean; draft: boolean
+  resolution: string                 // the size it asked for; once completed, the size its video was delivered at (a smaller one when the size asked for could not be finished)
   engine?: "nodaro-prism" | "nodaro-pulse" // the engine it was made on; absent = nodaro-prism
   engineName?: string                   // "Nodaro Prism" | "Nodaro Pulse"
   videoUrl: string | null; posterUrl: string | null  // once completed
@@ -3333,7 +3395,9 @@ to `"new"` for everyone, or keep every face), and `estimate()` and `run()`
 set at least one chip to `"new"`). Other refusals: `401`, `404 not_found`
 (the trend is not published; for `run()` also a `sessionId` you may not use),
 `409 trend_unavailable` (the trend's setup is out of date: it cannot run until
-it is updated), `502 engine_error`, `503 engine_unsupported` /
+it is updated), `409 resolution_unavailable` (a trend with
+`deliveredResolution`: the size is offered but cannot be made for this run right
+now; choose a smaller one, or try again later), `502 engine_error`, `503 engine_unsupported` /
 `trend_unavailable` / `not_available`. When the video engine refuses, `estimate()` / `run()` get the
 trend routes' OWN codes with fixed messages, never the engine's text or
 `issues`: `400 trend_run_rejected` (or `clip_out_of_range`,
@@ -3391,13 +3455,13 @@ const { trendId, clip } = await client.trendRadar.approve(candidate.id)
 
 | Method | Returns | Notes |
 |--------|---------|-------|
-| `summary()` | `Promise<TrendRadarSummary>` | `GET /v1/trend-radar/summary`. `{ lastRun, counts: { candidates, watching, slowing }, searchesToday, dailySearchBudget }` — `lastRun` is `{ at, sourcesRead, namesSeen, searchesUsed }` or `null` before the first run. |
-| `candidates(params?)` | `Promise<TrendCandidatePage>` | `GET /v1/trend-radar/candidates`. `{ data: TrendCandidateCard[], next }`; `status` (one `TrendCandidateStatus`; left out = everything but `rejected` and `archived`), `sort` (`"creators"` default, `"dayChange"`, `"firstSeen"`), `cursor` (the previous page's `next`), `limit` 1–200 (default 50). |
-| `candidate(id)` | `Promise<TrendCandidate>` | `GET /v1/trend-radar/candidates/:id`. The card plus `posts` (links and public counts; `embedUrl` is the platform's own player, `stillUrl` its short-lived still), `readings` (one per day, oldest first: `{ date, creators, plays, posts }`), `templatesElsewhere`, `search` (`{ suggest, interest7d, checkedAt }` or `null`), `history`, `checklist` (the thresholds the candidate is held to, `{ key, label, hint, auto }`; `auto` is whether the last reading met it, `null` when it was not read) and `rejectReason`. `NotFoundError` for an unknown id. |
+| `summary()` | `Promise<TrendRadarSummary>` | `GET /v1/trend-radar/summary`. `{ lastRun, counts: { candidates, watching, slowing }, searchesToday, dailySearchBudget, reading }` — `reading` (typed `TrendRadarReadingCost`) is `{ searchesPerRead, creditsPerRead, runnerCredits, maxSearchesPerDay, deepSearchesMax, creditsPerDeepSearch }`: the searches one candidate's reading takes (one per platform), the credits that reading is charged at the search's current charged price (`null` when a price cannot be read), what the account the run searches as holds now (`null` before a runner is set), the highest daily search budget the settings take, and the deeper count: a platform whose search came back full is searched again in other orders so a big trend's people are counted past one search's ceiling, at most `deepSearchesMax` extra searches per candidate, each charged `creditsPerDeepSearch`, out of the same daily budget — enough to set the budget in candidates per day and see what a day costs. `lastRun` is `{ at, sourcesRead, namesSeen, searchesUsed, stoppedEarly }` or `null` before the first run; `stoppedEarly` says why a run stopped before reading every candidate it could afford (the account it searches as ran out of credits), `null` or absent when it did not. |
+| `candidates(params?)` | `Promise<TrendCandidatePage>` | `GET /v1/trend-radar/candidates`. `{ data: TrendCandidateCard[], next }`; `status` (one `TrendCandidateStatus`; left out = everything but `rejected` and `archived`), `sort` (`"creators"` default, `"dayChange"`, `"firstSeen"`, `"plays"`), `cursor` (the previous page's `next`), `limit` 1–200 (default 50). A card carries `creators` (distinct accounts across TikTok, Instagram and YouTube) and `creatorsCapped` (`true` when a platform's search returned as many posts as it may — show the count as "n+"), `platforms` (per platform the last read found posts on: `{ posts, creators, plays, capped, top }`), `firstPostedAt` (the earliest post date seen: how old the trend is), `lastReadAt`, and `dayChangePct` (the latest reading's `growthPct`, else the change in summed plays). |
+| `candidate(id)` | `Promise<TrendCandidate>` | `GET /v1/trend-radar/candidates/:id`. The card plus `posts` (up to 8, each platform's most-played among them; links and public counts; `embedUrl` is the platform's own player, `stillUrl` a small copy of its still kept on this deployment's storage, else the platform's own short-lived link), `readings` (one per day, oldest first: `{ date, creators, plays, posts, growthPct }` — `growthPct` is the plays growth per day, in percent, over the posts that reading and the previous one both saw, `null` on a first reading, when no post was seen twice, and on readings from before it was measured), `templatesElsewhere`, `search` (`{ suggest, interest7d, checkedAt }` or `null`), `history`, `checklist` (the thresholds the candidate is held to, `{ key, label, hint, auto }`; `auto` is whether the last reading met it, `null` when it was not read) and `rejectReason`. `NotFoundError` for an unknown id. |
 | `approve(id, options?)` | `Promise<TrendCandidateApproval>` | `POST /v1/trend-radar/candidates/:id/approve` with `{ confirmationId? }`. `{ trendId, clip }`: creates a draft trend named after the candidate and marks the candidate `approved`. `clip` is `"attaching"` when the top post is being downloaded (as the approving admin, through the same path as the editor's Video URL node, under the admin's content rights confirmation for the post's link, `contentRights.confirm({ url })` → `confirmationId`; required once `content_rights_required` is on, and without one then the clip is left out with `source_failed` saying why) and stored as the draft's source clip in the background — the candidate's `history` then gains `source_attached`, or `source_failed` with why (a private post, a clip outside 4–30 s), and the admin uploads the clip by hand — or `"none"` when there is no top post or the candidate was approved before. Approving again answers the same `trendId`. A `NodaroError` with status 409 and code `slug_taken` when no free slug was found. |
 | `watch(id)` | `Promise<TrendCandidateCard>` | `POST /v1/trend-radar/candidates/:id/watch`. Back to `watching`; the daily run keeps reading it. |
 | `reject(id, { reason })` | `Promise<TrendCandidateCard>` | `POST /v1/trend-radar/candidates/:id/reject`. `rejected`, with the reason (1–500 characters); the run stops reading it. |
-| `settings()` | `Promise<TrendRadarSettings>` | `GET /v1/trend-radar/settings`. `{ sources, thresholds, alerts, retentionDays, runAt }` — `sources` are the sitemap, social and suggestion sources with what their last read found; `thresholds` is `{ minCreators, windowDays, risingPct, slowingPct, maxClipSec, dailySearchBudget }`; `runAt` is `HH:MM` in Israel time. |
+| `settings()` | `Promise<TrendRadarSettings>` | `GET /v1/trend-radar/settings`. `{ sources, thresholds, alerts, retentionDays, runAt }` — `sources` are the sitemap, social and suggestion sources with what their last read found; `thresholds` is `{ minCreators, windowDays, risingPct, slowingPct, maxClipSec, dailySearchBudget }` — `dailySearchBudget` (default 900, up to 5,000) counts searches, and reading one candidate is three (TikTok, Instagram, YouTube); `runAt` is `HH:MM` in Israel time. |
 | `updateSettings(patch)` | `Promise<TrendRadarSettings>` | `PUT /v1/trend-radar/settings`. Only the keys sent change; `sources` replaces the list whole (a source without `id` is added, one with an `id` updated, one left out removed; a sitemap `url` is `https` only). Whoever saves becomes the account the daily searches run as. |
 | `run()` | `Promise<{ runId: string; startedAt: string }>` | `POST /v1/trend-radar/run`. Starts today's run now (202); one run at a time, a second call joins the running one. |
 

@@ -23,7 +23,7 @@
     "sha256": "4f59b8a6c16a42a2536b11bd83908946da1dfb8fdf9721f887424571d8dc0148",
     "addresses": []
   },
-  "mcp.nodaro.ai resources/read ui://nodaro/widget/v5/job-image": {
+  "mcp.nodaro.ai resources/read ui://nodaro/widget/v6/job-image": {
     "status": 200,
     "meta": {
       "ui": {
@@ -41,12 +41,14 @@
         "prefersBorder": false
       }
     },
-    "sha256": "324fa078a7bfc739954b1c1fe37299ce90fca4e98ef27d2f85006f6bfbcfabec",
+    "sha256": "2b566456563bb3f8881e4df88b77462327282b96bfaacb6bc1eea57a0059c1bf",
     "addresses": [
-      "https://app.nodaro.ai/gallery"
+      "https://app.nodaro.ai/gallery",
+      "https://app.nodaro.ai/v1/download",
+      "https://cdn.example.com"
     ]
   },
-  "mcp.nodaro.ai resources/read ui://nodaro/widget/v5/job-auto": {
+  "mcp.nodaro.ai resources/read ui://nodaro/widget/v6/job-auto": {
     "status": 200,
     "meta": {
       "ui": {
@@ -64,17 +66,18 @@
         "prefersBorder": false
       }
     },
-    "sha256": "e35a477dfb2d019d0d9506d3322b14c53dec1920416bddd8ec3e505fc2e514e0",
+    "sha256": "2e903c2ce7af77bbdf02d3673b2d81fe624431ddc59bae748761023c77b77346",
     "addresses": [
       "https://*.",
       "https://*.r2.cloudflarestorage.com",
       "https://app.nodaro.ai/gallery",
+      "https://app.nodaro.ai/v1/download",
       "https://assets.nodaro.ai",
       "https://cdn.example.com",
       "https://cdn.nodaro.ai"
     ]
   },
-  "mcp.nodaro.ai resources/read ui://nodaro/widget/v5/workflow": {
+  "mcp.nodaro.ai resources/read ui://nodaro/widget/v6/workflow": {
     "status": 200,
     "meta": {
       "ui": {
@@ -97,7 +100,7 @@
       "https://app.nodaro.ai/gallery"
     ]
   },
-  "mcp.nodaro.ai resources/read ui://nodaro/widget/v5/upload-image": {
+  "mcp.nodaro.ai resources/read ui://nodaro/widget/v6/upload-image": {
     "status": 200,
     "meta": {
       "ui": {
@@ -142,7 +145,7 @@
     "sha256": "4f59b8a6c16a42a2536b11bd83908946da1dfb8fdf9721f887424571d8dc0148",
     "addresses": []
   },
-  "app.nodaro.ai resources/read ui://nodaro/widget/v5/job-image": {
+  "app.nodaro.ai resources/read ui://nodaro/widget/v6/job-image": {
     "status": 200,
     "meta": {
       "ui": {
@@ -160,12 +163,14 @@
         "prefersBorder": false
       }
     },
-    "sha256": "324fa078a7bfc739954b1c1fe37299ce90fca4e98ef27d2f85006f6bfbcfabec",
+    "sha256": "2b566456563bb3f8881e4df88b77462327282b96bfaacb6bc1eea57a0059c1bf",
     "addresses": [
-      "https://app.nodaro.ai/gallery"
+      "https://app.nodaro.ai/gallery",
+      "https://app.nodaro.ai/v1/download",
+      "https://cdn.example.com"
     ]
   },
-  "app.nodaro.ai resources/read ui://nodaro/widget/v5/job-auto": {
+  "app.nodaro.ai resources/read ui://nodaro/widget/v6/job-auto": {
     "status": 200,
     "meta": {
       "ui": {
@@ -183,17 +188,18 @@
         "prefersBorder": false
       }
     },
-    "sha256": "e35a477dfb2d019d0d9506d3322b14c53dec1920416bddd8ec3e505fc2e514e0",
+    "sha256": "2e903c2ce7af77bbdf02d3673b2d81fe624431ddc59bae748761023c77b77346",
     "addresses": [
       "https://*.",
       "https://*.r2.cloudflarestorage.com",
       "https://app.nodaro.ai/gallery",
+      "https://app.nodaro.ai/v1/download",
       "https://assets.nodaro.ai",
       "https://cdn.example.com",
       "https://cdn.nodaro.ai"
     ]
   },
-  "app.nodaro.ai resources/read ui://nodaro/widget/v5/workflow": {
+  "app.nodaro.ai resources/read ui://nodaro/widget/v6/workflow": {
     "status": 200,
     "meta": {
       "ui": {
@@ -216,7 +222,7 @@
       "https://app.nodaro.ai/gallery"
     ]
   },
-  "app.nodaro.ai resources/read ui://nodaro/widget/v5/upload-image": {
+  "app.nodaro.ai resources/read ui://nodaro/widget/v6/upload-image": {
     "status": 200,
     "meta": {
       "ui": {
@@ -261,7 +267,7 @@
     "sha256": "4f59b8a6c16a42a2536b11bd83908946da1dfb8fdf9721f887424571d8dc0148",
     "addresses": []
   },
-  "studio.example.com resources/read ui://nodaro/widget/v5/job-image": {
+  "studio.example.com resources/read ui://nodaro/widget/v6/job-image": {
     "status": 200,
     "meta": {
       "ui": {
@@ -279,12 +285,14 @@
         "prefersBorder": false
       }
     },
-    "sha256": "324fa078a7bfc739954b1c1fe37299ce90fca4e98ef27d2f85006f6bfbcfabec",
+    "sha256": "2b566456563bb3f8881e4df88b77462327282b96bfaacb6bc1eea57a0059c1bf",
     "addresses": [
-      "https://app.nodaro.ai/gallery"
+      "https://app.nodaro.ai/gallery",
+      "https://app.nodaro.ai/v1/download",
+      "https://cdn.example.com"
     ]
   },
-  "studio.example.com resources/read ui://nodaro/widget/v5/job-auto": {
+  "studio.example.com resources/read ui://nodaro/widget/v6/job-auto": {
     "status": 200,
     "meta": {
       "ui": {
@@ -302,17 +310,18 @@
         "prefersBorder": false
       }
     },
-    "sha256": "e35a477dfb2d019d0d9506d3322b14c53dec1920416bddd8ec3e505fc2e514e0",
+    "sha256": "2e903c2ce7af77bbdf02d3673b2d81fe624431ddc59bae748761023c77b77346",
     "addresses": [
       "https://*.",
       "https://*.r2.cloudflarestorage.com",
       "https://app.nodaro.ai/gallery",
+      "https://app.nodaro.ai/v1/download",
       "https://assets.nodaro.ai",
       "https://cdn.example.com",
       "https://cdn.nodaro.ai"
     ]
   },
-  "studio.example.com resources/read ui://nodaro/widget/v5/workflow": {
+  "studio.example.com resources/read ui://nodaro/widget/v6/workflow": {
     "status": 200,
     "meta": {
       "ui": {
@@ -335,7 +344,7 @@
       "https://app.nodaro.ai/gallery"
     ]
   },
-  "studio.example.com resources/read ui://nodaro/widget/v5/upload-image": {
+  "studio.example.com resources/read ui://nodaro/widget/v6/upload-image": {
     "status": 200,
     "meta": {
       "ui": {
@@ -380,7 +389,7 @@
     "sha256": "4f59b8a6c16a42a2536b11bd83908946da1dfb8fdf9721f887424571d8dc0148",
     "addresses": []
   },
-  "unlisted.example.net resources/read ui://nodaro/widget/v5/job-image": {
+  "unlisted.example.net resources/read ui://nodaro/widget/v6/job-image": {
     "status": 200,
     "meta": {
       "ui": {
@@ -398,12 +407,14 @@
         "prefersBorder": false
       }
     },
-    "sha256": "324fa078a7bfc739954b1c1fe37299ce90fca4e98ef27d2f85006f6bfbcfabec",
+    "sha256": "2b566456563bb3f8881e4df88b77462327282b96bfaacb6bc1eea57a0059c1bf",
     "addresses": [
-      "https://app.nodaro.ai/gallery"
+      "https://app.nodaro.ai/gallery",
+      "https://app.nodaro.ai/v1/download",
+      "https://cdn.example.com"
     ]
   },
-  "unlisted.example.net resources/read ui://nodaro/widget/v5/job-auto": {
+  "unlisted.example.net resources/read ui://nodaro/widget/v6/job-auto": {
     "status": 200,
     "meta": {
       "ui": {
@@ -421,17 +432,18 @@
         "prefersBorder": false
       }
     },
-    "sha256": "e35a477dfb2d019d0d9506d3322b14c53dec1920416bddd8ec3e505fc2e514e0",
+    "sha256": "2e903c2ce7af77bbdf02d3673b2d81fe624431ddc59bae748761023c77b77346",
     "addresses": [
       "https://*.",
       "https://*.r2.cloudflarestorage.com",
       "https://app.nodaro.ai/gallery",
+      "https://app.nodaro.ai/v1/download",
       "https://assets.nodaro.ai",
       "https://cdn.example.com",
       "https://cdn.nodaro.ai"
     ]
   },
-  "unlisted.example.net resources/read ui://nodaro/widget/v5/workflow": {
+  "unlisted.example.net resources/read ui://nodaro/widget/v6/workflow": {
     "status": 200,
     "meta": {
       "ui": {
@@ -454,7 +466,7 @@
       "https://app.nodaro.ai/gallery"
     ]
   },
-  "unlisted.example.net resources/read ui://nodaro/widget/v5/upload-image": {
+  "unlisted.example.net resources/read ui://nodaro/widget/v6/upload-image": {
     "status": 200,
     "meta": {
       "ui": {

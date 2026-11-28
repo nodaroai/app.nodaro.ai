@@ -16,9 +16,15 @@ vi.mock("@/lib/config.js", async (importOriginal) => ({
   hasCredits: () => true,
 }))
 const committed = vi.hoisted(() => ({ amounts: [] as Array<number | undefined> }))
+const routedPlan = vi.hoisted(() => ({ result: { kind: "pending" } as { kind: string; credits?: number } }))
+vi.mock("@/ee/billing/video-route-settlement.js", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  plannedRoutedCredits: vi.fn(async () => routedPlan.result),
+}))
 const service = vi.hoisted(() => ({
   CreditsService: {
     trySettleManagedCredits: vi.fn(async () => false),
+    trySettleManagedCreditsOrReadLog: vi.fn(async () => ({ managed: false, log: null })),
     commitCredits: vi.fn(async (_id: string, actual?: number, opts?: { collectOverHold?: boolean }) => {
       committed.amounts.push(actual)
       return opts?.collectOverHold ? { charged: actual, collectedOverHold: 0, shortfall: 0 } : undefined
@@ -37,7 +43,7 @@ vi.mock("@/lib/app-settings.js", async (importOriginal) => ({
   getAppSettings: vi.fn(async () => ({})),
 }))
 
-import { plannedCommitCredits, settleFinalizedJobCredits } from "../deferred-child-settlement.js"
+import { deferredCompletionFields, plannedCommitCredits, settleFinalizedJobCredits } from "../deferred-child-settlement.js"
 import type { HeldCommitReplay } from "../job-policy.js"
 
 const JOB = "00000000-0000-4000-8000-0000000000c1"
@@ -52,6 +58,17 @@ beforeEach(() => {
 })
 
 describe("the planned figure is what the settle commits", () => {
+  it("leaves an unverified routed charge unset, but records a confirmed zero", async () => {
+    const args = { jobId: JOB, usageLogId: LOG, commit: {}, providerCost: 0.5, workflowExecutionId: null }
+    routedPlan.result = { kind: "pending" }
+    expect(await deferredCompletionFields(args)).not.toHaveProperty("credits_actual")
+    routedPlan.result = { kind: "confirmed", credits: 0 }
+    expect(await deferredCompletionFields(args)).toHaveProperty("credits_actual", 0)
+    routedPlan.result = { kind: "default" }
+    expect(await deferredCompletionFields(args)).toHaveProperty("credits_actual", 40)
+    expect(committed.amounts).toEqual([])
+  })
+
   it.each([
     ["a fixed price", {}, 0.5],
     ["a metered USD cost plus an add-on", { metered: true, extraNonProviderCredits: 3 }, 0.21],

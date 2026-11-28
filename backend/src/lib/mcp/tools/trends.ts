@@ -17,8 +17,10 @@
  * and every result here is rebuilt field by field from those (never spread),
  * so a field a route might add later does not reach the agent by accident.
  * The route is the authority on every rule (required slots, chips per kind,
- * image caps, the resolutions the trend's engine offers, draft only at 480p
- * on Nodaro Prism); this file maps snake_case to its body.
+ * image caps, the resolutions the trend offers, draft only at 480p on Nodaro
+ * Prism); this file maps snake_case to its body. Where get_trend says
+ * `deliveredResolution`, its resolutions are the sizes a run is delivered at
+ * ("4k" among them) and `resolution` names the size the user receives.
  *
  * Cloud-only: registered behind `hasCredits()` in server.ts — off-cloud the
  * routes are not served and a call answers `not_available`.
@@ -94,8 +96,8 @@ export const trendRunShape = {
   example: z.number().int().min(1).optional().describe("The example (1-based, as get_trend lists its examples; default 1) whose pictures fill optional slots left out, as slots says. Leave out if the trend has none."),
   details: z.string().max(1000).optional().describe("The user's own words; mention a slot as {slot:<key>}."),
   preview: z.boolean().optional().describe("true = a 4 s preview (when the trend's previewSec is 4)."),
-  resolution: z.enum(["480p", "720p", "1080p"]).optional().describe("One of get_trend's resolutions; default its first."),
-  draft: z.boolean().optional().describe("true = a 480p draft that full_quality can finish at 1080p (a nodaro-pulse trend has none). Default false: plain."),
+  resolution: z.enum(["480p", "720p", "1080p", "4k"]).optional().describe("One of get_trend's resolutions (with its deliveredResolution, the size delivered); default its first."),
+  draft: z.boolean().optional().describe("true = a 480p draft that full_quality can finish at 1080p, whatever resolutions lists (a nodaro-pulse or Flash trend has none). Default false: plain."),
   preview_job_id: z.string().regex(JOB_ID_RE).optional().describe("For a full run: the job id of the user's own preview of this trend; it may carry the preview's settings over."),
 }
 
@@ -190,6 +192,8 @@ function detailView(d: Rec): Rec {
     // The public id, whichever vocabulary the route answered in (an older server: the internal one).
     ...engineView(d.engine),
     resolutions: strings(d.resolutions),
+    // Only where the route says its resolutions are the sizes delivered.
+    ...(d.deliveredResolution === true ? { deliveredResolution: true } : {}),
     slots: (Array.isArray(d.slots) ? d.slots.filter(isRec) : []).map((s) => {
       const hint = str(s.hint)
       const hintImage = str(s.hintImageUrl)
@@ -347,7 +351,7 @@ export function registerTrendTools({ server, session, fastify }: RegisterTrendTo
         title: "Get Trend",
         description:
           "One trend: its original (the clip it recasts, or its first example if the trend hides it; previewStartSec), its slots (key, label, kind, required, hint, hintImageUrl, defaultImages (the role as in the original), emptyFill (if left out: default, example or original), chips the user may set, their defaults), " +
-          "its examples (the result video and the pictures each slot used; may be none), previewSec, engine (\"nodaro-prism\" or \"nodaro-pulse\") with its engineName and resolutions (default first). Fill estimate_trend / run_trend `slots` by these keys and chips.",
+          "its examples (the result video and the pictures each slot used; may be none), previewSec, engine (\"nodaro-prism\" or \"nodaro-pulse\") with its engineName and resolutions (default first; with deliveredResolution, the sizes delivered). Fill estimate_trend / run_trend `slots` by these keys and chips.",
         inputSchema: {
           slug: z.string().regex(SLUG_RE).refine(notReserved, RESERVED).describe("The trend's slug (from list_trends)."),
         },

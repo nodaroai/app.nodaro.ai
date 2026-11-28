@@ -4,7 +4,6 @@ import { CREDIT_BASE_USD } from "@nodaro/shared/models"
 import { STATIC_CREDIT_COSTS, PriceNotConfiguredError, chargedPriceTableFrom } from "../credits.js"
 import {
   ROUTE_PRICE_ROUND_TO,
-  ROUTE_SETTLE_MAX_OF_QUOTE,
   routeUsdToBaseCredits,
   routedChargedCredits,
   routedListedPrice,
@@ -44,28 +43,28 @@ describe("routeUsdToBaseCredits — the one USD → credits rule", () => {
   })
 
   it("settles from the billed cost with the same rule", () => {
-    expect(routedSettlementCredits({ providerCostUsd: CREDIT_BASE_USD * 101, priceId: "seedance-2-5:8s:720p", settings, quotedUsd: CREDIT_BASE_USD * 100 })).toEqual({ baseCredits: 110, chargedCredits: 132, capped: false })
+    expect(routedSettlementCredits({ providerCostUsd: CREDIT_BASE_USD * 101, priceId: "seedance-2-5:8s:720p", settings })).toEqual({ baseCredits: 110, chargedCredits: 132 })
   })
 
-  it("never settles a missing, zero or negative cost as free (it throws: the caller commits the hold)", () => {
-    for (const cost of [0, -1, Number.NaN, undefined as unknown as number]) {
-      expect(() => routedSettlementCredits({ providerCostUsd: cost, priceId: "seedance-2-5:8s:720p", settings, quotedUsd: 1 })).toThrow()
+  it("accepts an explicit zero bill and rejects missing or negative costs", () => {
+    expect(routedSettlementCredits({ providerCostUsd: 0, priceId: "seedance-2-5:8s:720p", settings }).chargedCredits).toBe(0)
+    for (const cost of [-1, Number.NaN, undefined as unknown as number]) {
+      expect(() => routedSettlementCredits({ providerCostUsd: cost, priceId: "seedance-2-5:8s:720p", settings })).toThrow()
     }
   })
 
-  it("charges a runaway cost only up to ROUTE_SETTLE_MAX_OF_QUOTE × the quote, and says so", () => {
-    expect(ROUTE_SETTLE_MAX_OF_QUOTE).toBe(3)
-    const r = routedSettlementCredits({ providerCostUsd: CREDIT_BASE_USD * 10_000, priceId: "seedance-2-5:8s:720p", settings: { cost_markup_percent: 0, service_margin_percent: {} } as typeof settings, quotedUsd: CREDIT_BASE_USD * 100 })
-    expect(r).toEqual({ baseCredits: 300, chargedCredits: 300, capped: true })
+  it("charges the reported cost even when it exceeds three times the quote", () => {
+    const r = routedSettlementCredits({ providerCostUsd: CREDIT_BASE_USD * 10_000, priceId: "seedance-2-5:8s:720p", settings: { cost_markup_percent: 0, service_margin_percent: {} } as typeof settings })
+    expect(r).toEqual({ baseCredits: 10_000, chargedCredits: 10_000 })
   })
 
   it("worked examples: a per-second route cost × seconds, with and without a reference video", () => {
-    // 8 s of output at $0.0700/s: $0.56 → 280 credits at the credit's value → 280 (already a step of 10).
-    expect(routeUsdToBaseCredits(0.07 * 8)).toBe(280)
-    // The same 8 s with a 6 s reference clip billed at the same rate: (8 + 6) × $0.07 = $0.98 → 490.
-    expect(routeUsdToBaseCredits(0.07 * (8 + 6))).toBe(490)
-    // 5 s at $0.0453/s: $0.2265 → 113.25 credits → rounded up to 120.
-    expect(routeUsdToBaseCredits(0.0453 * 5)).toBe(120)
+    // Invented round unit rates. 8 s of output: 400 credits.
+    expect(routeUsdToBaseCredits(0.1 * 8)).toBe(400)
+    // The same 8 s with a 6 s reference clip billed at the same rate: 14 billed seconds, 700 credits.
+    expect(routeUsdToBaseCredits(0.1 * (8 + 6))).toBe(700)
+    // 7 s at a lower invented rate: 105 credits, rounded up to the next step, 110.
+    expect(routeUsdToBaseCredits(0.03 * 7)).toBe(110)
   })
 })
 
@@ -100,6 +99,10 @@ describe("routed price ids", () => {
     expect(routedPriceIdOf("seedance-2-5-hd:8s-ref")).toEqual({ model: "seedance-2-5", kind: "draft-finalize", resolution: undefined, hasRefVideo: true, seconds: 8 })
     expect(routedPriceIdOf("seedance-2-5-flash-extend:720p:per-1s")).toMatchObject({ model: "seedance-2-5-flash", kind: "extend", resolution: "720p" })
     expect(routedPriceIdOf("kling-3.0:5s")).toBeUndefined()
+    // The orchestrator asks admission only for ids starting "seedance-2" (node-executor.ts): every routed id does.
+    for (const id of Object.keys(STATIC_CREDIT_COSTS)) {
+      if (routedPriceIdOf(id)) expect(id.startsWith("seedance-2"), id).toBe(true)
+    }
     // A Seedance head with a segment of no known shape is no routed id.
     for (const odd of ["seedance-2-5:8s:720p:extra", "seedance-2-5:fast", "seedance-2-5:8s:720p-hdr", "seedance-2-5:999s"]) {
       expect(routedPriceIdOf(odd), odd).toBeUndefined()
@@ -124,7 +127,7 @@ describe("every Seedance id the default table prices, under a routed model", () 
 
 describe("listing a routed model", () => {
   const rows = new Map<string, number>()
-  // USD per listed id: $0.14 → 70 credits at the credit's value.
+  // USD per listed id: 70 credits' worth at the credit's value.
   const prices = { "seedance-2-5:8s:720p": CREDIT_BASE_USD * 70 }
 
   it("is inert with nothing routed: the table is the one it always was", () => {
@@ -149,10 +152,22 @@ describe("listing a routed model", () => {
     expect(table.base("seedance-2:8s:720p")).toBe(STATIC_CREDIT_COSTS["seedance-2:8s:720p"])
   })
 
-  it("lists the default price where this process's route cannot take the model", () => {
+  it("reports unavailable when the configured route cannot take the model", () => {
     for (const v of [null, { ...view, v2: false }, { ...view, capable: () => false }]) {
       const table = chargedPriceTableFrom(rows, settings, undefined, { policy: routedPolicy("seedance-2-5"), view: v, pricesUsd: prices, factors: {} })
-      expect(table.base("seedance-2-5:8s:720p")).toBe(STATIC_CREDIT_COSTS["seedance-2-5:8s:720p"])
+      expect(table.base("seedance-2-5:8s:720p")).toBeUndefined()
+      expect(table.refuses?.("seedance-2-5:8s:720p")).toBe(true)
     }
+  })
+})
+
+describe("a routed model's -ref rows are whole-run prices", () => {
+  it("are listed as the converted row, never the per-second formula", () => {
+    // The route's whole-run price of 8 s output + an 8 s reference (an invented round figure): 500 credits.
+    const pricesUsd = { "seedance-2-5:8s:720p-ref": 1 }
+    const table = chargedPriceTableFrom(new Map(), { cost_markup_percent: 0, service_margin_percent: {} } as typeof settings, undefined, { policy: routedPolicy("seedance-2-5"), view, pricesUsd, factors: {} })
+    expect(table.base("seedance-2-5:8s:720p-ref")).toBe(500)
+    expect(table.routes?.("seedance-2-5:8s:720p-ref")).toBe(true)
+    expect(table.routes?.("seedance-2:8s:720p-ref")).toBe(false)
   })
 })

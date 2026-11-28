@@ -57,6 +57,7 @@ import type {
   Choice,
   LocalizedText,
   TrendRunRequest,
+  TrendRunSize,
   TrendSlot,
   TrendPromptPartOverrides,
   TrendSlotKind,
@@ -548,18 +549,38 @@ const trendRunSlotSchema = z.strictObject({
   finish: choice.optional(),
 })
 
-export const trendRunRequestSchema: z.ZodType<TrendRunRequest> = z
-  .object({
+/** A run request whose `resolution` takes `sizes` (any other is a `validation_error`). */
+function trendRunRequestSchemaOf(sizes: readonly [TrendRunSize, ...TrendRunSize[]]): z.ZodType<TrendRunRequest> {
+  return z.object({
     slots: slotRecord(z.record(runSlotKeySchema, trendRunSlotSchema)),
     example: z.int().min(1).optional(),
     details: z.string().max(TREND_PROMPT_LIMITS.detailsMax).optional(),
     preview: z.boolean().optional(),
-    resolution: z.enum(["480p", "720p", "1080p"]).optional(),
+    resolution: z.enum(sizes).optional(),
     draft: z.boolean().optional(),
     sessionId: z.string().min(1).max(200).optional(),
     projectId: z.string().min(1).max(200).optional(),
     previewJobId: z.string().regex(UUID_RE, "previewJobId must be a job id (uuid).").optional(),
   })
+}
+
+/** A run request where the loaded engine reads trend runs by the size the ENGINE makes (every engine before stage 4). */
+export const trendRunRequestSchema: z.ZodType<TrendRunRequest> = trendRunRequestSchemaOf(["480p", "720p", "1080p"])
+
+/**
+ * A run request where the loaded engine reads trend runs by the size DELIVERED (sizes.ts): "4k" is a size a
+ * run may ask for too. Whether a size is offered for the trend is the composition's to say.
+ */
+export const trendRunRequestSchemaDelivered: z.ZodType<TrendRunRequest> = trendRunRequestSchemaOf(["480p", "720p", "1080p", "4k"])
+
+/**
+ * The run request schema for the way this deployment's engine reads a trend run (sizes.ts `TrendSizesHere`): "4k"
+ * taken wherever the engine reads trend runs the delivered way, its settings read (`delivered`) or not (`unread`,
+ * where the composition refuses it as a size the trend does not list).
+ */
+export function trendRunRequestSchemaFor(here: { readonly delivered: boolean; readonly unread?: true }): z.ZodType<TrendRunRequest> {
+  return here.delivered || here.unread === true ? trendRunRequestSchemaDelivered : trendRunRequestSchema
+}
 // `draft: true` above 480p is refused by the composition, which knows the trend's
 // engine: Seedance 2.5 answers `validation_error` (draft is 480p only), Kling 4
 // `draft_unsupported` (it has no draft at all).

@@ -1,3 +1,4 @@
+import { deliveredVideoClips } from "@/lib/run-result-identity"
 import type { Job, LibraryAsset } from "@/lib/api"
 import { isValidUuid } from "@/lib/uuid"
 
@@ -52,9 +53,10 @@ export function isLookupableId(target: DeepLinkTarget): boolean {
  */
 export function jobOutputUrls(job: Pick<Job, "output_data">): readonly string[] {
   const output = job.output_data ?? {}
-  return ["imageUrl", "videoUrl", "audioUrl"]
+  const primary = ["imageUrl", "videoUrl", "audioUrl"]
     .map((key) => output[key])
     .filter((url): url is string => typeof url === "string" && url.length > 0)
+  return [...new Set([...primary, ...deliveredVideoClips(output).map(clip => clip.url)])]
 }
 
 export type JobLinkState = "ready" | "processing" | "no-result"

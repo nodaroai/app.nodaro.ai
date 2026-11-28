@@ -392,6 +392,10 @@ export const videoToVideoPricing: RoutePricing = {
     return isClipPricedV2vProvider(provider) ? clipCreditId(req) : provider
   },
   opts: {
+    routedVideoInput: (body, req) => {
+      const parsed = textToVideoBody.safeParse(body)
+      return parsed.success ? { input: parsed.data, jobType: "text-to-video" } : null
+    },
     runModel: jobRunModel("video-to-video"),
     computeCredits: async (body, req) => {
       if (isSeedanceEdit(req)) return textToVideoPricing.opts?.computeCredits?.(body, req)

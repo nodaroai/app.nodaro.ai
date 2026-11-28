@@ -6,7 +6,7 @@ Single-node requests and workflow nodes check the deployment payer's prepaid poo
 
 Configure `DEPLOYMENT_WALLET_URL`, `DEPLOYMENT_WALLET_TOKEN` and `DEPLOYMENT_WALLET_SSO_PROVIDER` together on the API and workers. The URL must use HTTPS. The token is a dedicated server secret. `DEPLOYMENT_WALLET_TIMEOUT_MS` defaults to 10000 and accepts 1000–30000. Leave all three authority settings unset to retain existing billing. Local per-user allowance enforcement must be off; incompatible configuration refuses activation.
 
-The endpoint accepts POST JSON with `contract: 1` and `unit: "nodaro_credit"`. Authenticate `Authorization: Bearer <token>`. Never interpret these credits as another product's tokens without an explicit conversion owned by the external wallet.
+The endpoint accepts POST JSON with `unit: "nodaro_credit"`. Every request uses `contract: 1` unless an admin has turned on **Enforce unpaid charges** in Admin → Video route (off by default). Only then do routed video reservations, settlements with a verified overage, and installment reads use contract 2. Authenticate `Authorization: Bearer <token>`. Never interpret these credits as another product's tokens without an explicit conversion owned by the external wallet.
 
 ## Reserve
 
@@ -46,6 +46,59 @@ The terminal request key is `<operation_id>:settle`. Delivery is at least once; 
 **Settlement can precede a delayed reserve.** A zero settlement must create a permanent terminal record even if the operation is not yet known. A subsequent reserve must never reopen it. Reservations have no automatic expiry: generation and human review can outlive HTTP requests. Keep holds until settlement and retain idempotency records. Never release an active hold merely because a callback is late.
 
 The local ledger records settlement and its outbox together. Normal settlement attempts delivery immediately; a minute-based worker retries with backoff up to one hour. Unacknowledged events remain durable. Never remove wallet configuration or point it to another wallet while operations remain open. Rotate the token on the same authority. Operators should monitor `external_wallet_operations` for undelivered terminal records and aged active holds; the table and RPCs are service-role-only. Existing job recovery owns authorized running jobs; the wallet recovery worker safely cancels only reservations that were never authorized.
+
+## Routed video and later top-ups
+
+A routed video's final verified cost can exceed its initial hold. This section applies only while **Enforce unpaid charges** is on in Admin → Video route. While it is off (the default), a wallet sees the version 1 contract for every operation, routed video included: a reserve, then one terminal `settle` that captures at most the hold. The part of a verified cost above the hold is recorded on the platform and raised as an alert to its operators; the wallet is asked for nothing more.
+
+Turn enforcement on for a wallet deployment after its wallet implements the following contract. A version 1 wallet continues to serve ordinary operations. With enforcement on, a routed reserve that the wallet cannot authorize returns an error before video submission.
+
+For a routed reserve, the request uses the existing reserve fields and idempotency key, with `"contract": 2` and `"capability": "routed_debt_v1"`. Before answering `allow`, the wallet must support collection against future top-ups. Its response must echo version 2, the capability, operation ID, unit, and exact reserved amount. A denial echoes version 2, operation ID and unit with `"decision": "deny"`. Preserve the operation ID across versions and retries. A retry can only refer to the original hold. The terminal `settle` captures at most the original hold and releases unused credits.
+
+When a verified charge exceeds the hold, the terminal `settle` request uses contract 2 and the same `<operation_id>:settle` key. It carries the original operation fields, `actual_credits` equal to the hold, and a positive `original_shortfall` for the excess. Atomically capture the hold and register one obligation for that exact amount and subject. A repeated terminal request must return the original result. Reject conflicting amounts or identities. Once registered, apply available customer credits and future top-ups to the outstanding obligation before making them available for new paid runs. Serialize collection, grants and spending for that subject. Create one permanent, provider-unique receipt for each positive whole-credit installment in the same transaction as its debit. The service keeps the terminal event open until capture and registration are both acknowledged.
+
+```json
+{"contract":2,"unit":"nodaro_credit","operation_id":"a3354131-4e5e-43a6-8f61-3914f09c658e","sso_provider":"partner","sso_subject":"customer-123","settled":true,"actual_credits":30,"debt_registered":true,"original_shortfall":18}
+```
+
+After this acknowledgement, the service sends `sync_debt` to read verified installments. Each read carries the original operation identity and overage. Its credit offset is how much of that overage the service has already recorded.
+
+When a run delivers no acceptable video, its zero settlement releases the hold before capture. Post-capture refunds are unsupported for external-wallet usage. The original capture and subsequent repayments stay recorded. Clearing a local debt record would leave the partner's obligation active.
+
+```json
+{
+  "contract": 2,
+  "unit": "nodaro_credit",
+  "action": "sync_debt",
+  "operation_id": "a3354131-4e5e-43a6-8f61-3914f09c658e",
+  "job_id": "381dbe98-2ba4-4c43-b19c-130642e267a9",
+  "user_id": "5bf0d884-47b1-468e-a7b2-2433f957b267",
+  "sso_provider": "partner",
+  "sso_subject": "customer-123",
+  "model_identifier": "example-model",
+  "reserved_credits": 30,
+  "original_shortfall": 18,
+  "after_credits": 6
+}
+```
+
+1. Locate the obligation already registered at settlement. Verify the original operation, identity, ceiling, settled amount and overage. Reject unknown or conflicting obligations.
+2. Return the **first** installment after the exact `after_credits` boundary. A repeat read at that boundary must return the same confirmed receipt. If no next payment exists yet, echo the obligation with `"receipt": null`. A later read at the same boundary can then return a new receipt. An offset within an installment or beyond the collected total is invalid.
+
+```json
+{
+  "contract": 2,
+  "unit": "nodaro_credit",
+  "operation_id": "a3354131-4e5e-43a6-8f61-3914f09c658e",
+  "sso_provider": "partner",
+  "sso_subject": "customer-123",
+  "original_shortfall": 18,
+  "after_credits": 6,
+  "receipt": {"id": "payment-842", "credits": 8}
+}
+```
+
+In this example, the next read asks for `after_credits: 14` and four credits remain. A receipt ID is a nonempty string of at most 200 characters. A read can return a new installment as funds arrive, so it has no HTTP idempotency key. The worker retries missing or invalid replies and records each verified payment once. While the customer has an unpaid balance, new paid runs are blocked. The deployment's prepaid platform pool is tracked separately. Wallet operators must implement and test this extension on their endpoint before activating routed reservations.
 
 ## Balance
 

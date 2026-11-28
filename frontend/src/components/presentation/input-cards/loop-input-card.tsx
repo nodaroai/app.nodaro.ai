@@ -25,6 +25,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useFileUpload } from "@/hooks/use-file-upload"
 import { CachedImage } from "@/components/ui/cached-image"
 import { GlassButton, copyUrl, downloadFile } from "../output-cards/shared"
+import { isStoredVideoAddress, openVideoDownload } from "@/lib/video-result-download"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { PromptHelperButton } from "@/components/editor/config-panels/prompt-helper-button"
 import type { PromptContext } from "@/lib/prompt-context"
@@ -76,7 +77,7 @@ function MediaOverlayButtons({
       <GlassButton onClick={onPreview} title={t("common.enlarge")}>
         <Maximize2 className="w-3.5 h-3.5" />
       </GlassButton>
-      <GlassButton onClick={() => downloadFile(url, getFilenameFromUrl(url))} title={t("common.download")}>
+      <GlassButton onClick={() => (isStoredVideoAddress(url) ? openVideoDownload(url, () => downloadFile(url, getFilenameFromUrl(url))) : downloadFile(url, getFilenameFromUrl(url)))} title={t("common.download")}>
         <Download className="w-3.5 h-3.5" />
       </GlassButton>
       <GlassButton onClick={() => copyUrl(url)} title={t("cfgshared.copyUrl")}>
@@ -169,7 +170,7 @@ function RichMediaCell({
           <div className="relative group flex items-center gap-2 rounded-lg p-2">
             <WaveformAudioPlayer url={value} variant="compact" className="flex-1" />
             <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-              <GlassButton onClick={() => downloadFile(value, getFilenameFromUrl(value))} title={t("common.download")}>
+              <GlassButton /* download-site: a sound */ onClick={() => downloadFile(value, getFilenameFromUrl(value))} title={t("common.download")}>
                 <Download className="w-3.5 h-3.5" />
               </GlassButton>
               {!readOnly && (

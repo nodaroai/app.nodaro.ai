@@ -36,10 +36,9 @@ import {
 } from "@nodaro/shared/models"
 import { config } from "./config.js"
 import { callerGrantOf, withJobSubmissionContext } from "./job-submission-context.js"
-import { neutralBreakdown, privacyCreditsOf } from "./nodaro-motion-quote.js"
+import { neutralBreakdown, privacyCreditsOf, withStepFolded } from "./nodaro-motion-quote.js"
 import { CAST_SWAP_PREFIX, VIDEO_REMAKE_PREFIX } from "./video-remake-paths.js"
-import { upscaleQuoteOf } from "./video-remake-upscale-choice.js"
-import type { VideoRemakeDeliveredSize } from "./video-remake-delivered-resolution.js"
+import { deliveredSizeOfQuote, type VideoRemakeDeliveredSize } from "./video-remake-delivered-resolution.js"
 
 /** The engine's estimate route, in the spelling every engine version serves. */
 export const VIDEO_REMAKE_ESTIMATE_ROUTE = `${CAST_SWAP_PREFIX}/estimate`
@@ -130,9 +129,9 @@ export interface VideoRemakeEngineQuote {
   privacyCredits?: number
   settlesLower: boolean
   /**
-   * The size the run would deliver, as the engine answers it (lib/video-remake-delivered-resolution.ts). An engine
-   * that still answers the earlier quote fields (lib/video-remake-upscale-choice.ts) has them passed through beside
-   * it, untyped, for the clients built for them.
+   * The size the run would deliver, as the engine answers it (lib/video-remake-delivered-resolution.ts
+   * `deliveredSizeOfQuote`: an engine that still answers the earlier fields has its delivered size read from
+   * them). How the engine makes the size is never named: none of the earlier fields is answered.
    */
   resolution?: VideoRemakeDeliveredSize
 }
@@ -147,15 +146,17 @@ export function videoRemakeEngineQuoteOf(answer: unknown, asked: NodaroMotionEng
   // The engine it priced: its own answer when it names one, else the one asked for.
   const priced: CastSwapEngine = castSwapEngineOfRun(quote.engine) ?? castSwapEngineOfRun(asked) ?? CAST_SWAP_ENGINE_WHEN_OMITTED
   const privacyCredits = privacyCreditsOf(quote)
+  const delivered = deliveredSizeOfQuote(quote)
   return {
     engine: flash ?? nodaroMotionEngineOf(priced),
     engineName: flash ? VIDEO_REMAKE_FLASH_ENGINE_NAMES[flash] : nodaroMotionEngineName(priced),
     totalCredits: quote.totalCredits,
     ...(typeof quote.expectedCredits === "number" && Number.isFinite(quote.expectedCredits) ? { expectedCredits: quote.expectedCredits } : {}),
-    breakdown: neutralBreakdown(quote.breakdown),
+    // An engine that still prices the step on a line of its own has it in the engine's line (never named).
+    breakdown: withStepFolded(neutralBreakdown(quote.breakdown)),
     ...(privacyCredits !== undefined ? { privacyCredits } : {}),
     settlesLower: quote.settlesLower === true,
-    ...upscaleQuoteOf(quote),
+    ...(delivered !== undefined ? { resolution: delivered } : {}),
   }
 }
 

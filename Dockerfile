@@ -629,15 +629,50 @@ COPY --chown=node:node tools/scene3d-cleanup-probe-owner.mjs ./tools/scene3d-cle
 COPY <<'EOF' /app/start.sh
 #!/bin/sh
 
-echo "Starting with PORT=${PORT:-3000}"
+# Which programs this container runs (docs/deployment.md, "The render worker as
+# its own service"). The video renders are the one program here that can use
+# every thread a container may have (incident 2026-11-25: two renders at once
+# did, and the proxy beside them died of it), so they can be given a container
+# of their own, started from this same image:
+#   true  (the default)  everything, the render worker included
+#   false                everything but the render worker: a render service runs it
+#   only                 the render worker and nothing else: no API, no proxy, no
+#                        migrations. This container IS the render service.
+# Anything else stops here: a mistyped `only` would start a second whole app.
+case "${RENDER_WORKER_IN_CONTAINER:-true}" in
+  true|false|only) RENDER_WORKER_IN_CONTAINER="${RENDER_WORKER_IN_CONTAINER:-true}" ;;
+  *)
+    echo "[start.sh] RENDER_WORKER_IN_CONTAINER must be true, false or only (it is \"$RENDER_WORKER_IN_CONTAINER\"): nothing was started"
+    exit 1
+    ;;
+esac
+
+if [ "$RENDER_WORKER_IN_CONTAINER" = "only" ]; then
+  echo "Starting the render worker only (RENDER_WORKER_IN_CONTAINER=only): no API, no proxy"
+  # The bundled stack's default addresses name the app container itself (its
+  # proxy on localhost:3000). In this container that name is this container,
+  # where nothing answers: said once at boot, rather than found one failed
+  # render at a time. A warning, not a refusal: a container that shares the
+  # app's network address does reach it there.
+  case " $SUPABASE_URL $R2_PUBLIC_URL " in
+    *://localhost:*|*://localhost/*|*"://localhost "*|*://127.0.0.1:*|*://127.0.0.1/*|*"://127.0.0.1 "*)
+      echo "[start.sh] WARNING: SUPABASE_URL or R2_PUBLIC_URL names this machine (localhost). In a render-only container that is this container, not the app: the render worker reaches the database and the stored media there only if this container shares the app's network address (docs/deployment.md, \"The render worker as its own service\")"
+      ;;
+  esac
+else
+  echo "Starting with PORT=${PORT:-3000}"
+fi
 
 # The settings that move the app's pages to their own host (docs/deployment.md):
 # checked by the server's own rule before anything starts. This script starts
 # Caddy and writes /config.js whatever the API does, so a value the server
 # refuses would otherwise still turn the proxy's or the browser's half on.
-if ! node /app/backend/dist/lib/moved-pages-check.js; then
-  echo "[start.sh] the settings that move the app's pages are invalid (see the line above): nothing was started"
-  exit 1
+# (A render-only container starts neither, so it is not held to them.)
+if [ "$RENDER_WORKER_IN_CONTAINER" != "only" ]; then
+  if ! node /app/backend/dist/lib/moved-pages-check.js; then
+    echo "[start.sh] the settings that move the app's pages are invalid (see the line above): nothing was started"
+    exit 1
+  fi
 fi
 
 # The Supabase keys (docs/deployment.md, "Supabase keys in production"): a
@@ -670,6 +705,9 @@ fi
 # disk between deploys and MUST set the variable explicitly — there we
 # deliberately do nothing, so a misconfiguration surfaces as the named
 # EncryptionKeyMissingError instead of a silently rotating key.
+# A render-only container reads the key the app generated (its data volume
+# mounted here too) and never generates one: a second key, on a volume of its
+# own, would not open what the app stored.
 if [ "$RUN_MIGRATIONS_ON_BOOT" = "true" ] && [ -z "$NODARO_ENCRYPTION_KEY" ] && [ -z "$SOCIAL_ENCRYPTION_KEY" ]; then
   KEY_DIR="${NODARO_DATA_DIR:-/data/nodaro}"
   KEY_FILE="$KEY_DIR/encryption-key"
@@ -677,6 +715,8 @@ if [ "$RUN_MIGRATIONS_ON_BOOT" = "true" ] && [ -z "$NODARO_ENCRYPTION_KEY" ] && 
     export NODARO_ENCRYPTION_KEY=$(cat "$KEY_FILE")
     export NODARO_ENCRYPTION_KEY_SOURCE=generated
     echo "[start.sh] instance encryption key loaded from $KEY_FILE"
+  elif [ "$RENDER_WORKER_IN_CONTAINER" = "only" ]; then
+    echo "[start.sh] WARNING: no NODARO_ENCRYPTION_KEY and no key at $KEY_FILE — a render-only container does not generate the instance key: give it the app's NODARO_ENCRYPTION_KEY, or mount the app's data volume here"
   else
     mkdir -p "$KEY_DIR" 2>/dev/null || true
     if [ -d "$KEY_DIR" ] && [ -w "$KEY_DIR" ]; then
@@ -702,6 +742,7 @@ fi
 # signal to every child and wait for them to drain before exiting.
 TERMINATING=""
 CHILD_PIDS=""
+EXIT_CODE=0
 
 forward_term() {
   TERMINATING=1
@@ -710,11 +751,36 @@ forward_term() {
 }
 trap forward_term TERM INT
 
+# A supervisor that ended on its own (the EXIT trap in supervise, below). The
+# program it kept running has nobody left to start it again, so the container
+# must not go on half alive: every child is stopped as on a shutdown, and this
+# script then leaves with a failure status so the platform starts a fresh
+# container (on Railway: the restart policy "On Failure" or "Always"). That
+# cuts the jobs that are running, which is why it is the last resort only —
+# a program that exits is started again in place by its supervisor.
+# A drain that hangs is not waited on for ever: after the grace this script
+# leaves anyway, and the kernel ends whatever is left together with PID 1. The
+# timer is started inside `command eval` like every start in supervise: with
+# no process free it is simply not started, and the children's own drain
+# limits are then the only bound.
+SUPERVISOR_LOST_GRACE_S=40
+supervisor_lost() {
+  if [ -n "$TERMINATING" ]; then return 0; fi
+  TERMINATING=1
+  EXIT_CODE=1
+  echo "[start.sh] a supervisor ended on its own — stopping every process so the platform starts a fresh container"
+  kill -TERM $CHILD_PIDS 2>/dev/null
+  command eval '( ( sleep "$SUPERVISOR_LOST_GRACE_S"; kill -USR2 $$ 2>/dev/null ) & )' 2>/dev/null
+}
+trap supervisor_lost USR1
+trap 'echo "[start.sh] still draining ${SUPERVISOR_LOST_GRACE_S}s after a supervisor ended — leaving"; exit "$EXIT_CODE"' USR2
+
 # Self-host: apply supabase/migrations before anything touches the DB.
 # Gated on BOTH vars so cloud (neither set) and partial configs are no-ops.
 # A failed migration refuses to boot — an API against a half-migrated
-# schema fails stranger and later.
-if [ "$RUN_MIGRATIONS_ON_BOOT" = "true" ] && [ -n "$DATABASE_URL" ]; then
+# schema fails stranger and later. Never from a render-only container: the
+# app's container applies them, and two at once would run the same migration.
+if [ "$RUN_MIGRATIONS_ON_BOOT" = "true" ] && [ -n "$DATABASE_URL" ] && [ "$RENDER_WORKER_IN_CONTAINER" != "only" ]; then
   echo "[start.sh] applying database migrations..."
   if ! node /app/backend/scripts/run-migrations.mjs; then
     echo "[start.sh] migrations FAILED - refusing to start"
@@ -744,28 +810,90 @@ fi
 # here FLOW_PUBLIC_URL alone reaches Caddy and the writer under their name.
 export FLOW_UI_ORIGIN="${FLOW_UI_ORIGIN:-$FLOW_PUBLIC_URL}"
 
-# Supervised process runner: the API server and the queue consumers below are
-# background siblings of this PID-1 script — without supervision, a crashed worker
-# (e.g. OOM-killed during a render burst) stays dead while /health keeps
-# serving 200 from server.js (incident 2026-06-11: orchestrator + worker
-# died at ~21:08/21:12 UTC, queues froze for 10h, container stayed green).
-# 10s backoff prevents a hot crash-loop; the loop dies with the container.
-# On TERM/INT the subshell forwards to its current node child, waits for the
+# Supervised process runner: the API server, the queue consumers and the proxy
+# below are background siblings of this PID-1 script — without supervision, a
+# crashed worker (e.g. OOM-killed during a render burst) stays dead while
+# /health keeps serving 200 from server.js (incident 2026-06-11: orchestrator +
+# worker died at ~21:08/21:12 UTC, queues froze for 10h, container stayed green).
+# The backoff (SUPERVISE_DELAY seconds, 10 unless a start states its own)
+# prevents a hot crash-loop; the loop dies with the container.
+# On TERM/INT the subshell forwards to its current child, waits for the
 # child's drain, and exits WITHOUT restarting — a fresh worker in a dying
 # container would pick up jobs only to be SIGKILLed holding their locks.
+#
+# A container can run out of processes (incident 2026-11-25: two renders at
+# once used every thread the container may have, the proxy died of it, and for
+# minutes nothing in the container could start a process). This shell cannot
+# start one then either, and on its own a refused start ENDS the shell
+# ("Cannot fork"): the supervisor would be gone exactly when it is needed. So
+# both starts here — the program and the backoff's `sleep` — run inside
+# `command eval`, where a refused start is an error status instead of the end
+# of the shell. A backoff whose `sleep` cannot start is counted off
+# /proc/uptime: this shell has no way to wait without a process. The program
+# is then started again as soon as a process is free.
+#
+# A supervisor that ends any other way tells its program to stop and reports
+# to this script (USR1 — supervisor_lost, above), which replaces the
+# container: nothing is left running without the one that restarts it.
 supervise() {
   name="$1"; shift
   sup_child=""
-  trap '[ -n "$sup_child" ] && kill -TERM "$sup_child" 2>/dev/null; [ -n "$sup_child" ] && wait "$sup_child"; echo "[supervise] $name stopped (drained)"; exit 0' TERM INT
+  sup_delay="${SUPERVISE_DELAY:-10}"
+  trap 'trap - EXIT; [ -n "$sup_child" ] && kill -TERM "$sup_child" 2>/dev/null; [ -n "$sup_child" ] && wait "$sup_child"; echo "[supervise] $name stopped (drained)"; exit 0' TERM INT
+  trap 'echo "[supervise] $name: its supervisor ended on its own — reporting to start.sh"; [ -n "$sup_child" ] && kill -TERM "$sup_child" 2>/dev/null; kill -USR1 $$ 2>/dev/null' EXIT
   while :; do
-    "$@" &
-    sup_child=$!
-    wait "$sup_child"
-    code=$?
-    echo "[supervise] $name exited (code $code) — restarting in 10s"
-    sleep 10
+    sup_child=""
+    command eval '"$@" & sup_child=$!'
+    if [ -n "$sup_child" ]; then
+      wait "$sup_child"
+      code=$?
+      echo "[supervise] $name exited (code $code) — restarting in ${sup_delay}s"
+    else
+      echo "[supervise] $name could not be started: no process is free — trying again in ${sup_delay}s"
+    fi
+    if ! command eval 'sleep "$sup_delay"' 2>/dev/null; then
+      if read -r sup_up sup_rest 2>/dev/null < /proc/uptime; then
+        sup_until=$(( ${sup_up%.*} + sup_delay ))
+        while read -r sup_up sup_rest < /proc/uptime && [ "${sup_up%.*}" -lt "$sup_until" ]; do :; done
+      else
+        sup_count=0
+        while [ "$sup_count" -lt 200000 ]; do sup_count=$((sup_count + 1)); done
+      fi
+    fi
   done
 }
+
+# Reap children. `wait` returns early, with a status above 128, each time a
+# trapped signal arrives — a TERM/INT (the trap forwards it), a supervisor's
+# report — so it is asked again until every child has actually ended
+# (Railway's SIGKILL at grace-end is the backstop for hung drains on a
+# shutdown; supervisor_lost has its own). It also collects every process that
+# lost its parent and was handed to PID 1: left uncollected, each one stays in
+# the process table and counts against the container's process limit.
+reap_children() {
+  while :; do
+    wait
+    if [ $? -le 128 ]; then break; fi
+  done
+}
+
+# The BullMQ render worker (Remotion video rendering).
+start_render_worker() {
+  supervise render-worker node dist/render-worker.js &
+  CHILD_PIDS="$CHILD_PIDS $!"
+}
+
+# The render service (RENDER_WORKER_IN_CONTAINER=only): the render worker and
+# nothing else. Through this script rather than as a bare start command, so it
+# is started again in place when it dies, the shutdown signal is forwarded to
+# it and its drain waited for, a process left without a parent is reaped, and
+# a lost supervisor ends the container with a failure status.
+if [ "$RENDER_WORKER_IN_CONTAINER" = "only" ]; then
+  cd /app/backend
+  start_render_worker
+  reap_children
+  exit "$EXIT_CODE"
+fi
 
 # Start backend API server on fixed internal port. Supervised like the
 # consumers: the proxy keeps answering the pages while a dead API answers 502
@@ -781,9 +909,12 @@ CHILD_PIDS="$CHILD_PIDS $!"
 supervise worker node dist/worker.js &
 CHILD_PIDS="$CHILD_PIDS $!"
 
-# Start BullMQ render worker (Remotion video rendering)
-supervise render-worker node dist/render-worker.js &
-CHILD_PIDS="$CHILD_PIDS $!"
+# Start the render worker here too, unless a render service runs it.
+if [ "$RENDER_WORKER_IN_CONTAINER" = "false" ]; then
+  echo "[start.sh] RENDER_WORKER_IN_CONTAINER=false — the render worker is not started here: renders wait in the queue for the render service (a container of this image with RENDER_WORKER_IN_CONTAINER=only)"
+else
+  start_render_worker
+fi
 
 # Start BullMQ orchestrator worker (workflow execution)
 supervise orchestrator node dist/orchestrator.js &
@@ -875,6 +1006,10 @@ RUNTIME_SURFACE_PROFILE_RESOLVED="$(node /app/backend/dist/lib/print-surface-pro
 # Same printer, same rules: "" unless the surface is white-label and its public
 # media URL is https (the backend reads both). A failure is the same "".
 RUNTIME_MEDIA_ORIGIN_RESOLVED="$(node /app/backend/dist/lib/print-surface-profile.js --media-origin)" || RUNTIME_MEDIA_ORIGIN_RESOLVED=""
+# Same printer, same rules: the storage origin the deployment publishes to the
+# browser (R2_PUBLIC_URL's https origin, which the download routes accept; never
+# the fallback host), so its video Download asks the server only about that. "" when none.
+RUNTIME_STORAGE_ORIGINS_RESOLVED="$(node /app/backend/dist/lib/print-surface-profile.js --storage-origins)" || RUNTIME_STORAGE_ORIGINS_RESOLVED=""
 # PUBLIC_URL is single-valued, so on a studio answering on more than one
 # hostname it would send every browser's SSE to whichever host it names —
 # cross-origin from all the others. The "/" sentinel says "same origin as the
@@ -883,25 +1018,42 @@ if [ "$PUBLIC_URL_SAME_ORIGIN" = "true" ]; then RUNTIME_API_URL_EFFECTIVE="/"; e
 # The writer prints the /config.js line to stdout (log line to stderr), so the
 # redirect captures only the payload; on failure the file is left empty, which
 # the frontend reads as "no override" → build-time values.
-if ! RUNTIME_API_URL="$RUNTIME_API_URL_EFFECTIVE" RUNTIME_SUPABASE_URL="$FRONTEND_SUPABASE_URL_EFFECTIVE" RUNTIME_SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" RUNTIME_FREECUT_URL="$FREECUT_URL" RUNTIME_AUDIOMASS_URL="$AUDIOMASS_URL" RUNTIME_DEFAULT_LOCALE="$DEFAULT_LOCALE" RUNTIME_SURFACE_PROFILE="$RUNTIME_SURFACE_PROFILE_RESOLVED" RUNTIME_PREVIEW_STOP_RULE="$PREVIEW_STOP_RULE_ENABLED" RUNTIME_MEDIA_ORIGIN="$RUNTIME_MEDIA_ORIGIN_RESOLVED" RUNTIME_FLOW_UI_ORIGIN="$FLOW_UI_ORIGIN" RUNTIME_LEGACY_UI_HOSTS="$LEGACY_UI_HOSTS" RUNTIME_LINK_ORIGIN="$PUBLIC_URL" \
+if ! RUNTIME_API_URL="$RUNTIME_API_URL_EFFECTIVE" RUNTIME_SUPABASE_URL="$FRONTEND_SUPABASE_URL_EFFECTIVE" RUNTIME_SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" RUNTIME_FREECUT_URL="$FREECUT_URL" RUNTIME_AUDIOMASS_URL="$AUDIOMASS_URL" RUNTIME_DEFAULT_LOCALE="$DEFAULT_LOCALE" RUNTIME_SURFACE_PROFILE="$RUNTIME_SURFACE_PROFILE_RESOLVED" RUNTIME_PREVIEW_STOP_RULE="$PREVIEW_STOP_RULE_ENABLED" RUNTIME_MEDIA_ORIGIN="$RUNTIME_MEDIA_ORIGIN_RESOLVED" RUNTIME_STORAGE_ORIGINS="$RUNTIME_STORAGE_ORIGINS_RESOLVED" RUNTIME_FLOW_UI_ORIGIN="$FLOW_UI_ORIGIN" RUNTIME_LEGACY_UI_HOSTS="$LEGACY_UI_HOSTS" RUNTIME_LINK_ORIGIN="$PUBLIC_URL" \
   node /app/tools/build-runtime-config.mjs > /app/frontend/dist/config.js; then
   echo "[start.sh] WARNING: could not write /app/frontend/dist/config.js — the frontend keeps its build-time URLs"
 fi
 
-# Start Caddy (reverse proxy). Backgrounded — start.sh remains PID 1 so it
-# owns signal forwarding; Caddy still receives a clean TERM through the trap.
+# The proxy's own demand for threads. The Go runtime ends the whole program the
+# moment it cannot start a thread ("fatal error: newosproc" — how the proxy
+# died on 2026-11-25, 62 seconds after boot), and it starts one whenever it
+# wants more parallelism, up to GOMAXPROCS: by default the CPU quota, 32 on
+# that container, where it held 19 threads and died asking for the next. Four
+# is more than this proxy uses, and a proxy that has its few threads seconds
+# after boot rarely has to ask for another while the container is short of
+# them. Never above a smaller CPU quota; an operator's own GOMAXPROCS wins.
+CADDY_GOMAXPROCS=4
+if read -r cpu_quota cpu_period 2>/dev/null < /sys/fs/cgroup/cpu.max && [ "$cpu_quota" != "max" ] && [ "${cpu_period:-0}" -gt 0 ]; then
+  cpu_whole=$(( (cpu_quota + cpu_period - 1) / cpu_period ))
+  if [ "$cpu_whole" -ge 1 ] && [ "$cpu_whole" -lt "$CADDY_GOMAXPROCS" ]; then CADDY_GOMAXPROCS="$cpu_whole"; fi
+fi
+
+# Start Caddy (reverse proxy). Supervised like every other program of the
+# container (incident 2026-11-25: it was the one program started bare, so when
+# it died nothing started it again, every page answered 502 for 27 minutes and
+# the container stayed green — the platform's health check runs only while a
+# deployment starts). A two-second backoff: the pages are down until it is back.
+# start.sh remains PID 1 so it owns signal forwarding; Caddy still receives a
+# clean TERM through its supervisor's trap.
 if [ -z "$TERMINATING" ]; then
   cd /app
-  caddy run --config /etc/caddy/Caddyfile --adapter caddyfile &
+  SUPERVISE_DELAY=2 supervise caddy env GOMAXPROCS="${GOMAXPROCS:-$CADDY_GOMAXPROCS}" caddy run --config /etc/caddy/Caddyfile --adapter caddyfile &
   CHILD_PIDS="$CHILD_PIDS $!"
 fi
 
-# Reap children. On TERM the trap forwards the signal, the interrupted first
-# `wait` returns, and the second `wait` blocks until every child has actually
-# drained (Railway's SIGKILL at grace-end is the backstop for hung drains).
-wait
-wait
-exit 0
+# Wait for every child to end (reap_children, above), then leave: 0 after a
+# shutdown, a failure status after a supervisor was lost.
+reap_children
+exit "$EXIT_CODE"
 EOF
 
 RUN chmod +x /app/start.sh

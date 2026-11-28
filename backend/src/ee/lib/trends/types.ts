@@ -628,7 +628,14 @@ export interface TrendRunSlot extends PersonChips, PetChips, ProductChips {
   images?: string[]
 }
 
+/** A size the trend's ENGINE makes a run at (what every engine before the delivered sizes reads `resolution` as). */
 export type TrendResolution = "480p" | "720p" | "1080p"
+
+/**
+ * A size a trend run may ask for: an engine size, and "4k" where the loaded engine reads a trend run by the size
+ * DELIVERED (sizes.ts). Which sizes a trend offers is `trendRunSizes`'s to say.
+ */
+export type TrendRunSize = TrendResolution | "4k"
 
 export interface TrendRunRequest {
   slots: Record<string, TrendRunSlot>
@@ -636,7 +643,7 @@ export interface TrendRunRequest {
   example?: number
   details?: string
   preview?: boolean
-  resolution?: TrendResolution
+  resolution?: TrendRunSize
   draft?: boolean
   sessionId?: string
   projectId?: string

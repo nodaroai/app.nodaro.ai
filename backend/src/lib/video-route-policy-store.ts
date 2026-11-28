@@ -76,13 +76,17 @@ export async function updateSettingsRow(key: string, change: (current: unknown, 
     const row = await readRow(key)
     const value = change(row?.value ?? null, row?.updatedAt ?? null)
     if (value === undefined) return undefined
-    const now = new Date().toISOString()
+    // This timestamp is also the compare-and-set revision. Always advance it,
+    // including when writers share a millisecond or their clocks differ.
+    const previousMs = row?.updatedAt ? Date.parse(row.updatedAt) : NaN
+    const now = new Date(Math.max(Date.now(), Number.isFinite(previousMs) ? previousMs + 1 : 0)).toISOString()
     if (!row) {
       const { error } = await supabase.from("app_settings").insert({ key, value, updated_at: now })
       if (!error) {
         invalidateSettingsCache()
         return value
       }
+      if (error.code !== "23505") throw new Error(`Could not save ${key}: ${error.message}`)
       continue // someone inserted first: read again
     }
     let query = supabase.from("app_settings").update({ value, updated_at: now }).eq("key", key)

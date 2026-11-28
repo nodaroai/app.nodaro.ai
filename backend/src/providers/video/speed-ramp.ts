@@ -1,5 +1,6 @@
+import { downloadEditingSource } from "./editing-source.js"
 import { join } from "node:path"
-import { downloadFile, runFfmpeg, createWorkDir, cleanupWorkDir } from "./ffmpeg-utils.js"
+import { runFfmpeg, createWorkDir, cleanupWorkDir } from "./ffmpeg-utils.js"
 
 export interface SpeedRampSegment {
   /** Start time in input seconds. */
@@ -163,7 +164,7 @@ export async function speedRamp(options: SpeedRampOptions): Promise<string> {
     const outputPath = join(workDir, "output.mp4")
 
     console.log(`[speedRamp] Downloading video from ${videoUrl}`)
-    await downloadFile(videoUrl, inputPath)
+    await downloadEditingSource(videoUrl, inputPath)
 
     // ---- Build the video filter chain ----
     const videoFilters: string[] = []

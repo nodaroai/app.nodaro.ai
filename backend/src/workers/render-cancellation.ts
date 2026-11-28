@@ -9,6 +9,9 @@ interface RenderCancellationOptions {
   isDraining(): boolean
   /** Cancels Remotion and closes any browser used during metadata selection. */
   cancel(): void | Promise<void>
+  /** A reason of the work's own to stop now (a render stuck in a shortage,
+   *  `render-shortage.ts`), asked on every poll after the two above. */
+  stuck?(): Error | undefined
 }
 
 /** Stop the underlying work, then await its cleanup before releasing the job. */
@@ -34,6 +37,10 @@ export async function withRenderCancellation<T>(
       try {
         if (options.isDraining()) abort(new DrainAbortError())
         else if (await options.isCancelled()) abort(new JobCancelledError(options.jobId))
+        else {
+          const stuck = options.stuck?.()
+          if (stuck) abort(stuck)
+        }
       } catch (error) {
         abort(error instanceof Error ? error : new Error("Failed to check render cancellation"))
       }

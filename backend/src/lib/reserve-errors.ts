@@ -35,6 +35,7 @@ export interface MappedReserveError {
   // workspace_archived is publicly documented as 409. A reserve-side fork
   // of either would be a second dialect for the same condition.
   code:
+    | "routed_balance_due"
     | "budget_exceeded"
     | "member_cap_exceeded"
     | "workspace_archived"
@@ -51,6 +52,7 @@ export interface MappedReserveError {
 }
 
 const RESERVE_PREFIX_MAP: Readonly<Record<string, MappedReserveError>> = {
+  ROUTED_BALANCE_DUE: { status: 402, code: "routed_balance_due", message: "An outstanding video charge must be paid before starting another paid run." },
   // A blocked account (lib/access-blocks.ts). Raised by the platform check
   // AHEAD of the RPC at every reserve site (`refuseBlockedReservation`), never
   // by the database — carried in this vocabulary so each site's existing

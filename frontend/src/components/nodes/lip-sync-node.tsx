@@ -1,3 +1,4 @@
+import { useNodeVideoPrice } from "@/hooks/use-seedance-ref-price"
 "use client"
 
 import { useT } from "@/lib/i18n"
@@ -36,6 +37,7 @@ import { useUnitQuoteCredits } from "@/hooks/use-unit-quote-credits"
 import { useLipSyncQuoteIsEstimate, useLipSyncQuotedAudioSec, useLipSyncQuotedSeconds } from "@/hooks/use-lip-sync-quote"
 import { probeAudioDuration } from "@/lib/audio-duration"
 import { extractNodeOutput } from "@/components/editor/workflow-editor/execution-graph"
+import { downloadVideoFile } from "@/lib/video-result-download"
 
 const ACCEPTS_IMAGE = (t: string) => isValidLipSyncConnection("image", t)
 const ACCEPTS_VIDEO = (t: string) => isValidLipSyncConnection("video", t)
@@ -184,7 +186,8 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
   // A saved node on a model retired from Lip Sync: no price (it does not run),
   // and the node says so until the person picks another model.
   const retiredModel = retiredLipSyncProviderName(nodeData.provider)
-  const shownCredits = retiredModel === undefined ? credits : undefined
+  const price = useNodeVideoPrice(id, credits ?? 0)
+  const shownCredits = retiredModel === undefined ? (price.quoted ? price.credits : credits) : undefined
   const retiredNotice = retiredModel === undefined ? null : (
     <p role="alert" className="px-3 pt-2 text-[11px] text-center text-red-400">
       {t("audiocfg.retiredLipSyncModel", { model: retiredModel })}
@@ -449,7 +452,7 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
           loop={shouldPlay}
           playsInline
         />
-        {unplayableVideo.unplayable && activeUrl && <VideoUnplayableNotice url={activeUrl} label={(nodeData.label as string | undefined) ?? ""} />}
+        {unplayableVideo.unplayable && activeUrl && <VideoUnplayableNotice url={activeUrl} />}
 
         {/* Version badge - top left */}
         {results.length > 1 && (
@@ -484,7 +487,7 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
           </button>
           <button type="button" aria-label={t("cfgshared.download")}
             className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-            onClick={(e) => { e.stopPropagation(); const a = document.createElement('a'); a.href = `/v1/image-proxy?url=${encodeURIComponent(activeUrl!)}&download=1`; a.download = `${nodeData.label || 'video'}.mp4`; a.click() }} title={t("cfgshared.download")}>
+            onClick={(e) => { e.stopPropagation(); downloadVideoFile(activeUrl!) }} title={t("cfgshared.download")}>
             <Download className="w-3.5 h-3.5" />
           </button>
           <button type="button" aria-label={t("cfgshared.copyUrl")}

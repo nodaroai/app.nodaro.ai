@@ -5,6 +5,6 @@
  * Everything the setting reaches — a routed listing price, saving a model on
  * the alternate route, the `alternateRouteV2` capability a plugin reads —
  * follows this one switch, so a build that lists or saves a routed price
- * always runs and charges it too. False until the lanes are wired.
+ * always runs and charges it too. On: every lane admits, runs and settles a routed job.
  */
-export const HOST_ROUTES_PER_MODEL: boolean = false
+export const HOST_ROUTES_PER_MODEL: boolean = true

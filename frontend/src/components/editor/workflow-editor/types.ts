@@ -1,4 +1,4 @@
-import type { WorkflowNode, WorkflowEdge, GenerateVideoProNodeData, EditVideoProNodeData, ProbedVideoInfo } from "@/types/nodes";
+import type { GeneratedResult, WorkflowNode, WorkflowEdge, GenerateVideoProNodeData, EditVideoProNodeData, ProbedVideoInfo } from "@/types/nodes";
 import { StorageExceededError, SubscriptionRequiredError } from "@/lib/api";
 import { promptCreditsShortfall, type CreditsShortfall } from "./credits-shortfall";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
@@ -27,7 +27,7 @@ import { speechQuote, upstreamSpeechText } from "@/lib/speech-estimate"
 import { UNIT_NODE_DEFINITIONS } from "@/lib/unit-definitions"
 import { composeRecord, composeSet, unitPriceRows } from "@/lib/unit-compose"
 // estimateNodeCredits asks the one node type it prices for its unit price id (unitCreditIdOf(nodeType, data)).
-import { unitCreditIdOf } from "@/lib/unit-price-ids"
+import { unitCreditIdOf, wiredInputsOf } from "@/lib/unit-price-ids"
 
 /** Sentinel error thrown when a polling callback detects that the active
  *  workflow has changed. Callers should catch this silently (no error toast). */
@@ -464,11 +464,9 @@ function gvpExplicitSplit(requestedSec: number, segmentDurations: number[]): Gvp
  *  math beyond) instead of a fixed single-segment approximation. Honors the
  *  same split-selection precedence as the backend: explicit `segmentDurations`
  *  > `preferredSegmentSec` > classic pack-to-cap. */
-export function estimateGenerateVideoProCredits(data: GenerateVideoProNodeData): number {
-  if (data.segmentMode) {
-    const quoted=getCachedVideoProCredits(data)
-    if (quoted!==undefined) return quoted
-  }
+export function estimateGenerateVideoProCredits(data: GenerateVideoProNodeData, hasOpeningVideo = false): number {
+  const quoted = getCachedVideoProCredits(data, hasOpeningVideo)
+  if (quoted !== undefined) return quoted
   const provider = data.provider || "seedance-2"
   // The tier the run renders and is billed at (the pro pricing's own rule): a
   // stored tier the model renders as another (Vidu Q4's 540p, a 360p written
@@ -631,7 +629,7 @@ export function estimateNodeCredits(
   // A node unit priced by its settings (its price-id.ts): the row its run
   // reserves — the live charged price when cached, else the price mirror's
   // row, else its type's own row. A unit without one is priced below.
-  const unitCreditId = unitCreditIdOf(nodeType, node.data)
+  const unitCreditId = unitCreditIdOf(nodeType, node.data, wiredInputsOf(node.id, edges))
   if (unitCreditId !== undefined) {
     return getCachedCredits(unitCreditId) ?? NODE_CREDIT_COSTS[unitCreditId] ?? NODE_CREDIT_COSTS[nodeType] ?? 0
   }
@@ -646,7 +644,7 @@ export function estimateNodeCredits(
     return getCachedCredits(PRO3D_RENDER_CREDIT_ID) ?? 0
   }
   if (nodeType === "generate-video-pro" && node.data) {
-    return estimateGenerateVideoProCredits(node.data as GenerateVideoProNodeData)
+    return estimateGenerateVideoProCredits(node.data as GenerateVideoProNodeData, edges?.some(edge => edge.target === node.id && edge.targetHandle === "videoReferences"))
   }
   if (nodeType === "edit-video-pro" && node.data) {
     return estimateEditVideoProCredits(node.data as EditVideoProNodeData)
@@ -1351,6 +1349,8 @@ export interface RunConfirmInfo {
 }
 
 export interface ExecutionContext {
+  /** The take this fan-out iteration landed, before the batch reorders its rows. */
+  onMediaTake?: (nodeId: string, take: GeneratedResult) => void;
   userId: string | undefined;
   projectId: string | undefined;
   /**
