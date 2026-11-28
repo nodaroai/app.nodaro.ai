@@ -629,6 +629,44 @@ Source: KIE LTX 2.5 contracts (docs.kie.ai/market/ltx/2-5-fast-text-to-video, �
 …/2-5-pro-text-to-video, …/2-5-pro-image-to-video). Captured 2026-11-22.`,
 }
 
+// MAGI-2 — no public prompt guide beyond the KIE contract is captured, so the
+// body is the contract's own guidance (its field descriptions and examples)
+// plus the platform-standard structure. The contract's example names a
+// reference in plain words ("the person in the first reference image"); the
+// editor's reference tokens emit the platform-wide `@image_N` / `@audio_N`
+// binding, and which form the model follows better is not measured.
+const MAGI_2_DOCTRINE: ProviderPromptDoctrine = {
+  providers: ["magi-2"],
+  heading: "MAGI-2 (magi-2)",
+  tips: [
+    "Picture and sound come in one pass: describe the sound in the prompt (a \"Sound:\" line — voices, effects, ambience), and say it continues to the last frame. The sound switch turns it off at the same price.",
+    "Put dialogue in quotes and say who speaks it (\"turns to the camera and says: \\\"These are for you.\\\"\").",
+    "Text only, a first frame (and an optional last frame), or references — up to 10 images, 5 videos and 5 audio clips; a prompt with only reference audio works. Say how each reference is used.",
+    "4-30s (default 5), 1080p only; 21:9 / 16:9 / 4:3 / 1:1 / 3:4 / 9:16 when no frame is wired. No negative prompt: state exclusions in the prompt. Prompt cap 15,000 chars.",
+  ],
+  doctrine: `Prompt structure (KIE contract guidance): describe the subjects, the action, the camera moves and the sound, and — with references — how each reference file should be used; put dialogue in quotes. Prompts take 1-15,000 characters.
+
+**Modes (picked by what is wired)**
+- Nothing wired → text-to-video, at the chosen aspect ratio (16:9 by default; also 21:9, 4:3, 1:1, 3:4, 9:16).
+- A first frame (optionally a last frame) → image-to-video. The clip starts from the first frame and keeps its shape (no aspect setting); with a last frame it ends on it. Describe the motion, the camera and the sound, not the still.
+- Any reference image, video or audio → reference-to-video. Frames are not taken beside references: a wired first or last frame joins the reference images (after the caller's own, ordinals unchanged) and is named in the prompt as the opening or closing frame — it guides the clip rather than pinning it. A lone last frame is handled the same way.
+
+**References**
+- Up to 10 images (JPG / PNG / WEBP), 5 videos (MP4 / MOV) and 5 audio clips (MP3 / WAV). Each video or audio clip is 2-30 seconds, and the videos together, like the audio clips together, last at most 30 seconds — the platform refuses a request outside these limits before it runs. Audio in another format is converted to MP3.
+- Say which reference is which and what to keep ("use the person in the first reference image as the lead and keep her face, hair and outfit exactly the same"). In the editor the reference tokens emit "@image_N" / "@video_N" / "@audio_N".
+
+**Sound**
+- Sound (dialogue, effects, ambience) is generated with the picture by default. Write it out — "Sound: soft market chatter, birdsong and her voice, continuing to the very last frame." — or turn sound off for a silent clip (same price).
+- Text in quotes is spoken; keep lines short enough to fit the clip.
+
+**Length and constraints**
+- Whole seconds from 4 to 30 (default 5), always 1080p.
+- There is no negative prompt: state camera moves and anything to avoid in the prompt itself. A seed (0-2147483647) repeats a take.
+
+Source: KIE MAGI-2 market contracts (magi-2/text-to-video, magi-2/image-to-video,
+magi-2/reference-to-video on docs.kie.ai). Captured 2026-11-26.`,
+}
+
 export const PROVIDER_PROMPT_DOCTRINES: readonly ProviderPromptDoctrine[] = [
   SEEDANCE_2_DOCTRINE,
   KLING_AUDIO_DOCTRINE,
@@ -645,6 +683,7 @@ export const PROVIDER_PROMPT_DOCTRINES: readonly ProviderPromptDoctrine[] = [
   HAPPYHORSE_DOCTRINE,
   RUNWAY_KIE_DOCTRINE,
   LTX_2_5_DOCTRINE,
+  MAGI_2_DOCTRINE,
 ]
 
 const DOCTRINE_BY_PROVIDER: ReadonlyMap<string, ProviderPromptDoctrine> = new Map(

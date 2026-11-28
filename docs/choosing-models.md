@@ -159,6 +159,7 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 | Hailuo 2.3 Pro | MiniMax | Standard | 220<!-- credits: hailuo-2.3-pro --> | i2v | Hailuo 2.3 Pro — newer Hailuo with 768P / 1080P resolutions. |
 | Wan 3.0 | Alibaba | Standard | 220<!-- credits: wan-3 --> | i2v, t2v | Wan 3.0 — multimodal: first/last frame or image/video/audio references, native audio, 2-30s at 480p/720p/1080p. |
 | Kling 4.0 Flash | Kuaishou | Standard | 242<!-- credits: kling-4-flash --> | i2v, t2v | Kling 4.0 Flash — the faster, lower-cost Kling 4.0 at 720p, up to 20s with native audio; a start frame, reference images, videos and characters (each can carry a voice clip), or plain text. |
+| MAGI-2 | Sand AI | Standard | 242<!-- credits: magi-2 --> | i2v, t2v | Sand AI MAGI-2 — 1080p video with its sound in one pass, 4–30s, from text, a first frame (and an optional last frame) or up to 10 image / 5 video / 5 audio references (audio alone works). Dialogue written in quotes is spoken. |
 | LTX 2.3 Pro | Lightricks | Standard | 264<!-- credits: ltx-2.3-pro --> | i2v, t2v | Lightricks LTX 2.3 Pro — text/image/audio→video up to 4K, 6/8/10s, end-frame interpolation. |
 | Kling 3 Omni | Kuaishou | Standard | 275<!-- credits: kling-3-omni --> | i2v | Kling 3 Omni via Replicate — 3-15s, 720p/1080p, end frame + reference images, native audio. |
 | Wan Animate Replace | Alibaba | Standard | 281<!-- credits: wan-animate-replace --> | motion-transfer | Wan 2.2 Animate: replaces the person in a driving video with the subject of a still image, keeping the motion. |
@@ -216,6 +217,8 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 <!-- AUTO-GEN:END model-table-video -->
 
 **LTX: 2.5 Fast, 2.5 Pro or 2.3.** LTX 2.5 makes the sound with the picture on every run — speech in quotes, effects and ambience you describe in the prompt — so it suits a scene that should arrive with its audio already in place. Pick **LTX 2.5 Fast** for longer clips (up to 20 s at 720p or 1080p) or for 1440p (up to 10 s), and when you are trying several takes; pick **LTX 2.5 Pro** for short hero shots (6–10 s) where faces, textures and on-screen text need the most detail. **LTX 2.3** is a different, older model that stays available: use it when you need its 2K or 4K output, an end frame to land on, an audio clip to drive the picture (2.3 Pro), or LTX 2.3 Pro's Extend and Video Retake, which LTX 2.5 does not offer.
+
+**MAGI-2** makes a 1080p clip of 4 to 30 seconds with its sound in the same pass, and speaks dialogue written in quotes. Pick it for a long single shot at 1080p, for a clip that should start (and end) on frames you made, or for a scene built from several kinds of reference at once — images, videos and audio clips together, or a prompt with reference audio alone. Its price depends only on the length.
 
 ## Audio, voice & music models
 

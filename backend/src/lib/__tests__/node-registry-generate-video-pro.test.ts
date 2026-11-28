@@ -50,6 +50,7 @@ describe("generate-video-pro node registry", () => {
       "wan-3-prime",
       "happyhorse-ref2v",
       "vidu-q4",
+      "magi-2",
       // Admitted by its catalog opt-in without reference images (decided 2026-11-12).
       "pixverse-v6-max",
     ])

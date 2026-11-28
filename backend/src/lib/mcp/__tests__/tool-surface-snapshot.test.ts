@@ -2033,6 +2033,12 @@ const REMAKE_PORTION_BYTES = 417
 const REMAKE_SIZES_HERE_PER_TOOL_BYTES = 14
 // The list: 571_715 B, then 571_745 B, 30 B more (`video_remake` 14 B, `modify_video` 16 B), with no headroom before it.
 const REMAKE_SIZES_HERE_BYTES = 30
+// RAISED by MAGI-2 (decided 2026-11-26): the id joins the video tools' model lists, and the reference
+// descriptions of `generate_video` and `animate_image` name its 10 / 5 / 5 caps. No tool was added, so
+// the membership fixtures do NOT move (tool-list-wire.json does). Measured by this suite on the same
+// tree: the list 571_245 B, then 571_340 B, 95 B more (no tool near the per-tool budget). The list had
+// no headroom, so it is raised by exactly what it measures.
+const MAGI_2_BYTES = 95
 
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES + GPT_IMAGE_2_6_PER_TOOL_BYTES + GPT_IMAGE_2_6_FORMAT_PER_TOOL_BYTES + MINIMAX_H3_IMAGE_PER_TOOL_BYTES + SEEDREAM_5_5_PER_TOOL_BYTES + FLUX_3_KLEIN_PER_TOOL_BYTES + SEEDANCE_2_5_FLASH_PER_TOOL_BYTES + SEEDANCE_2_5_FLASH_REFERENCE_LIMIT_PER_TOOL_BYTES + OMNI_FLASH_1_2_CHARACTERS_BYTES + VIDEO_REMAKE_PREVIZ_PER_TOOL_BYTES + ROLE_FACE_PER_TOOL_BYTES + FLASH_CHOICES_PER_TOOL_BYTES + REMAKE_INTENT_CHECK_PER_TOOL_BYTES + REMAKE_UPSCALE_CHOICE_PER_TOOL_BYTES + REMAKE_UPSCALE_4K_PER_TOOL_BYTES + REMAKE_PORTION_PER_TOOL_BYTES + REMAKE_SIZES_HERE_PER_TOOL_BYTES,
@@ -2289,7 +2295,8 @@ export const TOOL_WIRE_BUDGET = {
     KLING_4_HDR_ARG_BYTES +
     SEEDANCE_2_5_4K_BYTES +
     REMAKE_PORTION_BYTES +
-    REMAKE_SIZES_HERE_BYTES,
+    REMAKE_SIZES_HERE_BYTES +
+    MAGI_2_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

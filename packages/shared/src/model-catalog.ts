@@ -296,6 +296,7 @@ export const MODEL_MAKERS = {
   pixverse: { name: "PixVerse" },
   recraft: { name: "Recraft" },
   runway: { name: "Runway" },
+  "sand-ai": { name: "Sand AI" },
   shengshu: { name: "ShengShu" },
   suno: { name: "Suno" },
   "sync-labs": { name: "Sync Labs" },
@@ -970,6 +971,11 @@ const VIDEO_RATIOS_PIXVERSE_V6_MAX = ["16:9", "4:3", "1:1", "3:4", "9:16", "2:3"
 // endpoints take NO aspect ratio: the output follows the start frame, so these
 // apply to text-only runs.
 const VIDEO_RATIOS_LTX_2_5 = ["16:9", "9:16", "1:1", "3:2", "2:3"] as const
+// MAGI-2 — the text-to-video and reference-to-video enum (docs.kie.ai MAGI-2
+// pages), its default 16:9 first so a "first listed" fallback lands on it. The
+// image-to-video endpoint takes NO aspect ratio: the output follows the first
+// frame.
+const VIDEO_RATIOS_MAGI_2 = ["16:9", "21:9", "4:3", "1:1", "3:4", "9:16"] as const
 
 // =============================================================================
 // IMAGE MODELS
@@ -3734,6 +3740,42 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "vidu-q4:5s:4k", credits: 780, note: "5s 4K" },
       { identifier: "vidu-q4:3s:540p", credits: 60, note: "3s 540p (min)" },
       { identifier: "vidu-q4:16s:4k", credits: 2500, note: "16s 4K (max)" },
+    ],
+  },
+  // ── MAGI (Sand AI) ──
+  // MAGI-2 — ONE id over three KIE task models, picked by what is wired
+  // (decided 2026-11-26): text-to-video (nothing wired), image-to-video (a first
+  // frame, optionally a last frame; the output follows the first frame's shape)
+  // and reference-to-video (any reference image, video or audio; wired frames
+  // join the reference images, as on Wan 3.0). 1080p only, whole seconds 4-30,
+  // sound in the same pass behind `generate_audio` (the same price either way),
+  // a seed 0-2147483647, a 1-15,000 character prompt, no negative prompt.
+  "magi-2": {
+    id: "magi-2",
+    kind: "video",
+    modes: ["i2v", "t2v"] as const,
+    family: "Sand AI",
+    maker: "sand-ai",
+    label: "MAGI-2",
+    series: "MAGI",
+    description: "Sand AI MAGI-2 — 1080p video with its sound in one pass, 4–30s, from text, a first frame (and an optional last frame) or up to 10 image / 5 video / 5 audio references (audio alone works). Dialogue written in quotes is spoken.",
+    useCases: ["long-form", "narrative", "dialogue", "reference"],
+    features: ["end-frame", "audio", "reference-image", "reference-to-video"],
+    aspectRatios: VIDEO_RATIOS_MAGI_2,
+    aspectRatiosTextOnly: true,
+    resolutions: ["1080p"] as const,
+    defaultResolution: "1080p",
+    unlistedResolutionRendersAs: "1080p",
+    durations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30],
+    defaultDuration: 5,
+    noNegativePrompt: true,
+    pricing: [
+      { identifier: "magi-2", credits: 220, note: "default 5s 1080p — see :Ns:1080p variants for exact" },
+      { identifier: "magi-2:5s:1080p", credits: 220, note: "5s 1080p (the default length)" },
+      { identifier: "magi-2:4s:1080p", credits: 180, note: "4s 1080p (min)" },
+      { identifier: "magi-2:10s:1080p", credits: 440, note: "10s 1080p" },
+      { identifier: "magi-2:15s:1080p", credits: 660, note: "15s 1080p" },
+      { identifier: "magi-2:30s:1080p", credits: 1320, note: "30s 1080p (max)" },
     ],
   },
   // ── PixVerse ──

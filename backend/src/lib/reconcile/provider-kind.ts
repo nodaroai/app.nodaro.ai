@@ -53,10 +53,11 @@ const VIDEO_REPLICATE_MODELS: ReadonlySet<string> = new Set([
  * min, `kling4PollAttempts`), so it is `kie-long-video`, whose threshold is past
  * that; at 720p / 1080p SDR it stays `kie-standard`. A Seedance 2.5 run at 4K
  * (decided 2026-11-25) is a long render too (`longRenderPollAttempts`, about
- * 56 min for a 30 s clip), and so `kie-long-video` as well.
+ * 56 min for a 30 s clip), and so `kie-long-video` as well. So is a MAGI-2 run
+ * longer than 12 s (`duration`: its budget passes the standard ceiling).
  */
-export function providerKindForVideoModel(model: string, run?: { resolution?: unknown; dynamicRange?: unknown }): ProviderKind {
-  if (run && isLongKieVideoRender(model, run.resolution)) return "kie-long-video"
+export function providerKindForVideoModel(model: string, run?: { resolution?: unknown; dynamicRange?: unknown; duration?: unknown }): ProviderKind {
+  if (run && isLongKieVideoRender(model, run.resolution, run.duration)) return "kie-long-video"
   if (isKling4Provider(model) && run) {
     const res = typeof run.resolution === "string" ? run.resolution : undefined
     if (normalizeKling4Resolution(res) === "4k" || videoRunsHdr(model, run.dynamicRange)) return "kie-long-video"

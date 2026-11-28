@@ -1,5 +1,19 @@
 # @nodaro/sdk
 
+## 2.82.0
+
+### Minor Changes
+
+- 86cccad: Video Remake Full Quality: `VideoRemakeFullQualityEstimate.breakdown` no longer types an `upscale` part. The step that makes a render larger is never a line of its own: its credits are part of the 1080p render's line (`motionHd`), and `totalCredits` is unchanged. Code that reads `breakdown.upscale` no longer type-checks: read `totalCredits` and the parts that remain. An older server may still answer the line until it is updated; it stays readable through the breakdown's open record type. `VideoRemakeFullQualityEstimate` gains `renderReused?: boolean`: whether an earlier try's 1080p render is reused, so only the finishing is charged. Read it rather than `breakdown.motionHd === 0`, which no longer says it once the render's line carries the step; an older server leaves it out, and its `motionHd` 0 still means the render is reused.
+- 0250613: Video Remake can run a part of the clip. `videoRemake.run()`, `estimate()` and `planRoles()` take `portionStart` and `portionSec` (seconds): an ordinary run of that part, priced by its length, whose completed output's `durationSec` is the part's length; with a part the source may be longer than 30 s, up to 10 minutes. Only where the deployment offers it: `styleChoice()` now answers `portion` (absent or `false` elsewhere, where the fields are refused `portion_unavailable`). It also answers `shortClips`, whether a clip of 2 s or more is accepted (else 4 s or more). New refusal codes: `portion_unavailable`, `portion_incomplete`, `portion_with_preview`, `portion_not_for_trends`, `portion_out_of_range`, `source_too_long` and `long_source_unpriceable`. `VideoRemakeJobOutput` types `durationSec`.
+
+### Patch Changes
+
+- Updated dependencies [833fcda]
+- Updated dependencies [833fcda]
+  - @nodaro/prompts@1.62.2
+  - @nodaro/shared@3.77.0
+
 ## 2.81.0
 
 ### Minor Changes

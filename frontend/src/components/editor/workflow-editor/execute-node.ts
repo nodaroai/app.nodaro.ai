@@ -69,6 +69,7 @@ import {
   resolveVideoModeForInputs,
   videoProviderRefsReplaceStartFrame,
   videoProviderTakesLoneEndFrame,
+  isMagi2Provider,
   videoStartFrameOnlyProblem,
   videoHdrResolutionProblem,
   videoRunsHdr,
@@ -3208,7 +3209,9 @@ function executeNodeCore(
     // (videoProviderTakesLoneEndFrame — not Grok Imagine Video 1.5, which needs
     // its start image), and every Gemini Omni model runs a source video alone
     // as a video edit.
-    const i2vLoneEndFrame = videoProviderTakesLoneEndFrame(nodeProvider) && !!endFrameUrl
+    // MAGI-2 folds a lone end frame into its references on the route
+    // (videoProviderFoldsLoneEndFrame), so its Run sends it as the end frame.
+    const i2vLoneEndFrame = (videoProviderTakesLoneEndFrame(nodeProvider) || isMagi2Provider(nodeProvider)) && !!endFrameUrl
     const i2vSourceVideoAlone = isGeminiOmniProvider(nodeProvider) && Boolean((inputs.referenceVideoUrls as string[] | undefined)?.length)
     if (!startFrameUrl && !isVeoRefMode && !isSeedance2RefOnly && !i2vRefsCarried && !i2vLoneEndFrame && !i2vSourceVideoAlone) {
       const debugSources = edges.filter((e) => e.target === node.id).map((e) => `${e.sourceHandle ?? "?"}→${e.targetHandle ?? "?"}`).join(", ")

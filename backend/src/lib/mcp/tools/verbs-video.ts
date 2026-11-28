@@ -301,7 +301,7 @@ export function registerVideoVerbs({ server, session, fastify, videoRemakeSizes 
           .optional()
           .describe(
             "Identity/reference images (URLs or Nodaro asset IDs), capped at the model's own " +
-            "limit (seedance-2-5 30, seedance-2-5-flash 10/5/5 img/vid/audio, more refused, seedance-2 family + minimax-h3 9, wan-3 / wan-3-prime 10, " +
+            "limit (seedance-2-5 30, seedance-2-5-flash / magi-2 10/5/5 img/vid/audio, more refused, seedance-2 family + minimax-h3 9, wan-3 / wan-3-prime 10, " +
             "gemini-omni-video / gemini-omni-flash 7, gemini-omni-flash-1-2 6, veo3/veo3.1 3, ...). " +
             "Dropped on models with no reference path, except where the model's image-to-video " +
             "id takes them: grok then runs as grok-i2v (7). Accepts an array; a lone URL or " +
@@ -312,7 +312,7 @@ export function registerVideoVerbs({ server, session, fastify, videoRemakeSizes 
           .optional()
           .describe(
             "Reference videos for style/motion transfer, capped at the model's own limit " +
-            "(seedance-2-5 10, seedance-2 family + minimax-h3 3, wan-3 / wan-3-prime / kling-4(-flash) / seedance-2-5-flash 5, " +
+            "(seedance-2-5 10, seedance-2 family + minimax-h3 3, wan-3 / wan-3-prime / kling-4(-flash) / seedance-2-5-flash / magi-2 5, " +
             "gemini-omni-video / gemini-omni-flash / gemini-omni-flash-1-2 1). Wan 3.0 takes each clip at 1-15s and " +
             "≤15s combined, and input video seconds + output duration must stay ≤30s. " +
             "Dropped on models without video-reference support.",
@@ -329,7 +329,7 @@ export function registerVideoVerbs({ server, session, fastify, videoRemakeSizes 
           .optional()
           .describe(
             "Reference audio, capped per model (seedance-2-5 10; seedance-2 family, minimax-h3 3; " +
-            "wan-3 5, 1-15s each, ≤15s total; kling-4 3, clip 1 = soundtrack; kling-4-flash 7, clip N = character N's voice if it's a subject); else dropped.",
+            "wan-3 5, 1-15s each, ≤15s total; magi-2 5, 2-30s each, ≤30s total; kling-4 3, clip 1 = soundtrack; kling-4-flash 7, clip N = character N's voice if it's a subject); else dropped.",
           ),
         character_references: z
           .array(z.object({
@@ -645,7 +645,7 @@ export function registerVideoVerbs({ server, session, fastify, videoRemakeSizes 
           .optional()
           .describe(
             "Identity/reference images (URLs or Nodaro asset IDs), capped at the model's own " +
-            "limit: seedance-2-5 30, seedance-2-5-flash 10 (more is refused), seedance-2 family + minimax-h3 9, wan-3 / wan-3-prime 10, " +
+            "limit: seedance-2-5 30, seedance-2-5-flash / magi-2 10 (more is refused), seedance-2 family + minimax-h3 9, wan-3 / wan-3-prime 10, " +
             "gemini-omni-video / gemini-omni-flash / kling-3-omni / grok-i2v 7, gemini-omni-flash-1-2 6, " +
             "happyhorse-ref2v 9, veo3/veo3.1 3. Resolved server-side; " +
             "silently dropped on models with no reference path. " +
@@ -656,7 +656,7 @@ export function registerVideoVerbs({ server, session, fastify, videoRemakeSizes 
           .optional()
           .describe(
             "Reference videos for style/motion transfer (URLs or Nodaro asset IDs). " +
-            "seedance-2-5 up to 10, seedance-2-5-flash up to 5 (more is refused), seedance-2 family + minimax-h3 up to 3, wan-3 / wan-3-prime " +
+            "seedance-2-5 up to 10, seedance-2-5-flash / magi-2 up to 5 (more is refused), seedance-2 family + minimax-h3 up to 3, wan-3 / wan-3-prime " +
             "up to 5 (each clip 1-15s, ≤15s combined; input seconds + output duration ≤30s), " +
             "gemini-omni-video / gemini-omni-flash / gemini-omni-flash-1-2 1; " +
             "dropped on models without video-reference support. Ignored in 'frames' mode. " +
@@ -667,7 +667,7 @@ export function registerVideoVerbs({ server, session, fastify, videoRemakeSizes 
           .optional()
           .describe(
             "Reference audio for soundtrack-driven motion (URLs or Nodaro asset IDs). " +
-            "seedance-2-5 up to 10, seedance-2-5-flash up to 5 (more is refused), seedance-2 family + minimax-h3 up to 3, wan-3 / wan-3-prime " +
+            "seedance-2-5 up to 10, seedance-2-5-flash / magi-2 up to 5 (more is refused), seedance-2 family + minimax-h3 up to 3, wan-3 / wan-3-prime " +
             "up to 5 (each clip 1-15s, ≤15s combined); dropped on models " +
             "without audio-reference support. Ignored in 'frames' mode. " +
             "Accepts an array; a lone URL or JSON-stringified array is coerced.",
